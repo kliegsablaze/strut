@@ -48,7 +48,7 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_NOISE] = UNI("noise", "Noise", "Noise Level", 0.0f),
     [P_LEVEL] = UNI("level", "Level", "Level", 0.8f),
 
-    [P_S_PITCH] = SEMI("s_pitch", "Pitch", "Skin Pitch", -48, 48),
+    [P_S_PITCH] = SEMI("s_pitch", "Pitch", "Skin Pitch", -12, 60),
     [P_S_RING] = UNI("s_ring", "Ring", "Skin Ring", 0.5f),
     [P_S_HIT] = ENUM("s_hit", "Hit", "Skin Hit", HITS),
     [P_S_SNAP] = UNI("s_snap", "Snap", "Skin Snap", 0.2f),

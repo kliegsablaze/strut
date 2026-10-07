@@ -123,6 +123,99 @@ static void keys(void) {
     A->destroy_instance(p);
 }
 
+/* ---- Skin, through strut_render, in floats so a NaN cannot hide ---- */
+
+static float L[STRUT_SR * 4], R[STRUT_SR * 4];
+
+/* Hits pad 1 with its knobs as set and renders seconds of it. */
+static int hit(strut_t *s, float seconds) {
+    strut_note_on(s, STRUT_NOTE0, 100);
+    const int total = (int)(seconds * STRUT_SR);
+    for (int n = 0; n < total; n += 128) strut_render(s, L + n, R + n, total - n < 128 ? total - n : 128);
+    return total;
+}
+
+static strut_t *fresh(void) {
+    strut_t *s = calloc(1, sizeof(*s));
+    strut_init(s);
+    return s;
+}
+
+static double window_rms(int from, int len) {
+    double a = 0;
+    for (int n = from; n < from + len; n++) a += (double)L[n] * L[n];
+    return sqrt(a / len);
+}
+
+static void skin(void) {
+    /* PITCH is the pitch: zero crossings of a long, plain ring */
+    const float pitches[] = { -12, 0, 12, 31, 60 };
+    for (int i = 0; i < 5; i++) {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_PITCH] = pitches[i];
+        s->pad[0].p[P_S_RING] = 1.0f;
+        s->pad[0].p[P_S_MODE] = 1;
+        const int n = hit(s, 1.0f);
+        int cross = 0, first = -1, last = 0;
+        for (int k = STRUT_SR / 10; k < n - 1; k++)
+            if (L[k] <= 0 && L[k + 1] > 0) { if (first < 0) first = k; last = k; cross++; }
+        const double hz = (cross - 1) * (double)STRUT_SR / (last - first);
+        const float want = skin_hz(s->pad[0].p);
+        CHECK(fabs(hz / want - 1) < 0.01, "PITCH %+g st rings at %.1f Hz, want %.1f", pitches[i], hz, want);
+        free(s);
+    }
+
+    /* RING is the ring time: the fall between two windows, as a T60 */
+    const float rings[] = { 0.3f, 0.6f, 0.9f };
+    for (int i = 0; i < 3; i++) {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_RING] = rings[i];
+        s->pad[0].p[P_S_PITCH] = 24;
+        const float want = skin_t60(s->pad[0].p);
+        hit(s, 4.0f);
+        const int a = (int)(0.2f * want * STRUT_SR), b = (int)(0.6f * want * STRUT_SR), w = 2048;
+        const double db = 20 * log10(window_rms(a, w) / window_rms(b, w));
+        const double t60 = 60.0 * (b - a) / STRUT_SR / db;
+        CHECK(fabs(t60 / want - 1) < 0.1, "RING %.1f rings %.3f s, want %.3f", rings[i], t60, want);
+        free(s);
+    }
+
+    /* Every Skin knob at its ends and middle (every option of an enum):
+     * it sounds, it is finite, it does not clip, and it dies away. */
+    const int knobs[] = { P_S_PITCH, P_S_RING, P_S_HIT, P_S_SNAP, P_S_METAL, P_S_TONE, P_S_MODE, P_TUNE, P_DECAY };
+    double lo = 1e9, hi = 0;
+    for (size_t k = 0; k < sizeof(knobs) / sizeof(knobs[0]); k++) {
+        const param_def_t *d = &STRUT_PAD_PARAMS[knobs[k]];
+        const int steps = d->kind == PK_ENUM ? d->noptions : 3;
+        for (int i = 0; i < steps; i++) {
+            strut_t *s = fresh();
+            const float v = d->kind == PK_ENUM ? (float)i : d->min + (d->max - d->min) * (float)i / 2;
+            s->pad[0].p[knobs[k]] = v;
+            const int n = hit(s, 2.0f);
+            double peak = 0, acc = 0;
+            int finite = 1;
+            for (int j = 0; j < n; j++) {
+                finite &= isfinite(L[j]);
+                if (fabs(L[j]) > peak) peak = fabs(L[j]);
+                if (j < STRUT_SR / 4) acc += (double)L[j] * L[j];
+            }
+            const double rms = sqrt(acc / (STRUT_SR / 4));
+            if (peak < lo) lo = peak;
+            if (peak > hi) hi = peak;
+            (void)rms;
+            CHECK(finite, "%s %g: finite", d->key, v);
+            CHECK(peak < 0.9, "%s %g: does not clip (peak %.2f)", d->key, v, peak);
+            CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", d->key, v, peak);
+            /* the longest ring, 12 s, may still be going after two */
+            if (!(knobs[k] == P_S_RING && i == 2) && !(knobs[k] == P_DECAY && i == 2))
+                CHECK(!s->pad[0].active[0] && !s->pad[0].active[1], "%s %g: dies away", d->key, v);
+            free(s);
+        }
+    }
+    printf("skin: peak over every knob setting %.3f .. %.3f (%.1f dB)\n", lo, hi,
+           20 * log10(hi / lo));
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -153,6 +246,7 @@ int main(int argc, char **argv) {
     A->destroy_instance(p);
     pads();
     keys();
+    skin();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;

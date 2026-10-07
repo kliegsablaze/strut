@@ -1,6 +1,5 @@
 /*
- * The v2 plugin entry, the pads, their keys and the placeholder voice
- * (strut.h).
+ * The v2 plugin entry, the pads, their voices and their keys (strut.h).
  */
 #include <math.h>
 #include <stdio.h>
@@ -45,40 +44,30 @@ void strut_note_on(strut_t *s, int note, int vel) {
     const int i = note - STRUT_NOTE0;
     if (i < 0 || i >= STRUT_PADS || vel <= 0) return;
     pad_t *p = &s->pad[i];
-    p->active = 1;
-    p->phase = 0.0;
-    p->env = 1.0f;
-    p->drop = 1.0f;
-    p->vel = (float)vel / 127.0f;
+    /* the other voice, so the last hit keeps ringing under this one */
+    const int v = (p->last + 1) % STRUT_VOICES;
+    p->last = v;
+    p->active[v] = 1;
+    p->vel[v] = powf((float)vel / 127.0f, 1.5f);
+    s->seed = s->seed * 1664525u + 1013904223u;
+    skin_start(&p->skin[v], p->p, s->seed);
     s->note_pad = i;
     s->note_at = s->now;
     pair(s);
 }
 
-/* Placeholder: a sine from 45 Hz up a semitone per pad, dropping an octave
- * at the start, fading by DECAY. Replaced by the engines. */
 void strut_render(strut_t *s, float *l, float *r, int frames) {
     memset(l, 0, sizeof(float) * frames);
-    memset(r, 0, sizeof(float) * frames);
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
-        if (!p->active) continue;
-        const float hz = 45.0f * powf(2.0f, (i + p->p[P_TUNE]) / 12.0f);
-        const float t60 = 0.3f * powf(10.0f, p->p[P_DECAY]);   /* 30 ms .. 3 s */
-        const float fall = expf(-6.9f / (t60 * STRUT_SR));
-        const float dfall = expf(-1.0f / (0.012f * STRUT_SR));
-        const float g = p->vel * p->p[P_LEVEL] * 0.5f;
-        for (int n = 0; n < frames; n++) {
-            p->phase += hz * (1.0f + p->drop) / STRUT_SR;
-            if (p->phase >= 1.0) p->phase -= 1.0;
-            const float x = sinf(6.2831853f * (float)p->phase) * p->env * g;
-            l[n] += x;
-            r[n] += x;
-            p->env *= fall;
-            p->drop *= dfall;
+        const float level = p->p[P_LEVEL] * p->p[P_LEVEL];
+        const float skin = p->p[P_SKIN] * p->p[P_SKIN];
+        for (int v = 0; v < STRUT_VOICES; v++) {
+            if (!p->active[v]) continue;
+            p->active[v] = skin_render(&p->skin[v], p->p, 1.5f * p->vel[v] * level * skin, l, frames);
         }
-        if (p->env < 1e-4f) p->active = 0;
     }
+    memcpy(r, l, sizeof(float) * frames);   /* PAN comes with Finish (step 6) */
     s->now += (double)frames / STRUT_SR;
 }
 

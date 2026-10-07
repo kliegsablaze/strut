@@ -2,20 +2,22 @@
  * Strut: a drum instrument for Schwung. Sixteen pads, each its own sound,
  * built from three engines (DESIGN.md).
  *
- * PROBE (build step 2). Every key the design proposes is declared and kept,
- * so the pages can be planned and measured, but the voice is still the
- * scaffold's placeholder: one pitched, decaying sine per pad, reading only
- * TUNE, DECAY and LEVEL. The engines replace it in DESIGN.md's Build order.
+ * Every key the design proposes is declared and kept. What sounds so far is
+ * Skin (build step 3), mixed by SKIN, TUNE, DECAY and LEVEL; Wave, Noise,
+ * the modulators and the effects follow in DESIGN.md's Build order.
  */
 #ifndef STRUT_H
 #define STRUT_H
 
 #include <stdint.h>
 
+#include "skin.h"
+
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
 #define STRUT_MAX_BLOCK 256
+#define STRUT_VOICES 2          /* a pad's: a roll's tail rings under the next hit */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
 
 typedef enum { PK_FLOAT, PK_INT, PK_ENUM } param_kind_t;
@@ -75,10 +77,9 @@ extern const char *const STRUT_VIEW_OPTIONS[2];   /* "Sound", "Mod" */
 
 typedef struct {
     float p[P_COUNT];
-    /* the placeholder voice */
-    int active;
-    double phase;
-    float env, drop, vel;
+    int active[STRUT_VOICES], last;
+    float vel[STRUT_VOICES];
+    skin_voice_t skin[STRUT_VOICES];
 } pad_t;
 
 typedef struct {
@@ -89,6 +90,7 @@ typedef struct {
     double now;                 /* seconds rendered */
     double press_at, note_at;   /* last vouch from the host, last note-on */
     int note_pad;
+    uint32_t seed;              /* the noise behind every hit */
 } strut_t;
 
 void strut_init(strut_t *s);

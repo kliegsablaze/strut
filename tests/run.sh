@@ -17,6 +17,11 @@ cc $CFLAGS tests/test_strut.c src/dsp/*.c -lm -o "$out/test_strut"
 rc=0
 "$out/test_strut" "$out" || rc=$?
 
+# The bench and the demo must keep building.
+for t in bench demo; do
+  cc $CFLAGS tools/$t.c src/dsp/*.c -lm -o "$out/$t" || rc=1
+done
+
 if command -v node >/dev/null 2>&1 && [ -d "$SCHWUNG/src/shared/param_pages" ]; then
   node tests/plan.test.mjs "$out" "$SCHWUNG" || rc=$?
 else

@@ -2,12 +2,12 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** contract probe, 0.0.2 (2026-10-07). Every proposed knob, on every
+**Status:** Skin sounds, 0.0.3 (2026-10-07). Every proposed knob, on every
 page and both views of each engine page, is declared, kept per pad and planned
-by the host's own planner in the tests. The sound is still the scaffold's
-placeholder sine per pad, reading only TUNE, DECAY and LEVEL. None of the
-engines exists yet: from **The idea in plain words** down, the pages and keys
-are real, the sound behind them is the plan.
+by the host's own planner in the tests. **Skin**, the resonator, is built and
+plays on every pad, mixed by SKIN, TUNE, DECAY and LEVEL (see *How Skin
+works*). Wave, Noise, the modulators and the effects are still the plan; their
+knobs are kept but do nothing yet. Skin's CPU on the Move is not yet measured.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -211,7 +211,7 @@ Labels are real words of five letters or fewer. The header shows the full name.
 
 Every key below is declared and kept (`src/dsp/params.c`). The ranges and
 option lists are **provisional** until each engine's build step sets them by
-ear: PITCH is ±48 semitones, the SOUND list and the TABLE lists are stand-in
+ear: Wave's and Noise's PITCH are ±48 semitones, the SOUND list and the TABLE lists are stand-in
 names, and DICE is a plain number until its turn-to-roll gesture (step 10).
 The keys are the bare names in this table with an engine prefix where pages
 share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
@@ -243,6 +243,50 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 | 8 | MOD | Sound / Mod | MOD | Sound / Mod |
 
 Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
+
+#### How Skin works (built, 0.0.3)
+
+- **PITCH** is semitones from A1 (55 Hz), from −12 to +60: 27.5 Hz to
+  1.76 kHz, and the Pad page's TUNE moves it ±24 more.
+- **HIT** and **SNAP** make the strike. SNAP sets its length, 0.2 ms to 50 ms.
+  - **Click:** a sharp pulse that falls away; longer SNAP is a duller thud.
+  - **Soft:** a smooth bump, a felt mallet; longer is softer.
+  - **Burst:** a short burst of noise, falling away; the snare's hit.
+  - **Wave** and **Noise** strike with those engines once they exist (steps
+    4 and 5). Until then they strike with a burst, so no setting is silent.
+- **The ring.** The strike drives a phasor resonator (Mathews and Smith): one
+  complex multiply a sample, ringing at PITCH and dying away by RING. The
+  strike is scaled so the body always rings at the same level, whatever the
+  strike, its length or the pitch: the strike's own spectrum at PITCH is
+  worked out from its formula when the hit starts, and divided out. A soft
+  strike still sounds softer, because its click and its upper partials are
+  weaker. A burst rings at its expected level, so each hit is a little
+  different, as on a real drum.
+- **RING** is the time to fall 60 dB, 15 ms to 4 s, and Pad DECAY scales it by
+  a quarter to four. It is never shorter than two and a half cycles of the
+  pitch: a 55 Hz drum rung for 15 ms is a click with no pitch.
+- **METAL** adds two partials above the body. At zero they sit at a
+  drumhead's ratios over its fundamental (1.59 and 2.14, Rossing); turning it
+  moves them up to a free metal bar's (2.76 and 5.40) and makes them louder
+  and longer. A partial above the top of the audio range is left out.
+- **MODE** filters the ring and the strike together, at the pitch: **Low** is
+  a low-pass an octave above it (a round thump, partials softened), **Band** a
+  band-pass on it (a pure ping), **High** a high-pass an octave below it (the
+  click and the partials forward). A 12 dB trapezoidal state-variable filter
+  (Zavalishin), as is **TONE**: a low-pass from 150 Hz to 18 kHz.
+- **CURVE** (the Mod view) is Natural, the ring's own fall, until step 7.
+- **Velocity** sets the level, on a gentle curve (to the power 1.5).
+- **Two voices a pad.** A new hit takes the other voice, so the last one keeps
+  ringing under it.
+
+Rejected for the ring: the state-variable filter itself as the resonator. How
+loud it rings for a given strike depends on its pitch and resonance, so every
+PITCH and RING setting would need its own level correction; the phasor rings at
+the size of the strike's spectrum, and stays well behaved when PITCH moves
+mid-ring. Rejected for the strike's level: measuring each strike by running it
+once before playing it. Sixteen pads hit together cost 315 µs that way on a
+laptop, likely over a millisecond on the Move; the formulas cost almost
+nothing.
 
 ### Wave (the oscillator)
 
@@ -391,8 +435,12 @@ own engine, reach most of the same sounds.)
 
 - **CPU.** Sixteen pads × three engines, at most two voices a pad, so a fast
   roll's tail can overlap the next hit. Target: under a quarter of the Move's
-  time with every pad sounding. Measure on the device at build step 3, not
-  last.
+  time with every pad sounding. `tools/bench.c` plays all 32 voices with the
+  longest rings and strikes; `scripts/bench.sh` builds it for the Move and
+  runs it there over ssh, as Quilt's does.
+  - Skin alone, on a laptop (2026-10-07): **1.0 %** of a block, all 32 voices
+    ringing; 50–70 µs for a block in which all sixteen pads are hit.
+  - **On the Move: not yet measured.**
 - **Tables are built at load, not shipped.** The analogue and spectral
   wavetables, and the noise tables, are computed in `create_instance` (inverse
   FFT of a shaped spectrum with random phase). No data files. Watch the load
@@ -428,8 +476,9 @@ own engine, reach most of the same sounds.)
    template-vs-focused decision made (template, declared once).~~ (0.0.2)
    Still to try on the device: automation and a step lock on pad 5 land on
    pad 5, and MOD swaps its page at once.
-3. **Skin** engine, and measure CPU on the device (the user installs the CI
-   artifact).
+3. ~~**Skin** engine~~ (0.0.3). Still to do: measure its CPU on the Move
+   (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
+   ringing) and hear it there.
 4. **Wave** engine, its tables, and FM from Skin.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
@@ -452,6 +501,13 @@ own engine, reach most of the same sounds.)
     the contract's size; module.json's template against the served one.
     The validator's one warning, that `pad` is on no level, is expected: the
     host's Selected Pad list is how it is reached.
+  - Skin: PITCH within 1 % by zero crossings, RING within 10 % by the fall
+    between two windows, and every Skin knob (and TUNE and DECAY) at its ends
+    and middle, every option of each list: it sounds, stays finite, peaks
+    under 0.9 and dies away. Across all of them the loudest and quietest peaks
+    are within 7.7 dB.
+- `tools/demo.c` renders a few hand-set sounds and a groove to a WAV, for
+  listening away from the Move (`build/tests/demo out.wav`).
 - The CI builds a device tarball on every push.
 - **Listening.** The user plays it on the Move.
 
