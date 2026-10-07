@@ -101,15 +101,15 @@ static double spectrum(int t, float *re, float *im, float *sre, float *sim) {
                     const double sign = uni() < 0.5 ? -1 : 1;
                     y += sign * (0.6 + 0.4 * uni());
                 }
-                re[fft_rev(n, NT_BITS)] = (float)y;
+                re[n] = (float)y;
                 y *= 0.7;
             } else {                    /* eight levels, each held 1 to 20 of the output's samples */
                 if (hold-- <= 0) y = ((int)(uni() * 8) - 3.5) / 3.5, hold = (int)(uni() * 40) + 1;
-                re[fft_rev(n, NT_BITS)] = (float)y;
+                re[n] = (float)y;
             }
         }
         memset(im, 0, sizeof(float) * NT_N);
-        fft_reversed(re, im, NT_N, -1);    /* drawn in reversed order, above */
+        fft(re, im, NT_N, -1);
         for (int k = KMIN; k <= KMAX; k++) sre[k] = re[k], sim[k] = im[k];
     } else if (t == NT_METAL) {
         for (int s = 0; s < 6; s++) {
@@ -137,7 +137,10 @@ static double spectrum(int t, float *re, float *im, float *sre, float *sim) {
 
 static void store(int16_t *q, const float *x, double scale, int n) {
     const float g = (float)(scale * 32767);
-    for (int i = 0; i < n; i++) q[i] = (int16_t)(int32_t)rintf(x[i] * g);
+    for (int i = 0; i < n; i++) {   /* rounded half away from zero: no library call, so four at a time */
+        const float v = x[i] * g;
+        q[i] = (int16_t)(int32_t)(v + (v < 0 ? -0.5f : 0.5f));
+    }
     q[-2] = q[n - 2], q[-1] = q[n - 1];
     for (int i = 0; i < 5; i++) q[n + i] = q[i];
 }
@@ -155,14 +158,12 @@ static void build_pair(int a, float *re, float *im, float *sp[4]) {
         const int n = NT_N >> l, top = KMAX >> l;
         memset(re, 0, sizeof(float) * n);
         memset(im, 0, sizeof(float) * n);
-        const int bits = NT_BITS - l;
-        for (int k = KMIN; k <= top; k++) {     /* straight into the transform's order */
-            const int p = fft_rev(k, bits), q = fft_rev(n - k, bits);
-            re[p] = ar[k] - bi[k], im[p] = ai[k] + br[k];
-            re[q] = ar[k] + bi[k], im[q] = br[k] - ai[k];
+        for (int k = KMIN; k <= top; k++) {
+            re[k] = ar[k] - bi[k], im[k] = ai[k] + br[k];
+            re[n - k] = ar[k] + bi[k], im[n - k] = br[k] - ai[k];
         }
         t = clock();
-        fft_reversed(re, im, n, 1);
+        fft(re, im, n, 1);
         wt_profile[WT_P_FFT] += (double)(clock() - t) / CLOCKS_PER_SEC;
         t = clock();
         if (l == 0) {       /* under full scale */
@@ -209,6 +210,7 @@ void nt_build(void) {
         for (int t = 0; t < NT_TABLES; t += 2) build_pair(t, re, im, sp);
     free(re), free(im);
     for (int j = 0; j < 4; j++) free(sp[j]);
+    fft_done();
 }
 
 /* ---- playing ---- */
