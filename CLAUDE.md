@@ -218,9 +218,10 @@ When the user moves work back to their local machine:
     tables.
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it, not yet confirmed.
-  - Not yet: Finish, the modulators, the Kit page and samples by ear;
-    0.7.0's Resynth row in the bench, and how long a 4 s sample's Resynth
-    takes to make there (180 ms on a laptop).
+  - Resynth (0.7.0): on every pad, looped, with every effect and
+    modulator, 20.5 % (runs to 22.3 %) against 17.0 % for samples; a 4 s
+    sample's Resynth takes 496 ms to make, its Noise 190.
+  - Not yet: Finish, the modulators, the Kit page and samples by ear.
 - **Next:** step 10: the SOUND presets, factory kits, DICE by role,
   help.json and the README.
 - **Open questions for the user:**

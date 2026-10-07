@@ -15,7 +15,8 @@ works*). Noise plays the library's 208 samples, or your own, as recorded,
 resynthesised or as their colour alone (*The sample library*, *How
 Resynth and Noise work*). SOUND and DICE are still the plan; their knobs
 are kept but do nothing yet. On the Move, every pad at its dearest, with
-every effect and modulator and the Kit page: about 22 % of the CPU (0.6.0).
+every effect and modulator and the Kit page: about 22 % of the CPU (0.6.0);
+with Resynth on every pad, 20.5 %, its runs reaching 22.3 % (0.7.0).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -733,11 +734,15 @@ apart, so it plays as itself in every MODE.
 - **Level.** Across every one-shot in the library, against the sample
   itself (loudest 400 ms): Resynth −3.6 to +1.7 dB, half of them over
   +0.3; Noise −0.6 to +1.1 dB. Every one sounds, peaks under 0.95 and ends.
-- **Cost.** On a laptop a 4 s sample's Resynth takes 180 ms to make and its
-  Noise 75; Resynth adds up to 1.5 MB to a sample (2.8 MB in all). Playing,
-  Resynth looped on every pad cost no more than samples looped (5.2 %
-  against 5.0 % on the laptop, with 24 of a pad's 32 sines sounding); the
-  Move's measurement is to come.
+- **Cost.** Resynth adds up to 1.5 MB to a sample (2.8 MB in all). **On
+  the Move** (2026-10-07): a 4 s sample's Resynth takes 496 ms to make and
+  its Noise 190 (after 160 ms to load it), so the first switch of a long
+  sample to Resynth waits about 0.7 s, playing the sample meanwhile.
+  Resynth looped on every pad, with every effect and modulator: 20.5 %
+  (runs 20.4 to 22.3 %), against 17.0 % for samples looped in the same
+  run. So Resynth costs about 3.5 % more and stays under the 25 %
+  allowed. (On a laptop the two cost the same; the Move's slower memory
+  and narrower vectors show the sines.)
 
 Rejected for Resynth:
 
@@ -1199,9 +1204,9 @@ own engine, reach most of the same sounds.)
    - ~~load on demand per pad, off the audio thread~~ (0.6.0);
    - ~~Sample mode, START and LOOP; Cycle/ looped and pitched, in copies an
      octave apart~~ (0.6.0); ~~Resynth and Noise modes~~ (0.7.0);
-   - ~~CPU measured with resynthesis on every pad~~ (0.7.0, on a laptop:
-     no more than samples; still to do: the Move's measurement, and hear
-     it);
+   - ~~CPU measured with resynthesis on every pad~~ (0.7.0: 20.5 % on
+     the Move, runs to 22.3 %, against 17.0 % for samples; still to do:
+     hear it);
    - ~~tests: every file parses, every Cycle file is 2048 samples, the
      tarball holds the library~~ (0.6.0).
 10. The SOUND library, factory kits and DICE, drawing on the sample library
