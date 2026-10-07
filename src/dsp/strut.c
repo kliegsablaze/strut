@@ -17,6 +17,8 @@ void strut_init(strut_t *s) {
         for (int k = 0; k < P_COUNT; k++) s->pad[i].p[k] = STRUT_PAD_PARAMS[k].def;
     for (int k = 0; k < G_COUNT; k++) s->g[k] = STRUT_GLOBALS[k].def;
     s->press_at = s->note_at = -1.0;
+    s->dither = 0x9E3779B9u;
+    s->vol_g = -1.0f;
 }
 
 static void focus(strut_t *s, int pad) {
@@ -56,19 +58,65 @@ void strut_note_on(strut_t *s, int note, int vel) {
     pair(s);
 }
 
+/* A level knob, as a fader: off at zero, then 30 dB of travel to full, so
+ * every detent is heard. 0.8 is -6 dB. */
+float strut_fader(float x) {
+    return x <= 0.0f ? 0.0f : powf(10.0f, 1.5f * (fminf(x, 1.0f) - 1.0f));
+}
+
 void strut_render(strut_t *s, float *l, float *r, int frames) {
     memset(l, 0, sizeof(float) * frames);
+    s->sounding = 0;
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
-        const float level = p->p[P_LEVEL] * p->p[P_LEVEL];
-        const float skin = p->p[P_SKIN] * p->p[P_SKIN];
+        const float level = strut_fader(p->p[P_LEVEL]);
+        const float skin = strut_fader(p->p[P_SKIN]);
         for (int v = 0; v < STRUT_VOICES; v++) {
             if (!p->active[v]) continue;
-            p->active[v] = skin_render(&p->skin[v], p->p, 1.5f * p->vel[v] * level * skin, l, frames);
+            s->sounding++;
+            p->active[v] = skin_render(&p->skin[v], p->p, 2.4f * p->vel[v] * level * skin, l, frames);
         }
     }
     memcpy(r, l, sizeof(float) * frames);   /* PAN comes with Finish (step 6) */
     s->now += (double)frames / STRUT_SR;
+}
+
+/* ---- the output (Quilt's, src/dsp/quilt.c) ---- */
+
+/* Triangular noise of one 16-bit step. */
+static inline float dither(uint32_t *d) {
+    *d ^= *d << 13, *d ^= *d >> 17, *d ^= *d << 5;
+    const float a = (float)(*d & 0xFFFF), b = (float)(*d >> 16);
+    return (a + b) * (1.0f / 65536.0f) - 1.0f;
+}
+
+/* Soft above half scale, so a stack of pads rounds off rather than clips. */
+static inline int16_t limit(float x, float dg, uint32_t *d) {
+    float a = fabsf(x);
+    if (a > 0.5f) a = 0.5f + 0.5f * tanhf((a - 0.5f) * 2.0f);
+    return (int16_t)lrintf(copysignf(a, x) * 32000.0f + dg * dither(d));
+}
+
+/* VOL, then 16 bits, rounded with a step of triangular dither. Without it a
+ * fading tail's last few steps become a gritty distortion whose harmonics
+ * fold back down (heard on Quilt, 2026-10-05). The dither stays at full depth
+ * while any voice sounds, because the grit lives in those last steps (Quilt's
+ * fade below eight steps left it 11 dB proud there), and fades out over a
+ * block once all have ended, so the kit rests in true silence. VOL glides
+ * across the block, as the pads' levels do. */
+void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int frames) {
+    const float vol = s->g[G_VOL];
+    const float g1 = vol <= -59.9f ? 0.0f : powf(10.0f, vol / 20.0f);
+    const float g0 = s->vol_g < 0.0f ? g1 : s->vol_g;
+    s->vol_g = g1;
+    const float d0 = s->dither_g, d1 = s->sounding && g1 > 0.0f ? 1.0f : 0.0f;
+    s->dither_g = d1;
+    for (int i = 0; i < frames; i++) {
+        const float x = (float)(i + 1) / (float)frames;
+        const float g = g0 + (g1 - g0) * x, dg = d0 + (d1 - d0) * x;
+        out[2 * i] = limit(l[i] * g, dg, &s->dither);
+        out[2 * i + 1] = limit(r[i] * g, dg, &s->dither);
+    }
 }
 
 /* ---- keys ---- */
@@ -166,13 +214,24 @@ static int get_error(void *instance, char *buf, int buf_len) {
 }
 
 static void render_block(void *instance, int16_t *out, int frames) {
+    strut_t *s = instance;
+#if defined(__aarch64__)
+    /* Flush denormals to zero while Strut renders, so a long tail never falls
+     * into slow subnormal arithmetic; the host's own mode is put back after. */
+    uint64_t fpcr;
+    __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+    __asm__ volatile("msr fpcr, %0" ::"r"(fpcr | (1ull << 24)));
+#endif
     float l[STRUT_MAX_BLOCK], r[STRUT_MAX_BLOCK];
-    if (frames > STRUT_MAX_BLOCK) frames = STRUT_MAX_BLOCK;
-    strut_render(instance, l, r, frames);
-    for (int n = 0; n < frames; n++) {
-        out[2 * n] = (int16_t)lrintf(clampf(l[n], -1.0f, 1.0f) * 32767.0f);
-        out[2 * n + 1] = (int16_t)lrintf(clampf(r[n], -1.0f, 1.0f) * 32767.0f);
+    for (int done = 0; done < frames;) {
+        const int n = frames - done < STRUT_MAX_BLOCK ? frames - done : STRUT_MAX_BLOCK;
+        strut_render(s, l, r, n);
+        strut_output(s, l, r, out + 2 * done, n);
+        done += n;
     }
+#if defined(__aarch64__)
+    __asm__ volatile("msr fpcr, %0" ::"r"(fpcr));
+#endif
 }
 
 static plugin_api_v2_t api = {

@@ -15,6 +15,7 @@ typedef struct {
     uint32_t seed;
     float decay, env;
     float norm;             /* scales the hit so the body rings at one */
+    float gain;             /* the last block's, so a level change glides */
     /* three phasor resonators (Mathews and Smith), real and imaginary */
     float zr[SKIN_PARTIALS], zi[SKIN_PARTIALS];
     /* MODE's and TONE's state-variable filters (Zavalishin) */
@@ -24,7 +25,8 @@ typedef struct {
 /* Starts a hit with the pad's knobs p (STRUT_PAD_PARAMS order). */
 void skin_start(skin_voice_t *v, const float *p, uint32_t seed);
 
-/* Adds frames of Skin into out, times gain; returns 0 once it has died away. */
+/* Adds frames of Skin into out, times gain (gliding there from the last
+ * block's across this one); returns 0 once it has died away. */
 int skin_render(skin_voice_t *v, const float *p, float gain, float *out, int frames);
 
 /* What the knobs mean in physical units, shared with the tests. */

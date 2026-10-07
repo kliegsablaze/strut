@@ -91,11 +91,16 @@ typedef struct {
     double press_at, note_at;   /* last vouch from the host, last note-on */
     int note_pad;
     uint32_t seed;              /* the noise behind every hit */
+    uint32_t dither;            /* the output's dither, and how deep it is */
+    float dither_g, vol_g;
+    int sounding;               /* voices that rendered this block */
 } strut_t;
 
 void strut_init(strut_t *s);
 void strut_note_on(strut_t *s, int note, int vel);
 void strut_render(strut_t *s, float *l, float *r, int frames);
+void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int frames);
+float strut_fader(float x);
 void strut_press(strut_t *s);   /* the host's "a finger did that" */
 
 int strut_contract_hierarchy(char *buf, int len);

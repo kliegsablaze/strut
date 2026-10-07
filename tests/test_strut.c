@@ -216,6 +216,63 @@ static void skin(void) {
            20 * log10(hi / lo));
 }
 
+/* The level knobs are faders: off at zero, then a few dB a tenth of a turn,
+ * so a turn is always heard. */
+static void levels(void) {
+    const int keys[] = { P_SKIN, P_LEVEL };
+    for (int k = 0; k < 2; k++) {
+        double prev = 0;
+        int even = 1;
+        for (int i = 0; i <= 10; i++) {
+            strut_t *s = fresh();
+            s->pad[0].p[keys[k]] = (float)i / 10;
+            const int n = hit(s, 0.3f);
+            double peak = 0;
+            for (int j = 0; j < n; j++) peak = fmax(peak, fabs(L[j]));
+            if (i == 0) CHECK(peak == 0, "%s at zero is off", STRUT_PAD_PARAMS[keys[k]].key);
+            if (i >= 2) {
+                const double db = 20 * log10(peak / prev);
+                even &= db > 2.0 && db < 4.0;
+            }
+            prev = peak;
+            free(s);
+        }
+        CHECK(even, "%s: each tenth of a turn is 2 to 4 dB", STRUT_PAD_PARAMS[keys[k]].key);
+    }
+}
+
+/* Through the real 16-bit output: a fading tail follows the float signal to
+ * within a step and a half (the dither, no grit), and ends in true silence. */
+static void tail(void) {
+    void *p = A->create_instance(".", "");
+    A->set_param(p, "p01_s_mode", "Band");
+    A->set_param(p, "p01_s_ring", "0.7");
+    strut_t *ref = fresh();
+    ref->pad[0].p[P_S_MODE] = 1;
+    ref->pad[0].p[P_S_RING] = 0.7f;
+    midi3(p, 0x90, STRUT_NOTE0, 100);
+    strut_note_on(ref, STRUT_NOTE0, 100);
+    int16_t out[256];
+    float l[128], r[128];
+    double worst = 0;
+    int zeros = 0, blocks = 0;
+    for (; blocks < 4000; blocks++) {
+        A->render_block(p, out, 128);
+        strut_render(ref, l, r, 128);
+        int all0 = 1;
+        for (int i = 0; i < 128; i++) {
+            if (fabs(l[i]) * 32000 < 40) worst = fmax(worst, fabs(out[2 * i] - l[i] * 32000));
+            all0 &= out[2 * i] == 0 && out[2 * i + 1] == 0;
+        }
+        zeros = all0 ? zeros + 1 : 0;
+        if (zeros > 50) break;
+    }
+    CHECK(worst <= 1.5, "a quiet tail is within 1.5 steps of the exact signal (%.2f)", worst);
+    CHECK(zeros > 50, "and ends in true silence, not hiss");
+    free(ref);
+    A->destroy_instance(p);
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -247,6 +304,8 @@ int main(int argc, char **argv) {
     pads();
     keys();
     skin();
+    levels();
+    tail();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;

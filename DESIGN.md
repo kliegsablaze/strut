@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin sounds, 0.0.3 (2026-10-07). Every proposed knob, on every
+**Status:** Skin sounds, 0.0.4 (2026-10-07). Every proposed knob, on every
 page and both views of each engine page, is declared, kept per pad and planned
 by the host's own planner in the tests. **Skin**, the resonator, is built and
 plays on every pad, mixed by SKIN, TUNE, DECAY and LEVEL (see *How Skin
@@ -224,7 +224,7 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 | 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. |
 | 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
 | 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass). |
-| 5 | `pNN_skin` | SKIN | Skin's level. |
+| 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and LEVEL. |
 | 6 | `pNN_wave` | WAVE | Wave's level. |
 | 7 | `pNN_noise` | NOISE | Noise's level. |
 | 8 | `pNN_level` | LEVEL | The pad's level. |
@@ -278,6 +278,8 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
 - **Velocity** sets the level, on a gentle curve (to the power 1.5).
 - **Two voices a pad.** A new hit takes the other voice, so the last one keeps
   ringing under it.
+- **Levels glide.** A voice's level moves across a block, not in one step, so
+  turning SKIN or LEVEL while a drum rings does not crackle.
 
 Rejected for the ring: the state-variable filter itself as the resonator. How
 loud it rings for a given strike depends on its pitch and resonance, so every
@@ -445,6 +447,21 @@ own engine, reach most of the same sounds.)
   wavetables, and the noise tables, are computed in `create_instance` (inverse
   FFT of a shaped spectrum with random phase). No data files. Watch the load
   time.
+- **The output** is Quilt's, with one change. VOL (the Kit page's, wired
+  early) glides across the block; a soft limiter above half scale rounds off a
+  stack of pads instead of clipping; then 16 bits, rounded with one step of
+  triangular dither, and denormals flushed to zero on the Move.
+  - **The dither stays at full depth while any voice sounds**, and fades out
+    over a block once all have ended. The user heard quantization grit on the
+    first Skin build (2026-10-07), which had no dither. Quilt's dither fades
+    out as the sound falls below eight steps; measured on a tom's tail, that
+    left the distortion at its harmonics 11 dB above the error's floor, against
+    18 dB with no dither and 0.6 dB (none) with dither kept on. The price is
+    about a quarter of a second more tail, at −96 dB.
+- **The level knobs are faders.** SKIN, WAVE, NOISE and LEVEL began as the
+  square of the knob, moving half a percent a detent; the user turned SKIN
+  and heard nothing change (2026-10-07). Now off at zero, then 30 dB across the
+  turn, about 3 dB a tenth.
 - **Samples.** User WAVs come from a folder, for example
   `/data/UserData/schwung/samples/strut/`. The file browser is Schwung's
   `filepath` param type. Loading happens off the audio thread, as Ragtag does.
@@ -476,7 +493,8 @@ own engine, reach most of the same sounds.)
    template-vs-focused decision made (template, declared once).~~ (0.0.2)
    Still to try on the device: automation and a step lock on pad 5 land on
    pad 5, and MOD swaps its page at once.
-3. ~~**Skin** engine~~ (0.0.3). Still to do: measure its CPU on the Move
+3. ~~**Skin** engine~~ (0.0.3; 0.0.4 fixed the output's grit and made the
+   levels faders). Still to do: measure its CPU on the Move
    (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
    ringing) and hear it there.
 4. **Wave** engine, its tables, and FM from Skin.
@@ -506,6 +524,9 @@ own engine, reach most of the same sounds.)
     and middle, every option of each list: it sounds, stays finite, peaks
     under 0.9 and dies away. Across all of them the loudest and quietest peaks
     are within 7.7 dB.
+  - The faders: off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
+    through the real 16-bit output stays within 1.5 steps of the exact
+    signal and ends in true silence.
 - `tools/demo.c` renders a few hand-set sounds and a groove to a WAV, for
   listening away from the Move (`build/tests/demo out.wav`).
 - The CI builds a device tarball on every push.

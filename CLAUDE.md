@@ -79,7 +79,13 @@ You need a checkout of the host to test against:
 git clone --depth 1 https://github.com/charlesvestal/schwung .schwung
 ```
 
-`tests/run.sh` uses `../schwung` if it exists, otherwise `.schwung`.
+`tests/run.sh` uses `../schwung` if it exists, otherwise `.schwung`. Test against the
+release the Move runs (`git -C .schwung fetch --depth 1 origin tag v1.7.3 &&
+git -C .schwung checkout v1.7.3`), not the newest commit.
+
+**On the device, "no sound and the pages do not follow" first means MIDI is
+off for the slot** (2026-10-07): page-follow pairs a press with its note, so
+it needs notes too.
 
 What matters most in the host:
 

@@ -77,6 +77,7 @@ static float hit_next(skin_voice_t *v) {
 
 void skin_start(skin_voice_t *v, const float *p, uint32_t seed) {
     *v = (skin_voice_t){ 0 };
+    v->gain = -1.0f;        /* none yet: the first block starts where it is */
     v->kind = (int)p[P_S_HIT];
     v->seed = seed | 1u;
     const int len = hit_len(p);
@@ -158,7 +159,8 @@ int skin_render(skin_voice_t *v, const float *p, float gain, float *out, int fra
     const svf_t mf = mode == MODE_LOW ? svf(2.0f * hz, 1.4142f)
                    : mode == MODE_HIGH ? svf(0.5f * hz, 1.4142f) : svf(hz, 1.0f);
     const svf_t tf = svf(150.0f * powf(120.0f, p[P_S_TONE]), 1.4142f);
-    const float g = gain * v->norm;
+    const float g0 = (v->gain < 0.0f ? gain : v->gain) * v->norm, dg = (gain * v->norm - g0) / (float)frames;
+    v->gain = gain;
 
     for (int n = 0; n < frames; n++) {
         const float x = hit_next(v);
@@ -174,7 +176,7 @@ int skin_render(skin_voice_t *v, const float *p, float gain, float *out, int fra
         svf_step(&mf, &v->m1, &v->m2, y, &lp, &bp, &hp);
         y = mode == MODE_LOW ? lp : mode == MODE_HIGH ? hp : mf.k * bp;
         svf_step(&tf, &v->t1, &v->t2, y, &lp, &bp, &hp);
-        out[n] += g * lp;
+        out[n] += (g0 + dg * (float)(n + 1)) * lp;
     }
 
     if (v->n < v->len) return 1;
