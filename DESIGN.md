@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, 0.2.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, 0.2.1 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -10,8 +10,7 @@ on every pad, mixed by SKIN, WAVE, NOISE, TUNE, DECAY and LEVEL; Skin's ring
 can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
 *How Wave works*, *How Noise works*). Noise's samples, the modulators and the
 effects are still the plan; their knobs are kept but do nothing yet. On the
-Move, Skin and Wave at their dearest take 6.8 % of the CPU (0.1.0, one voice
-a pad; two took 14.1 %); all three are still to be measured there.
+Move, all three engines at their dearest take 11.1 % of the CPU (0.2.0).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -687,6 +686,13 @@ own engine, reach most of the same sounds.)
     the Move: Skin 3.2 %, Skin and Wave 6.8 %**, all sixteen pads at their
     dearest (2026-10-07). About a quarter of the budget, leaving the rest
     for Noise, the modulators and the effects.
+  - **0.2.0: Noise.** On the Move (2026-10-07): Skin 3.3 %, Skin and Wave
+    7.8 %, **all three 11.1 %**, every pad at its dearest; the block in which
+    all sixteen are hit at once 1.28 ms of its 2.9. Noise costs about what
+    Wave does: its six-point read is most of it, the points loaded and made
+    floats four at a time (noise.h). Its strike sizing, the onset's
+    share, was halved in 0.2.1 (each band edge worked out once, in single
+    precision).
   - The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
@@ -697,8 +703,24 @@ own engine, reach most of the same sounds.)
   FFT: 115 cycles at ten brightnesses, 2.4 MB, 56 ms on a laptop. No data
   files. Noise's eight three-second loops are built the same way, two to
   each transform (one in its real part, one in its imaginary): 8 MB, as
-  16-bit numbers, and about 120 ms more on a laptop; with Wave's, 160 ms
-  (0.2.0). On the Move, still to measure; Wave's alone took 300 to 350 ms.
+  16-bit numbers.
+  - **0.2.0 took 2.8 s to load on the Move** (2026-10-07), against 0.3 s
+    for Wave's alone, though only 0.26 s on a laptop. A simulation of the
+    Move's caches (32 KB and 1 MB, cachegrind) found the transform waiting
+    on memory: 25 million misses. Its turns were read with a stride, a
+    whole cache line for each, and every stage swept 4 MB.
+  - **0.2.1:** each stage's turns side by side; the stages up to 16k points
+    done a block at a time, in the cache; spectra written straight into the
+    transform's bit-reversed order, so the long transforms skip their
+    scattered reordering; single precision (its error is 120 dB down, under
+    the 16 bits kept), with each row of butterflies a function of its own so
+    GCC runs it four at a time. Misses down to 3.3 million, instructions
+    from 1.18 to 0.64 billion; 65 ms on a laptop for every table, Wave's
+    included. On the Move, still to measure.
+  - Rejected: building Noise's tables on a thread of their own after
+    loading. A thread's library call can need a newer C library than the
+    Move's, which this session cannot check, and noise would be silent for
+    its first seconds.
 - **The output** is Quilt's, with one change. VOL (the Kit page's, wired
   early) glides across the block; a soft limiter above half scale rounds off a
   stack of pads instead of clipping; then 16 bits, rounded with one step of
@@ -783,8 +805,9 @@ own engine, reach most of the same sounds.)
    Move: 6.8 % with Skin, every pad at its dearest (0.1.0, one voice a
    pad; two voices took 14.1 %). Still to do: hear it on the device.
 5. ~~**Noise** engine and noise tables~~ (0.2.0). Samples come at step 9.
-   Still to do: hear it on the device, and measure its CPU and load time
-   there.
+   CPU on the Move: 11.1 % with all three engines on every pad at their
+   dearest. Load took 2.8 s; 0.2.1 rebuilds the tables for the Move's cache.
+   Still to do: hear it on the device, and measure 0.2.1's load there.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.

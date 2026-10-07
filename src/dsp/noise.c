@@ -86,10 +86,10 @@ static const double SQUARES[6] = { 317, 401, 463, 587, 677, 839 };
 
 /* Table t's spectrum, bins KMIN to KMAX, into sre and sim; re and im are
  * scratch. Returns the scale that sets it to the same loudness to the ear. */
-static double spectrum(int t, double *re, double *im, double *sre, double *sim) {
+static double spectrum(int t, float *re, float *im, float *sre, float *sim) {
     rs = 0x2545F491u ^ (0x9E3779B9u * (uint32_t)(t + 1));     /* each its own noise, whatever the others draw */
-    memset(sre, 0, sizeof(double) * (NT_N / 2 + 1));
-    memset(sim, 0, sizeof(double) * (NT_N / 2 + 1));
+    memset(sre, 0, sizeof(float) * (NT_N / 2 + 1));
+    memset(sim, 0, sizeof(float) * (NT_N / 2 + 1));
     if (t == NT_CRACKLE || t == NT_GRIT) {
         double y = 0;
         int hold = 0;
@@ -99,38 +99,43 @@ static double spectrum(int t, double *re, double *im, double *sre, double *sim) 
                     const double sign = uni() < 0.5 ? -1 : 1;
                     y += sign * (0.6 + 0.4 * uni());
                 }
-                re[n] = y;
+                re[fft_rev(n, NT_BITS)] = (float)y;
                 y *= 0.7;
             } else {                    /* eight levels, each held 1 to 20 of the output's samples */
                 if (hold-- <= 0) y = ((int)(uni() * 8) - 3.5) / 3.5, hold = (int)(uni() * 40) + 1;
-                re[n] = y;
+                re[fft_rev(n, NT_BITS)] = (float)y;
             }
         }
-        memset(im, 0, sizeof(double) * NT_N);
-        fft(re, im, NT_N, -1);
+        memset(im, 0, sizeof(float) * NT_N);
+        fft_reversed(re, im, NT_N, -1);    /* drawn in reversed order, above */
         for (int k = KMIN; k <= KMAX; k++) sre[k] = re[k], sim[k] = im[k];
     } else if (t == NT_METAL) {
         for (int s = 0; s < 6; s++) {
             const int k0 = (int)lround(SQUARES[s] * NT_N / NT_SR);
-            for (int m = 1; m * k0 <= KMAX; m += 2) sim[m * k0] -= 1.0 / m;
+            for (int m = 1; m * k0 <= KMAX; m += 2) sim[m * k0] -= 1.0f / (float)m;
         }
         for (int k = 0; k <= KMAX; k++) {
             const double g = k < KMIN ? 0 : 0.15 + hp2((double)k * NT_SR / NT_N, 5000);
-            sre[k] *= g, sim[k] *= g;
+            sre[k] *= (float)g, sim[k] *= (float)g;
         }
     } else {
         for (int k = KMIN; k <= KMAX; k++) {
-            const double m = colour(t, (double)k * NT_SR / NT_N), ph = 2 * PI * uni();
-            sre[k] = m * cos(ph), sim[k] = m * sin(ph);
+            /* a random phase: a point picked evenly in the unit disc, made
+             * unit length, without a sine or cosine */
+            double x, y, r;
+            do x = 2 * uni() - 1, y = 2 * uni() - 1, r = x * x + y * y; while (r > 1 || r < 1e-6);
+            const double m = colour(t, (double)k * NT_SR / NT_N) / sqrt(r);
+            sre[k] = (float)(m * x), sim[k] = (float)(m * y);
         }
     }
     double wa = 0;
-    for (int k = KMIN; k <= KMAX; k++) wa += (sre[k] * sre[k] + sim[k] * sim[k]) * aweight((double)k * NT_SR / NT_N);
+    for (int k = KMIN; k <= KMAX; k++) wa += ((double)sre[k] * sre[k] + (double)sim[k] * sim[k]) * aweight((double)k * NT_SR / NT_N);
     return LOUD / sqrt(2 * wa);
 }
 
-static void store(int16_t *q, const double *x, double scale, int n) {
-    for (int i = 0; i < n; i++) q[i] = (int16_t)lrint(x[i] * scale * 32767);
+static void store(int16_t *q, const float *x, double scale, int n) {
+    const float g = (float)(scale * 32767);
+    for (int i = 0; i < n; i++) q[i] = (int16_t)(int32_t)rintf(x[i] * g);
     q[-2] = q[n - 2], q[-1] = q[n - 1];
     for (int i = 0; i < 5; i++) q[n + i] = q[i];
 }
@@ -138,19 +143,21 @@ static void store(int16_t *q, const double *x, double scale, int n) {
 /* Two tables at once, a and a + 1: one inverse FFT of A + jB gives a in
  * its real part and b in its imaginary, since both are real; half the
  * work, and the build is most of Strut's load. */
-static void build_pair(int a, double *re, double *im, double *sp[4]) {
+static void build_pair(int a, float *re, float *im, float *sp[4]) {
     double scale[2];
     for (int j = 0; j < 2; j++) scale[j] = spectrum(a + j, re, im, sp[2 * j], sp[2 * j + 1]);
-    const double *ar = sp[0], *ai = sp[1], *br = sp[2], *bi = sp[3];
+    const float *ar = sp[0], *ai = sp[1], *br = sp[2], *bi = sp[3];
     for (int l = 0; l < NT_LEVELS; l++) {
         const int n = NT_N >> l, top = KMAX >> l;
-        memset(re, 0, sizeof(double) * n);
-        memset(im, 0, sizeof(double) * n);
-        for (int k = KMIN; k <= top; k++) {
-            re[k] = ar[k] - bi[k], im[k] = ai[k] + br[k];
-            re[n - k] = ar[k] + bi[k], im[n - k] = br[k] - ai[k];
+        memset(re, 0, sizeof(float) * n);
+        memset(im, 0, sizeof(float) * n);
+        const int bits = NT_BITS - l;
+        for (int k = KMIN; k <= top; k++) {     /* straight into the transform's order */
+            const int p = fft_rev(k, bits), q = fft_rev(n - k, bits);
+            re[p] = ar[k] - bi[k], im[p] = ai[k] + br[k];
+            re[q] = ar[k] + bi[k], im[q] = br[k] - ai[k];
         }
-        fft(re, im, n, 1);
+        fft_reversed(re, im, n, 1);
         if (l == 0) {       /* under full scale */
             double pa = 0, pb = 0;
             for (int i = 0; i < n; i++) pa = fmax(pa, fabs(re[i])), pb = fmax(pb, fabs(im[i]));
@@ -162,12 +169,12 @@ static void build_pair(int a, double *re, double *im, double *sp[4]) {
     }
     /* each band's share of the power, for the level and Skin's strike */
     for (int j = 0; j < 2; j++) {
-        const double *sr = sp[2 * j], *si = sp[2 * j + 1];
+        const float *sr = sp[2 * j], *si = sp[2 * j + 1];
         double var = 0, band[NT_BANDS] = { 0 };
-        for (int k = KMIN; k <= KMAX; k++) {
-            const double pw = 2 * (sr[k] * sr[k] + si[k] * si[k]) * scale[j] * scale[j];
-            const int b = (int)(4 * log2((double)k * NT_SR / NT_N / 20));
-            if (b >= 0 && b < NT_BANDS) band[b] += pw;
+        for (int k = KMIN, b = 0; k <= KMAX; k++) {
+            const double pw = 2 * ((double)sr[k] * sr[k] + (double)si[k] * si[k]) * scale[j] * scale[j];
+            while (b < NT_BANDS && (double)k * NT_SR / NT_N >= edge[b + 1]) b++;
+            if (b < NT_BANDS) band[b] += pw;
             var += pw;
         }
         for (int b = 0; b < NT_BANDS; b++) tables[a + j].band[b] = (float)band[b];
@@ -186,10 +193,10 @@ void nt_build(void) {
         rattle_f[i] = 2000 * pow(4.5, uni());
         rattle_a[i] = 0.5 + uni();
     }
-    /* scratch for the build only: 8 MB, given back */
-    double *re = malloc(sizeof(double) * NT_N), *im = malloc(sizeof(double) * NT_N), *sp[4];
+    /* scratch for the build only: 4 MB, given back */
+    float *re = malloc(sizeof(float) * NT_N), *im = malloc(sizeof(float) * NT_N), *sp[4];
     int ok = re && im;
-    for (int j = 0; j < 4; j++) ok &= (sp[j] = malloc(sizeof(double) * (NT_N / 2 + 1))) != NULL;
+    for (int j = 0; j < 4; j++) ok &= (sp[j] = malloc(sizeof(float) * (NT_N / 2 + 1))) != NULL;
     if (ok)
         for (int t = 0; t < NT_TABLES; t += 2) build_pair(t, re, im, sp);
     free(re), free(im);
@@ -306,12 +313,12 @@ void noise_skip(noise_voice_t *v, const float *p, int frames) {
 /* The strike's power gathered from x = 0 to x, at x radians a sample from
  * the resonance: the integral of 1 / |1 - d e^{-jx}|^2, the window
  * d^n's spectrum, in closed form. */
-static double gathered(double x, double d) {
-    const double turn = 2 * PI / (1 - d * d);
-    double k = 0;
-    while (x > PI) x -= 2 * PI, k += turn;
-    while (x < -PI) x += 2 * PI, k -= turn;
-    return k + 2 / (1 - d * d) * atan((1 + d) / (1 - d) * tan(x / 2));
+static float gathered(float x, float d) {
+    const float turn = 2 * (float)PI / (1 - d * d);
+    float k = 0;
+    while (x > (float)PI) x -= 2 * (float)PI, k += turn;
+    while (x < -(float)PI) x += 2 * (float)PI, k -= turn;
+    return k + 2 / (1 - d * d) * atanf((1 + d) / (1 - d) * tanf(x / 2));
 }
 
 /* Noise's expected drive of a resonance at hz through Skin's strike (the
@@ -320,7 +327,8 @@ static double gathered(double x, double d) {
  * the colour; a long one only what is near hz, so Metal's lines drive a
  * nearby pitch through a short hit and not through a long one, as they
  * really would. Never under the noise's own level, so a colour with nothing
- * near hz rings Skin quietly rather than blowing its hit up. */
+ * near hz rings Skin quietly rather than blowing its hit up. Each band edge
+ * is gathered once, for the band below it and the one above. */
 float noise_strike(noise_voice_t *v, const float *p, float hz, float d, int len) {
     (void)len;      /* the window, d^n, is down 43 dB by its end: taken as endless */
     const float rate = rate_of(p);
@@ -328,17 +336,18 @@ float noise_strike(noise_voice_t *v, const float *p, float hz, float d, int len)
     float fc;
     const float m = matched(v, p, rate, &filt, &fc);
     const nt_table_t *tb = nt_table((int)p[P_N_TABLE]);
-    const double w = 2 * PI * hz / STRUT_SR, dd = d;
-    double drive = 0, power = 0;
-    for (int b = 0, n = bands_kept(rate); b < n; b++) {
-        const double lo = fmin(2 * PI * heard(edge[b] * rate) / STRUT_SR, PI);
-        const double hi = fmin(2 * PI * heard(edge[b + 1] * rate) / STRUT_SR, PI);
-        const double pw = tb->band[b] * power_at(filt, fc, sqrtf(edge[b] * edge[b + 1]) * rate);
-        power += pw;
-        if (hi - lo < 1e-9) continue;
-        /* the band and its mirror below zero */
-        const double got = gathered(w - lo, dd) - gathered(w - hi, dd) + gathered(w + hi, dd) - gathered(w + lo, dd);
-        drive += pw / (2 * (hi - lo)) * got;
+    const float w = 2 * (float)PI * hz / STRUT_SR;
+    float drive = 0, power = 0, lo = 0, glo = 0;
+    for (int b = 0, n = bands_kept(rate); b <= n; b++) {
+        const float e = fminf(2 * (float)PI * heard(edge[b] * rate) / STRUT_SR, (float)PI);
+        /* the band and its mirror below zero, from 0 up to this edge */
+        const float g = gathered(w + e, d) - gathered(w - e, d);
+        if (b > 0) {
+            const float pw = tb->band[b - 1] * power_at(filt, fc, sqrtf(edge[b - 1] * edge[b]) * rate);
+            power += pw;
+            if (e - lo > 1e-6f) drive += pw / (2 * (e - lo)) * (g - glo);
+        }
+        lo = e, glo = g;
     }
-    return m * (float)sqrt(fmax(drive, power));
+    return m * sqrtf(fmaxf(drive, power));
 }

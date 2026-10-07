@@ -33,7 +33,7 @@ const wt_frame_t *wt_frame(int t, int f) {
     return t == WT_ANALOG ? &frames[f] : &frames[3 + (t - 1) * WT_FRAMES + f];
 }
 
-static double re[TD_N], im[TD_N];
+static float re[TD_N], im[TD_N];
 
 /* ---- a frame from its harmonics: x = sum ca[h] cos(2 pi h t) + sb[h] sin(2 pi h t) ---- */
 
@@ -46,8 +46,8 @@ static void make(wt_frame_t *fr, float *mem, const double *ca, const double *sb)
         memset(re, 0, sizeof(double) * n);
         memset(im, 0, sizeof(double) * n);
         for (int h = 1; h <= top && h < n / 2; h++) {
-            re[h] = ca[h] / 2, im[h] = -sb[h] / 2;
-            re[n - h] = ca[h] / 2, im[n - h] = sb[h] / 2;
+            re[h] = (float)(ca[h] / 2), im[h] = (float)(-sb[h] / 2);
+            re[n - h] = (float)(ca[h] / 2), im[n - h] = (float)(sb[h] / 2);
         }
         fft(re, im, n, 1);
         if (l == 0) {       /* no frame peaks over full scale */
@@ -78,14 +78,14 @@ static void sync_wave(double u) {
     const double r = pow(2.0, 3 * u);
     for (int i = 0; i < TD_N; i++) {
         const double x = r * i / TD_N;
-        re[i] = 2 * (x - floor(x)) - 1;
+        re[i] = (float)(2 * (x - floor(x)) - 1);
     }
 }
 
 /* A sine folded back on itself more and more, as a wavefolder does. */
 static void fold_wave(double u) {
     const double g = 1 + 7 * u;
-    for (int i = 0; i < TD_N; i++) re[i] = sin(PI / 2 * g * sin(2 * PI * i / TD_N));
+    for (int i = 0; i < TD_N; i++) re[i] = (float)sin(PI / 2 * g * sin(2 * PI * i / TD_N));
 }
 
 /* Peterson and Barney's vowels (JASA 24(2), 1952, men's averages): the
