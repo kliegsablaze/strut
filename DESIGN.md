@@ -540,9 +540,10 @@ own engine, reach most of the same sounds.)
    pad 5, and MOD swaps its page at once.
 3. ~~**Skin** engine~~ (0.0.3; 0.0.4 fixed the output's grit and made the
    levels faders; 0.0.5 titles each page and logs its version; 0.0.6 shapes the dither's
-   noise). SKIN on the device is still to confirm. Still to do: measure its CPU on the Move
+   noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
+   at full Move volume. Still to do: measure its CPU on the Move
    (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
-   ringing) and hear it there.
+   ringing).
 4. **Wave** engine, its tables, and FM from Skin.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
