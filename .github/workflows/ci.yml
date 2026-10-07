@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # tests/plan.test.mjs plans the pages with the host's own planner
+      - uses: actions/checkout@v4
+        with:
+          repository: charlesvestal/schwung
+          path: .schwung
+      - name: Run tests
+        run: SCHWUNG=.schwung bash tests/run.sh
+
+  # A device build of every push, so a version can be tried on the Move
+  # without building locally: download the artifact, then
+  #   scripts/install.sh strut-module.tar.gz
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-compile for the Move (aarch64)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu
+          ./scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strut-module
+          path: dist/strut-module.tar.gz

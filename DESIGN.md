@@ -1,0 +1,359 @@
+# Strut
+
+*Sixteen drums, each one built from three engines and played from eight knobs.*
+
+**Status:** plan and scaffold, 0.0.1 (2026-10-07). The scaffold builds, loads,
+follows the pads and plays a placeholder sine per pad. None of the engines below
+exists yet. Everything from **Pads and focus** down is the plan, not what runs.
+
+- **Module ID:** `strut`
+- **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
+  (knob pictures may follow Quilt's `canvas.js` later, see *Later*).
+- **Host:** Schwung 1.7.3 (the Move runs 1.7.3; the scaffold uses nothing newer).
+
+---
+
+## Lineage
+
+What the three engines are, and the papers they lean on:
+
+- **The resonator** is the analogue drum: a short exciter rings a filter that is
+  close to oscillating. This is how the TR-808's kick and toms work.
+  - K. J. Werner, J. S. Abel, J. O. Smith. *A Physically-Informed,
+    Circuit-Bounded, Analog Synth Model of the Roland TR-808 Bass Drum.*
+    DAFx 2014.
+  - K. J. Werner. *Virtual Analog Modeling of Audio Circuitry Using Wave
+    Digital Filters* (PhD thesis, Stanford 2016): the 808 cowbell and
+    cymbal circuits.
+  - M. Mathews, J. O. Smith. *Methods for Synthesizing Very High Q
+    Parametrically Well Behaved Two Pole Filters.* SMAC 2003. The phasor
+    resonator, already used in Quilt.
+  - A. Zavalishin. *The Art of VA Filter Design* (2012/2018). The
+    trapezoidal state-variable filter, stable under fast modulation.
+- **The oscillator** is the tonal body: a wavetable, morphed by an envelope,
+  frequency-modulated by the resonator.
+  - V. Välimäki, J. Pekonen, J. Nam. *Perceptually informed synthesis of
+    bandlimited classical waveforms using integrated polynomial
+    interpolation.* JASA 131(1), 2012 (polyBLEP).
+  - Mipmapped wavetables, one table per octave, so a high note does not
+    alias.
+- **The noise source** is the hiss, the metal and the sample: a loop that
+  repeats without ever sounding pitched, or a recording.
+  - X. Serra, J. O. Smith. *Spectral Modeling Synthesis.* CMJ 14(4), 1990.
+    Keep a sound's spectrum, throw away its phase, and it becomes noise of the
+    same colour. This is how a recording becomes a noise table.
+  - The 808 and 909 hi-hats: six square oscillators at inharmonic
+    frequencies through band-pass filters (Werner, above).
+- **Drum physics**, for the presets and the randomiser's sense of what a
+  drum is:
+  - T. D. Rossing. *Science of Percussion Instruments.* World Scientific, 2000.
+  - J. Bilbao. *Numerical Sound Synthesis.* Wiley, 2009. Chapter 11
+    (membranes and plates).
+
+Effects are our own, built for drums: a tilt filter, drive, a bit crusher, a
+two-band EQ, a transient shaper, and a kit-wide room and glue. The room can start
+from Quilt's plate (Dattorro, *Effect Design Part 1*, JAES 1997).
+
+---
+
+## The idea in plain words
+
+Every pad is its own drum. You build each drum from three sources, played
+together:
+
+| Engine | Page | What it is | Good for |
+|---|---|---|---|
+| **Skin** | Skin | a burst that sets a resonant filter ringing | kicks, toms, snare bodies, cowbells, zaps |
+| **Wave** | Wave | an oscillator that sweeps through a table of waveforms | punchy bodies, tonal drums, bass hits, blips |
+| **Noise** | Noise | a loop of coloured noise, or a sample | snares, hats, cymbals, claps, texture |
+
+The three can feed each other, and that is where the range comes from:
+
+- **Skin's ringing frequency-modulates Wave.** A decaying FM source is what
+  makes a body growl at the start and settle into a tone.
+- **Skin can be struck by Wave or Noise** instead of its own burst. A noise
+  burst through a high resonance is a snare; a wave through it is a metallic
+  ping.
+
+The **Pad** page mixes the three and gives the four knobs used most: TUNE,
+DECAY, COLOR and LEVEL. A beginner never needs to leave it; the presets do the
+rest. Each engine's page is there when you want to go further.
+
+---
+
+## Pads and focus
+
+There are sixteen pads, notes 36 to 51, which is what a Move drum track sends.
+The pages always show **the pad you last hit**:
+
+- The host forwards Move's pad presses to Strut as a *vouch*, `pad_press = "1"`,
+  without saying which pad. Strut pairs the vouch with the note it receives
+  itself within 50 ms, in either order, and focuses that pad. A note with no
+  vouch is the sequencer playing, and moves nothing. This is Schwung's
+  `child_press_param` contract (docs/MODULES.md, *Live presses*). **It works in
+  the scaffold.**
+- The focused pad is `pad` (1 to 16), the template level's `child_index_param`.
+  It is turnable, so the pad can be changed without hitting it.
+- **To do:** answer `pad` as `"<count>:<pad>"` once the host reads that form
+  for `child_index_param`. Otherwise hitting the same pad again after browsing
+  away does not come back. Check docs/MODULES.md, *A focus answer may carry a
+  CHANGE TOKEN*.
+
+**Open question, and build step 1: one key per pad, or keys for the focused
+pad?**
+
+- **Template keys** (`p01_tune` … `p16_level`) are what the scaffold uses.
+  - Every pad's knob is a real host parameter, so Move's automation and
+    per-step locks reach the right pad.
+  - The cost is size. The scaffold's 48 keys take 4.8 KB of `chain_params`,
+    about 100 bytes a key. The full design is about 58 keys a pad, about 930
+    keys and 93 KB, against a 128 KB buffer. It fits, but only just.
+- **Focused-pad keys** (`tune`, which means "the focused pad's tune") are about
+  60 keys.
+  - They are small and simple.
+  - But automation recorded on one pad plays back on whichever pad is
+    focused. That is a real defect for a drum machine.
+- **Recommendation: template keys.** Measure the full contract first, and keep
+  it under 96 KB:
+  - Shorten names.
+  - Leave out `step` where the host's default serves.
+  - Share option lists where the host allows.
+  - Check the grid's read rate with 900 keys on the device.
+
+---
+
+## Pages, and the page within a page
+
+Schwung shows eight knobs a page, and Shift+jog-click opens a list of every
+page. Strut keeps that list short:
+
+| Page | For | Shows |
+|---|---|---|
+| **Pad** | the focused pad | the mix and the four big knobs |
+| **Skin** | the focused pad | the resonator |
+| **Wave** | the focused pad | the oscillator |
+| **Noise** | the focused pad | the noise source or sample |
+| **Finish** | the focused pad | pan, choke, flam, drive, crush, EQ, punch, dice |
+| **Kit** | all pads | room, glue, kit volume |
+
+**The page within a page.** Each engine page has a last knob, **MOD**. Turning
+or clicking it swaps that page's other seven knobs for that engine's own
+modulation. Turning it back, or clicking again, brings the sound knobs back.
+Nothing else on screen moves, and you never leave the page.
+
+How it works in Schwung, as Quilt's Modulation page does already:
+
+- `MOD` is a two-option enum (`Sound`, `Mod`), for example `skin_view`. A
+  two-option enum flips on a jog click (`flipsOnClick`), so it works by turning
+  or clicking.
+- The page's 14 other knobs are all declared on the one level. Seven are gated
+  `visible_if: {"param": "skin_view", "equals": "Sound"}` and seven
+  `equals: "Mod"`.
+- Hidden knobs close up, so `MOD` stays in cell 8 either way.
+- A gate re-plans the grid the moment its own knob writes it
+  (`replanIfCondition`), so the swap is immediate.
+- The `*_view` keys are UI state. They are not saved with a sound, and they
+  are not per pad.
+
+This is used three times only, once per engine, so the trick is always in the same
+place and always means the same thing.
+
+(Rejected: a real pop-up page. Schwung has no knob page that opens over another.
+Its "doors" are canvas pages that hand the jog to the module, which would need a
+JavaScript UI for every modulation page.)
+
+---
+
+## Control surface (proposal)
+
+Labels are real words of five letters or fewer. The header shows the full name.
+"Bi" means bipolar, with the centre meaning no change.
+
+### Pad (the focused pad)
+
+| Knob | Key | Label | Behaviour |
+|---|---|---|---|
+| 1 | `pNN_sound` | SOUND | Picks a starting sound for this pad from the library (Kick, Snare, Hat…), replacing its engines. |
+| 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. |
+| 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
+| 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass). |
+| 5 | `pNN_skin` | SKIN | Skin's level. |
+| 6 | `pNN_wave` | WAVE | Wave's level. |
+| 7 | `pNN_noise` | NOISE | Noise's level. |
+| 8 | `pNN_level` | LEVEL | The pad's level. |
+
+### Skin (the resonator)
+
+| Knob | Sound view | | Mod view | |
+|---|---|---|---|---|
+| 1 | PITCH | resonant frequency | KIND | Envelope, LFO, Random or Velocity |
+| 2 | RING | resonance: how long the body rings | RATE | speed; synced right of centre, free left |
+| 3 | HIT | the exciter: Click, Soft, Noise, Wave or Noise source | CURVE | Skin's envelope shape: Natural, Ping, Soft, Hold |
+| 4 | SNAP | how long the exciter lasts | AIM | destination 1 (below) |
+| 5 | METAL | two extra inharmonic partials, rising and louder | DEPTH | Bi |
+| 6 | TONE | brightness, a 2-pole low-pass | AIM | destination 2 |
+| 7 | MODE | Low, Band or High-pass resonator | DEPTH | Bi |
+| 8 | MOD | Sound / Mod | MOD | Sound / Mod |
+
+Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
+
+### Wave (the oscillator)
+
+| Knob | Sound view | | Mod view | |
+|---|---|---|---|---|
+| 1 | PITCH | | KIND | |
+| 2 | BEND | pitch envelope depth, bi | RATE | |
+| 3 | DECAY | | CURVE | Natural, Ping, Soft, Hold, Swell (inverted) |
+| 4 | TABLE | Analog, then the spectral tables | AIM | |
+| 5 | WAVE | position in the table; at the end of Analog, pulse width | DEPTH | |
+| 6 | FM | Skin into Wave's frequency | AIM | |
+| 7 | RING | ring-modulation; bi: −2 to +2 octaves | DEPTH | |
+| 8 | MOD | | MOD | |
+
+Wave's destinations: Pitch, Wave, FM, Ring, Level.
+
+### Noise (the noise source or sample)
+
+| Knob | Sound view | | Mod view | |
+|---|---|---|---|---|
+| 1 | PITCH | | KIND | |
+| 2 | BEND | | RATE | |
+| 3 | DECAY | | CURVE | |
+| 4 | TABLE | noise tables, then samples | AIM | |
+| 5 | COLOR | bi: low-pass left, high-pass right | DEPTH | |
+| 6 | START | sample start (samples only) | AIM | |
+| 7 | LOOP | loop length; full = no loop (samples only) | DEPTH | |
+| 8 | MOD | | MOD | |
+
+Noise's destinations: Pitch, Color, Start, Loop, Level.
+
+### Finish (the focused pad)
+
+| Knob | Label | Behaviour |
+|---|---|---|
+| 1 | PAN | Bi. |
+| 2 | CHOKE | Off, or group A to D: a hit stops the others in its group (open/closed hats). |
+| 3 | FLAM | One hit becomes three; how far apart (claps). |
+| 4 | DRIVE | Saturation. |
+| 5 | CRUSH | Fewer bits and a lower rate. |
+| 6 | LOW | Bi. Low shelf, ±18 dB. |
+| 7 | HIGH | Bi. High shelf, ±18 dB. |
+| 8 | DICE | Turn right to roll a new sound for this pad; turn left to step back through the last eight. |
+
+### Kit (all pads)
+
+| Knob | Label | Behaviour |
+|---|---|---|
+| 1 | SPACE | Room send, set per kit. Per-pad sends are a later choice. |
+| 2 | SIZE | Room size. |
+| 3 | GLUE | Kit compression, transient-aware, one knob. |
+| 4 | WARM | Saturation of the whole kit. |
+| 5 | SWING | Rejected for now: Move's own sequencer swings. Listed so it is not re-proposed. |
+| 6 | | |
+| 7 | | |
+| 8 | VOL | Kit volume, in dB. |
+
+Kits are Schwung presets: the whole kit is saved in `state`, and the factory
+kits are presets. SOUND (Pad, knob 1) is the per-pad library.
+
+---
+
+## Modulation
+
+- Each engine has **one modulator** with two destinations. That makes three per
+  pad.
+- The **kinds** are:
+  - **Envelope:** a one-shot from each hit.
+  - **LFO:** retriggered by each hit, free or synced to the tempo.
+  - **Random:** a new value for each hit.
+  - **Velocity.**
+- **Destinations** are only that engine's own knobs, plus Level. This keeps
+  every list under eight items.
+- As in Quilt, modulation **never writes a knob**: the knob shows what was set.
+- The Pad page's TUNE and DECAY are the shared "move everything" controls.
+
+(Rejected: a mod matrix with any source to any destination. It is the opposite
+of minimal. Three small modulators, each with its
+own engine, reach most of the same sounds.)
+
+---
+
+## Sounds, presets and the randomiser
+
+- **The SOUND library.** About 40 starting sounds, each a full pad:
+  - 8 kicks, 8 snares and claps, 8 hats and cymbals, 8 toms and percussion,
+    and 8 effects and tonal hits.
+  - Each is levelled to the same loudness. Quilt used −26.5 LUFS for
+    instruments; for drums, agree a target with the user first. A peak level
+    for each hit may suit better than LUFS.
+- **Factory kits.** Twelve or so, each with 16 pads drawn from the library and
+  then varied.
+- **DICE.** The randomiser rolls within a profile chosen from the pad's role.
+  For example, a kick rolls Skin with a low PITCH, Wave sometimes, and Noise
+  rarely and short. It always keeps the result in a playable range:
+  - level-matched;
+  - no silence;
+  - no ten-second tails on a hat.
+
+  It remembers the last eight rolls; turning left walks back through them.
+
+---
+
+## Implementation notes
+
+- **CPU.** Sixteen pads × three engines, at most two voices a pad, so a fast
+  roll's tail can overlap the next hit. Target: under a quarter of the Move's
+  time with every pad sounding. Measure on the device at build step 3, not
+  last.
+- **Tables are built at load, not shipped.** The analogue and spectral
+  wavetables, and the noise tables, are computed in `create_instance` (inverse
+  FFT of a shaped spectrum with random phase). No data files. Watch the load
+  time.
+- **Samples.** User WAVs come from a folder, for example
+  `/data/UserData/schwung/samples/strut/`. The file browser is Schwung's
+  `filepath` param type. Loading happens off the audio thread, as Ragtag does.
+- **Separate outputs.** Schwung offers `move_plugin_render_split` (per-voice
+  buffers; see `plugin_api_v1.h`). Later, not 1.0.
+- **Pad presses** (`child_press_param`) only arrive while the grid shows Strut.
+  That is fine, because focus only matters on the grid.
+
+---
+
+## Build order
+
+1. ~~Scaffold: v2 entry, 16 pads, placeholder voice, focus-follow, tests, build,
+   CI artifact.~~ (0.0.1)
+2. **Probe the contract:**
+   - Generate the full proposed key set (all pages, all views) with dummy
+     DSP.
+   - Measure the `chain_params` size.
+   - Plan it with the host's planner: every page, both views of each engine
+     page, and the gates.
+   - Fix the template-vs-focused decision.
+3. **Skin** engine, and measure CPU on the device (the user installs the CI
+   artifact).
+4. **Wave** engine, its tables, and FM from Skin.
+5. **Noise** engine and noise tables. Samples come at step 9.
+6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
+7. **Modulation** (the MOD views).
+8. **Kit** page: room, glue, warmth.
+9. Samples and `filepath`.
+10. The SOUND library, factory kits, DICE, `help.json` and README.
+11. Voicing pass with the user listening on the device.
+12. Release to the catalog (needs the user's go-ahead).
+
+## Testing
+
+- `tests/run.sh`:
+  - black-box through the v2 API (no silence where sound is due, no clipping,
+    no NaN, parameter sweeps);
+  - the host's own planner and validator on the contract.
+- The CI builds a device tarball on every push.
+- **Listening.** The user plays it on the Move.
+
+## Later
+
+- Knob pictures (Quilt's `canvas.js` approach).
+- Per-pad room sends.
+- Separate outputs.
+- MPE / pad pressure as a modulation kind.

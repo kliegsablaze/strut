@@ -1,0 +1,16 @@
+{
+  "id": "strut",
+  "name": "Strut",
+  "abbrev": "STR",
+  "version": "0.0.1",
+  "dsp": "dsp.so",
+  "api_version": 2,
+  "component_type": "sound_generator",
+  "description": "A drum instrument: sixteen pads, each built from a resonator, an oscillator and a noise source.",
+  "capabilities": {
+    "audio_out": true,
+    "midi_in": true,
+    "chainable": true,
+    "component_type": "sound_generator"
+  }
+}
