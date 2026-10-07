@@ -34,4 +34,9 @@ if ! grep -q '"dsp": "dsp.so"' src/module.json; then
   echo "FAIL: module.json dsp must be dsp.so (the chain host loads that name)"; rc=1
 fi
 
+# The version Strut logs on load is the one the Move's module list shows.
+if ! grep -q "\"version\": \"$(sed -n 's/.*STRUT_VERSION "\([^"]*\)".*/\1/p' src/dsp/strut.h)\"" src/module.json; then
+  echo "FAIL: STRUT_VERSION in strut.h must match module.json's version"; rc=1
+fi
+
 exit $rc

@@ -87,6 +87,11 @@ git -C .schwung checkout v1.7.3`), not the newest commit.
 off for the slot** (2026-10-07): page-follow pairs a press with its note, so
 it needs notes too.
 
+**After installing, restart the Move** (2026-10-07): a slot already playing
+Strut keeps the old code, because the host opens the new `dsp.so` before
+closing the old and `dlopen()` returns the copy it has. Strut logs
+`strut <version> loaded` to the debug log, so check which build played.
+
 What matters most in the host:
 
 - **`docs/MODULES.md`:**
@@ -136,7 +141,8 @@ To try a build on the device, the user downloads the artifact and runs:
 rm -rf /tmp/strut && gh run download -n strut-module -D /tmp/strut && scripts/install.sh /tmp/strut/strut-module.tar.gz
 ```
 
-Tell the user when a build is worth trying, and what to listen for.
+Then restart the Move. Tell the user when a build is worth trying, and what to
+listen for.
 
 ## The sibling repos (for reference, same owner)
 

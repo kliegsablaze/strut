@@ -13,6 +13,7 @@
 
 #include "skin.h"
 
+#define STRUT_VERSION "0.0.5"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */

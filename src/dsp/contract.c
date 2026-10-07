@@ -64,18 +64,20 @@ static const param_def_t *page_param(const page_def_t *pg, int i) {
 }
 
 /* The fields that make a level one of the sixteen pads. Every rack names
- * the same focus, so the host plans one pad picker for all of them. */
-static void rack(sb_t *b) {
-    sb_printf(b, ",\"child_count\":%d,\"child_label\":\"Pad\",\"child_key_template\":\"p{index}_{key}\","
+ * the same focus, so the host plans one pad picker for all of them. The
+ * header of a pad's page reads "<child_label> <pad>", never the level's
+ * name, so each rack labels its pads with its own page: "Skin 3". */
+static void rack(sb_t *b, const page_def_t *pg) {
+    sb_printf(b, ",\"child_count\":%d,\"child_label\":\"%s\",\"child_key_template\":\"p{index}_{key}\","
                  "\"child_index_base\":1,\"child_index_digits\":2,\"child_index_param\":\"pad\"",
-              STRUT_PADS);
+              STRUT_PADS, pg->label);
 }
 
 static void level(sb_t *b, const page_def_t *pg) {
     const char *view = pg->view >= 0 ? STRUT_GLOBALS[pg->view].key : NULL;
     const int half = pg->count / 2;   /* an engine page: seven Sound, seven Mod */
     sb_printf(b, "\"%s\":{\"name\":\"%s\"", pg->level, pg->label);
-    if (pg->per_pad) rack(b);
+    if (pg->per_pad) rack(b, pg);
     if (pg == &STRUT_PAGES[0])
         sb_printf(b, ",\"child_press_param\":\"pad_press\",\"child_note_base\":%d", STRUT_NOTE0);
     if (view) sb_printf(b, ",\"child_key_overrides\":{\"%s\":\"%s\"}", view, view);

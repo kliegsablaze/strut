@@ -107,6 +107,16 @@ for (const [k, l] of Object.entries(hierarchy.levels)) {
     const w = fontWidth4x5(String(l.name).toUpperCase());
     check(w <= pageRoom, `page "${l.name}" (${k}) is ${w} px, the header has ${pageRoom}`);
 }
+// A pad's page is titled "<child_label> <pad>", not by its level's name
+// (page_controller.mjs, pageLabel), so each rack's child_label names its page.
+{
+    const plan = planPages({ hierarchy, chainParams, visible: visibleFor({ skin_view: "Sound", wave_view: "Sound", noise_view: "Sound" }) });
+    const titles = plan.pages.filter((p) => p.childLevel && Array.isArray(p.keys))
+        .map((p) => `${p.childLevel.child_label} 16`);
+    check(titles.join() === "Pad 16,Skin 16,Wave 16,Noise 16,Finish 16", `pad pages are titled by page, got ${titles}`);
+    for (const t of titles) check(fontWidth4x5(t.toUpperCase()) <= pageRoom, `"${t}" fits the header`);
+    check(plan.pages.some((p) => p.childOf && p.name === "Selected Pad"), "the picker is still Selected Pad");
+}
 
 const { findings } = validateContract({ id: "strut", hierarchy, chainParams, capabilities: moduleJson.capabilities });
 for (const f of findings) if (f.level !== "info") console.log(`  validate ${f.level}: ${f.rule} — ${f.message}`);

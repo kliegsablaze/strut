@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin sounds, 0.0.4 (2026-10-07). Every proposed knob, on every
+**Status:** Skin sounds, 0.0.5 (2026-10-07). Every proposed knob, on every
 page and both views of each engine page, is declared, kept per pad and planned
 by the host's own planner in the tests. **Skin**, the resonator, is built and
 plays on every pad, mixed by SKIN, TUNE, DECAY and LEVEL (see *How Skin
@@ -197,6 +197,15 @@ page has eight cells with MOD in cell 8.
 The host titles the first page **Main** whatever the module calls it
 (`page_plan.mjs`, so every module lands on a page with the same name). Strut
 keeps that rather than adding an empty first level to get "Pad".
+
+**Each pad page's header reads "Skin 3", not "Skin".** On the device the
+header shows the pad, not the page (`page_controller.mjs`, `pageLabel`): it
+is the rack's `child_label` and the pad's number, and the level's name is
+used only in the list of pages. With every rack labelled "Pad", every page
+read "Pad 3" and the user could not tell where they were (2026-10-07). So each
+rack's `child_label` is its page's name: Pad 3, Skin 3, Wave 3, Noise 3,
+Finish 3. The picker keeps "Selected Pad", from the first rack. The tests
+check the titles, and that the widest, "Finish 16", fits the header.
 
 (Rejected: a real pop-up page. Schwung has no knob page that opens over another.
 Its "doors" are canvas pages that hand the jog to the module, which would need a
@@ -458,6 +467,20 @@ own engine, reach most of the same sounds.)
     left the distortion at its harmonics 11 dB above the error's floor, against
     18 dB with no dither and 0.6 dB (none) with dither kept on. The price is
     about a quarter of a second more tail, at −96 dB.
+  - **The host rounds again after us.** Each slot is scaled by its volume
+    and the Move's master volume, each time rounded back to 16 bits with no
+    dither (`schwung_shim.c`). Below full volume our dither shrinks under a
+    step and is rounded away, so the last few steps of a quiet tail can grit
+    there whatever Strut does. Not yet heard on the device separately from
+    the old build's grit (see *Reinstalling*). If it is heard, the choices
+    are louder dither in Strut (a faint hiss at full volume) or asking the
+    host to dither its volume stage.
+- **Reinstalling needs a restart.** The host opens a new synth before
+  closing the old one, and `dlopen()` matches by path, so a slot reloaded
+  with Strut gets the copy already in memory. The user tested 0.0.4 and heard
+  0.0.3's grit and dead SKIN knob (2026-10-07). `scripts/install.sh` now says
+  to restart the Move, and Strut logs `strut <version> loaded` to
+  `/data/UserData/schwung/debug.log` when it starts.
 - **The level knobs are faders.** SKIN, WAVE, NOISE and LEVEL began as the
   square of the knob, moving half a percent a detent; the user turned SKIN
   and heard nothing change (2026-10-07). Now off at zero, then 30 dB across the
@@ -494,7 +517,8 @@ own engine, reach most of the same sounds.)
    Still to try on the device: automation and a step lock on pad 5 land on
    pad 5, and MOD swaps its page at once.
 3. ~~**Skin** engine~~ (0.0.3; 0.0.4 fixed the output's grit and made the
-   levels faders). Still to do: measure its CPU on the Move
+   levels faders; 0.0.5 titles each page and logs its version). Still to hear
+   0.0.4's fixes on the device, after a restart. Still to do: measure its CPU on the Move
    (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
    ringing) and hear it there.
 4. **Wave** engine, its tables, and FM from Skin.

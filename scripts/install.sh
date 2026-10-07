@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Copies Strut to a connected Move. No restart: the synth picker rescans the
-# modules folder each time it opens. Files are uploaded beside the target and
+# Copies Strut to a connected Move. The synth picker rescans the modules
+# folder each time it opens, but a slot that already holds Strut keeps the
+# old code: the host opens the new dsp.so before closing the old, and dlopen()
+# hands back the copy it already has. So restart the Move after installing. Files are uploaded beside the target and
 # renamed over it, never written in place (see Ragtag's install.sh for the
 # SIGSEGV that writing over a dlopen()'d .so causes).
 #
@@ -40,4 +42,6 @@ ssh "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming && \
     mv -f .dsp.so.incoming dsp.so && \
     mv -f .module.json.incoming module.json && \
     mv -f .help.json.incoming help.json && ls -l"
-echo "Installed to $HOST:$REMOTE_DIR"
+version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' dist/strut/module.json)
+echo "Installed Strut $version to $HOST:$REMOTE_DIR"
+echo "Restart the Move now: a slot already playing Strut keeps the old version until then."

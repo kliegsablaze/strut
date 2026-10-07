@@ -164,11 +164,17 @@ static int read_value(const param_def_t *d, float v, char *buf, int len) {
 
 /* ---- the v2 API ---- */
 
+static const host_api_v1_t *g_host;
+
 static void *create_instance(const char *module_dir, const char *json_defaults) {
     (void)module_dir;
     (void)json_defaults;
     strut_t *s = calloc(1, sizeof(*s));
     if (s) strut_init(s);
+    /* Reloading a module the host still holds hands back the old code (the
+     * host opens the new synth before closing the old, and dlopen() matches
+     * by path), so the log says which build is really playing. */
+    if (g_host && g_host->log) g_host->log("strut " STRUT_VERSION " loaded");
     return s;
 }
 
@@ -246,6 +252,6 @@ static plugin_api_v2_t api = {
 };
 
 plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host) {
-    (void)host;
+    g_host = host;
     return &api;
 }
