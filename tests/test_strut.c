@@ -1197,6 +1197,17 @@ static int by_double(const void *a, const void *b) {
     return x < y ? -1 : x > y;
 }
 
+static struct timespec now_ts(void) {
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return t;
+}
+
+static double since(struct timespec t0) {
+    const struct timespec t = now_ts();
+    return (double)(t.tv_sec - t0.tv_sec) + 1e-9 * (double)(t.tv_nsec - t0.tv_nsec);
+}
+
 /* The library's entry called name, as TABLE's index; -1 none. */
 static int table_of(const char *name) {
     for (int i = 0; i < smp_count(); i++)
@@ -1383,6 +1394,169 @@ static void samples(void) {
     A->destroy_instance(p);
 }
 
+/* Pad 1 on a sample in MODE m, made as the loader would. */
+static strut_t *mode_pad(int t, int m) {
+    strut_t *s = sample_pad(t);
+    s->pad[0].p[P_N_MODE] = (float)m;
+    if (m == SM_RESYNTH) s->pad[0].p[P_N_DECAY] = 0.5f;     /* its own length */
+    float l[128], r[128];
+    strut_render(s, l, r, 128);
+    smp_service(&s->lib, 0);
+    return s;
+}
+
+/* How much x repeats itself: the best of its normalised self-likeness at
+ * lags of 0.5 to 20 ms, over n samples from `from`. */
+static double tonal(const float *x, int from, int n) {
+    double e0 = 0, best = 0;
+    for (int j = from; j < from + n; j++) e0 += (double)x[j] * x[j];
+    for (int lag = 22; lag < 882; lag++) {
+        double c = 0, e1 = 0;
+        for (int j = from; j < from + n; j++) c += (double)x[j] * x[j + lag], e1 += (double)x[j + lag] * x[j + lag];
+        if (e0 > 0 && e1 > 0) best = fmax(best, c / sqrt(e0 * e1));
+    }
+    return best;
+}
+
+/* The loudest frequency, 40 Hz to 4 kHz to the nearest hertz, in n
+ * samples of x from `from` through a Hann window. */
+static double loudest_hz(const float *x, int from, int n) {
+    double best = 0, bp = -1;
+    for (int f = 40; f < 4000; f++) {
+        double c = 0, d = 0;
+        for (int j = 0; j < n; j++) {
+            const double w = (0.5 - 0.5 * cos(2 * 3.14159265358979 * j / n)) * x[from + j], ph = 2 * 3.14159265358979 * f * j / STRUT_SR;
+            c += w * cos(ph), d += w * sin(ph);
+        }
+        if (c * c + d * d > bp) bp = c * c + d * d, best = f;
+    }
+    return best;
+}
+
+/* Noise's MODE: Resynth and Noise (DESIGN.md, Noise). */
+static void modes(void) {
+    /* every one-shot in both: sounds, finite, under full scale, ends, and
+     * about as loud as the sample played straight */
+    static double dr[SM_FILES], dn[SM_FILES];
+    int nr = 0, ok = 1;
+    double slow = 0;
+    size_t extra = 0;
+    for (int i = 0; i < smp_count(); i++) {
+        if (!strncmp(smp_name(i), "Cycle", 5)) continue;
+        strut_t *s = mode_pad(NT_TABLES + i, SM_SAMPLE);
+        int n = hit(s, 4.0f);
+        const double straight = loudest(n);
+        free(s);
+        for (int m = SM_RESYNTH; m <= SM_NOISE; m++) {
+            s = sample_pad(NT_TABLES + i);
+            s->pad[0].p[P_N_MODE] = (float)m;
+            if (m == SM_RESYNTH) s->pad[0].p[P_N_DECAY] = 0.5f;
+            float l[128], r[128];
+            strut_render(s, l, r, 128);
+            const struct timespec t0 = now_ts();
+            smp_service(&s->lib, 0);
+            slow = fmax(slow, since(t0));
+            const smp_t *sm = s->lib.ready[0];
+            if (m == SM_RESYNTH) extra = sm->bytes > extra ? sm->bytes : extra;
+            n = hit(s, 4.0f);
+            int finite = 1;
+            for (int j = 0; j < n; j++) finite &= isfinite(L[j]);
+            const double pk = peak_of(L, 0, n), loud = loudest(n);
+            const int made = s->pad[0].voice.noise.mode == m;
+            if (!made || !finite || pk > 0.95 || pk < 0.005 || s->pad[0].voice.noise.env > 0) {
+                printf("  %s %s: made %d finite %d peak %.3f still %d\n", smp_name(i), m == SM_RESYNTH ? "Resynth" : "Noise",
+                       made, finite, pk, s->pad[0].voice.noise.env > 0);
+                ok = 0;
+            }
+            (m == SM_RESYNTH ? dr : dn)[nr] = 20 * log10(loud / straight);
+            if (fabs(20 * log10(loud / straight)) > 3) printf("  %s %d: %.1f dB\n", smp_name(i), m, 20 * log10(loud / straight));
+            free(s);
+        }
+        nr++;
+    }
+    double r0 = 1e9, r1 = -1e9, n0 = 1e9, n1 = -1e9;
+    for (int i = 0; i < nr; i++) r0 = fmin(r0, dr[i]), r1 = fmax(r1, dr[i]), n0 = fmin(n0, dn[i]), n1 = fmax(n1, dn[i]);
+    qsort(dr, (size_t)nr, sizeof(double), by_double);
+    qsort(dn, (size_t)nr, sizeof(double), by_double);
+    printf("modes: against Sample, Resynth %.1f .. %.1f dB (half over %.1f), Noise %.1f .. %.1f dB (half over %.1f)\n",
+           r0, r1, dr[nr / 2], n0, n1, dn[nr / 2]);
+    printf("modes: the slowest to make took %.0f ms here; a sample with Resynth holds up to %.1f MB\n", 1000 * slow, extra / 1048576.0);
+    CHECK(ok, "every one-shot in Resynth and Noise sounds, stays finite, peaks under 0.95 and ends");
+    CHECK(fabs(dr[nr / 2]) < 1.5 && r0 > -6 && r1 < 6, "Resynth is about as loud as the sample (%.1f .. %.1f dB)", r0, r1);
+    CHECK(fabs(dn[nr / 2]) < 1.5 && n0 > -6 && n1 < 6, "and so is Noise (%.1f .. %.1f dB)", n0, n1);
+
+    /* Resynth keeps a tune: a bass note sounds at its pitch, PITCH moves it
+     * and not its length, DECAY its length and not its pitch */
+    const int bass = table_of("Bass 007");
+    strut_t *s = mode_pad(bass, SM_SAMPLE);
+    int n = hit(s, 2.0f);
+    const int whole = last_heard(L, 0, n);
+    const double f_sample = loudest_hz(L, 2000, 4096);
+    free(s);
+    s = mode_pad(bass, SM_RESYNTH);
+    n = hit(s, 2.0f);
+    const int own = last_heard(L, 0, n);
+    const double f_rs = loudest_hz(L, 2000, 4096);
+    free(s);
+    s = mode_pad(bass, SM_RESYNTH);
+    s->pad[0].p[P_N_PITCH] = 12;
+    n = hit(s, 2.0f);
+    const int up_len = last_heard(L, 0, n);
+    const double f_up = loudest_hz(L, 2000, 4096);
+    free(s);
+    s = mode_pad(bass, SM_RESYNTH);
+    s->pad[0].p[P_N_DECAY] = 1.0f;
+    n = hit(s, 3.0f);
+    const int long_len = last_heard(L, 0, n);
+    const double f_long = loudest_hz(L, 8000, 4096);
+    free(s);
+    s = mode_pad(bass, SM_RESYNTH);
+    s->pad[0].p[P_N_DECAY] = 0.0f;
+    n = hit(s, 2.0f);
+    const int short_len = last_heard(L, 0, n);
+    free(s);
+    printf("modes: Bass 007 lasts %d samples, Resynth %d; +12 %d; DECAY 1 %d, 0 %d\n", whole, own, up_len, long_len, short_len);
+    printf("modes: loudest at %.0f Hz, Resynth %.0f, +12 %.0f, DECAY 1 %.0f\n", f_sample, f_rs, f_up, f_long);
+    CHECK(fabs((double)own / whole - 1) < 0.1, "Resynth at DECAY's centre lasts as the sample does");
+    CHECK(fabs(f_rs / f_sample - 1) < 0.02, "and sounds at its pitch");
+    CHECK(fabs((double)up_len / own - 1) < 0.1 && fabs(f_up / f_rs - 2) < 0.04, "PITCH +12 an octave up, as long");
+    CHECK(fabs((double)long_len / own - 4) < 0.4 && fabs(f_long / f_rs - 1) < 0.02, "DECAY fully right four times as long, at its pitch");
+    CHECK(fabs((double)short_len / own - 0.25) < 0.1, "DECAY 0 a quarter");
+
+    /* Noise mode takes the pitch out */
+    const int mallet = table_of("Mallet 003");
+    s = mode_pad(mallet, SM_SAMPLE);
+    n = hit(s, 1.0f);
+    const double t_sample = tonal(L, 2000, 4000);
+    free(s);
+    s = mode_pad(mallet, SM_NOISE);
+    n = hit(s, 1.0f);
+    const double t_noise = tonal(L, 2000, 4000);
+    free(s);
+    printf("modes: Mallet 003 repeats itself %.2f, as Noise %.2f\n", t_sample, t_noise);
+    CHECK(t_noise < 0.5 * t_sample, "Noise mode takes the pitch out");
+
+    /* LOOP in Resynth holds a moment as a drone */
+    s = mode_pad(bass, SM_RESYNTH);
+    s->pad[0].p[P_N_LOOP] = 0.0f, s->pad[0].p[P_N_START] = 0.1f;
+    n = hit(s, 4.0f);
+    const double a = window_rms(STRUT_SR, 4410), b = window_rms(3 * STRUT_SR, 4410);
+    printf("modes: a held moment at 1 s %.4f, at 3 s %.4f\n", a, b);
+    CHECK(a > 1e-3 && fabs(20 * log10(b / a)) < 1.5 && s->pad[0].voice.active, "LOOP in Resynth holds a moment still");
+    free(s);
+
+    /* MODE plays Sample until the rest is made; a cycle is always Sample */
+    s = sample_pad(bass);
+    s->pad[0].p[P_N_MODE] = SM_RESYNTH;
+    strut_note_on(s, STRUT_NOTE0, 100);
+    CHECK(s->pad[0].voice.noise.mode == SM_SAMPLE, "Resynth not yet made plays the sample");
+    free(s);
+    s = mode_pad(table_of("Cycle 001"), SM_RESYNTH);
+    strut_note_on(s, STRUT_NOTE0, 100);
+    CHECK(s->pad[0].voice.noise.mode == SM_SAMPLE && !s->lib.ready[0]->has, "a cycle plays as itself in every MODE");
+    free(s);
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -1424,6 +1598,7 @@ int main(int argc, char **argv) {
     tail();
     kit();
     samples();
+    modes();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;

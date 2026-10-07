@@ -36,6 +36,7 @@
 #define SM_GAIN 2.0f        /* the library (-18 LUFS) about as loud as the tables: half its sounds within 1 dB of White or louder */
 
 static int16_t pool[NT_TABLES][SPAN];
+static float grain_w[RS_GRAIN];     /* Resynth's grains' window: sin, so two half a grain apart keep the power */
 static nt_table_t tables[NT_TABLES];
 static float edge[NT_BANDS + 1];   /* the bands' edges, Hz */
 
@@ -246,6 +247,7 @@ void nt_build(void) {
         for (int l = 0; l < NT_LEVELS; l++) tables[t].level[l] = q, q += (NT_N >> l) + 7;
     }
     for (int i = 0; i < PHASES + PHASES / 4; i++) sine[i] = (float)sin(2 * PI * i / PHASES);
+    for (int i = 0; i < RS_GRAIN; i++) grain_w[i] = (float)sin(PI * i / RS_GRAIN);
     rs = 0x5BD1E995u;
     for (int i = 0; i < RATTLES; i++) {
         rattle_f[i] = 2000 * pow(4.5, uni());
@@ -357,12 +359,64 @@ static uint32_t start_of(const smp_t *sm, const float *p) {
     return (uint32_t)(fminf(fmaxf(p[P_N_START], 0.0f), 0.999f) * (float)sm->len) << SM_FRAC;
 }
 
+/* Resynth's length: DECAY's centre the sample's own, a quarter to four
+ * times it, and Pad DECAY scales it as it does every fall. */
+static float stretch_of(const float *p) {
+    return fminf(fmaxf(powf(4.0f, 2.0f * p[P_N_DECAY] - 1.0f) * powf(4.0f, p[P_DECAY]), 1.0f / 16), 16.0f);
+}
+
+/* LOOP's slice: from START, 2 ms long to all that is left, in level-0
+ * samples; all that is left (no loop) when fully right. */
+static float slice_of(const smp_t *sm, const float *p, float start) {
+    const float rest = (float)sm->len - start, shortest = 0.002f * NT_SR;
+    return p[P_N_LOOP] < 0.999f ? shortest * powf(fmaxf(rest / shortest, 1.0f), fmaxf(p[P_N_LOOP], 0.0f)) : rest;
+}
+
+static void rs_start(noise_voice_t *v, const float *p, const smp_t *sm, int fresh, uint32_t seed, float amp) {
+    noise_bank_t *k = v->bank;
+    if (fresh) {
+        /* each sine from its own phase, so they do not all peak together */
+        float c[RS_SLOTS], s[RS_SLOTS];
+        for (int i = 0; i < RS_SLOTS; i++) {
+            seed = seed * 1664525u + 1013904223u;
+            const int ph = (int)(seed >> 20);
+            c[i] = sine[ph + PHASES / 4], s[i] = sine[ph];
+        }
+        memcpy(k->c, c, sizeof(c)), memcpy(k->s, s, sizeof(s));
+        memset(k->a, 0, sizeof(k->a));
+        k->vel = amp;
+        k->seed = seed;
+        v->s1 = v->s2 = 0.0f;
+    }
+    k->vel_to = amp;
+    k->over = 0;
+    const uint32_t start = start_of(sm, p);
+    k->att = -1, k->held = 0, k->cut = !fresh;
+    const float hit = fmaxf((float)(start >> SM_FRAC), (float)sm->onset) + RS_ATTACK * 2.0f * sm->speed;
+    k->hold_end = hit >= (float)sm->len ? sm->len << SM_FRAC : (uint32_t)hit << SM_FRAC;
+    v->phase = start;       /* the attack's read position */
+    k->t = (float)(start >> SM_FRAC) / RS_HOP;
+    /* the leftover noise: a grain at its height from START, the next rising */
+    k->pos[0] = k->pos[1] = start;
+    k->age[0] = RS_GRAIN / 2, k->age[1] = 0;
+    v->level = -1;
+    v->old_n = 0;
+    v->env = 1.0f;          /* the hit's strength is in the bank, where it glides */
+}
+
 void noise_start(noise_voice_t *v, const float *p, const struct smp *smp, uint32_t seed, float amp) {
     const int t = (int)p[P_N_TABLE];
     const int sounding = v->env >= 1e-4f;
     if (t >= NT_TABLES) {
         if (!smp) { v->env = 0.0f; return; }   /* not loaded yet: nothing, never a stale sound */
-        if (!sounding || v->smp != smp) {
+        /* MODE as made so far: Sample until the loader has made the rest */
+        int mode = (int)p[P_N_MODE];
+        if (smp->cycle || mode < 0 || mode > SM_NOISE || !(__atomic_load_n(&smp->has, __ATOMIC_ACQUIRE) & 1 << mode))
+            mode = SM_SAMPLE;
+        const int fresh = !sounding || v->smp != smp || v->mode != mode;
+        v->smp = smp, v->mode = mode;
+        if (mode == SM_RESYNTH) { rs_start(v, p, smp, fresh, seed, amp); return; }
+        if (fresh) {
             v->s1 = v->s2 = 0.0f;
             v->level = -1;
             v->old_n = 0;
@@ -372,7 +426,6 @@ void noise_start(noise_voice_t *v, const float *p, const struct smp *smp, uint32
             v->old = v->phase, v->old_g = v->env, v->old_n = 256;
             v->phase = start_of(smp, p);
         }   /* a cycle runs on, as an oscillator does */
-        v->smp = smp;
         v->env = amp;
         return;
     }
@@ -382,8 +435,145 @@ void noise_start(noise_voice_t *v, const float *p, const struct smp *smp, uint32
         v->level = -1;
         v->env = 0.0f;
     }
-    v->smp = NULL, v->tab = t, v->old_n = 0;
+    v->smp = NULL, v->tab = t, v->old_n = 0, v->mode = SM_SAMPLE;
     v->env = sqrtf(v->env * v->env + amp * amp);
+}
+
+/* Sine and cosine of w in 0..pi, four at once: their series about pi/2,
+ * to within 1e-7, where the library's took a call each. */
+static inline void sincos4(nt_f4 w, nt_f4 *sn, nt_f4 *cs) {
+    const nt_f4 x = w - 1.57079633f, x2 = x * x;
+    *sn = 1.0f + x2 * (-1.0f / 2 + x2 * (1.0f / 24 + x2 * (-1.0f / 720 + x2 * (1.0f / 40320 + x2 * (-1.0f / 3628800 + x2 * (1.0f / 479001600))))));
+    *cs = -x * (1.0f + x2 * (-1.0f / 6 + x2 * (1.0f / 120 + x2 * (-1.0f / 5040 + x2 * (1.0f / 362880 + x2 * (-1.0f / 39916800))))));
+}
+
+/* Resynth's block, into b->buf (McAulay and Quatieri; Serra and Smith):
+ * the sample's sine waves, each a pointer turned a step a sample, at the
+ * pitch PITCH gives and the level the frame reached gives; and the noise
+ * left over, read in overlapping grains from where the frames have got
+ * to, so its time follows DECAY and not PITCH. The hit, to 10 ms past
+ * where it begins, is the sample itself, crossing over to that by power:
+ * frames 46 ms long blur a drum's attack, and sines of a guessed phase
+ * summed there peaked up to 6 dB over the recording. */
+static void rs_block(noise_voice_t *v, const float *p, int frames, int hold, float rate, noise_block_t *b) {
+    if (frames <= 0) return;        /* a FLAM hit landing on a block's edge */
+    noise_bank_t *k = v->bank;
+    const smp_t *sm = v->smp;
+    const float inv = 1.0f / (float)frames;
+    /* where the frames get to by the block's end: LOOP holds them in a
+     * slice, and with no loop the sound ends at the last */
+    /* through the attack, the frames keep up with the sample itself */
+    const float t0 = k->t, dt = hold ? 0.0f
+                                     : k->att < RS_GRAIN / 2 ? 2.0f * rate / RS_HOP
+                                                             : 2.0f * sm->speed / ((float)RS_HOP * stretch_of(p));
+    const float start = (float)(start_of(sm, p) >> SM_FRAC), slice = slice_of(sm, p, start);
+    const int loops = slice < (float)sm->len - start;
+    const float ts = start / RS_HOP, tl = slice / RS_HOP, last = (float)(sm->frames - 1);
+    float t1 = t0 + dt * (float)frames;
+    if (loops && t1 >= ts + tl) t1 = ts + fmodf(t1 - ts, tl);
+    const int ends = !loops && t1 >= last;
+    if (ends) t1 = last;
+    k->t = t1;
+    int f = (int)t1;
+    if (f > sm->frames - 1) f = sm->frames - 1;
+    const int f1 = f + 1 < sm->frames ? f + 1 : f;
+    const float u = t1 - (float)f;
+    const float *q0 = sm->fq + (size_t)f * RS_SLOTS, *q1 = sm->fq + (size_t)f1 * RS_SLOTS;
+    const float *a0 = sm->am + (size_t)f * RS_SLOTS, *a1 = sm->am + (size_t)f1 * RS_SLOTS;
+    const float vel = ends ? 0.0f : k->vel_to;
+    /* a level-0 cycle a sample is 2 rate cycles of the output's */
+    const float wk = 4.0f * (float)PI * rate, wtop = 2.0f * (float)PI * 0.45f;
+    nt_f4 acc[NT_BLOCK];
+    memset(acc, 0, sizeof(nt_f4) * (size_t)frames);
+    /* each sine's step and where its level is going, four to a vector */
+    nt_f4 cr[RS_SLOTS / 4], ci[RS_SLOTS / 4], ta[RS_SLOTS / 4];
+    int live[RS_SLOTS / 4];
+    for (int g = 0; g < RS_SLOTS / 4; g++) {
+        nt_f4 w;
+        for (int j = 0; j < 4; j++) {
+            const int i = 4 * g + j;
+            w[j] = wk * (q0[i] + u * (q1[i] - q0[i]));
+            ta[g][j] = w[j] < wtop ? (a0[i] + u * (a1[i] - a0[i])) * vel : 0.0f;   /* over 19.8 kHz: none */
+            w[j] = fminf(w[j], wtop);
+        }
+        const nt_f4 a = k->a[g];
+        live[g] = a[0] || a[1] || a[2] || a[3] || ta[g][0] || ta[g][1] || ta[g][2] || ta[g][3];
+        sincos4(w, &ci[g], &cr[g]);
+        const nt_f4 c = k->c[g], sn = k->s[g], m = 1.5f - 0.5f * (c * c + sn * sn);     /* kept on the circle */
+        k->c[g] = c * m, k->s[g] = sn * m;
+    }
+    /* four vectors at a time, side by side: one pointer's turn waits on
+     * its last, so turning four at once keeps the processor busy; the
+     * slots fill from the first, so a quiet sound's last four rest */
+    for (int h = 0; h < RS_SLOTS / 4; h += 4) {
+        if (!(live[h] | live[h + 1] | live[h + 2] | live[h + 3])) continue;
+        nt_f4 c0 = k->c[h], c1 = k->c[h + 1], c2 = k->c[h + 2], c3 = k->c[h + 3];
+        nt_f4 s0 = k->s[h], s1 = k->s[h + 1], s2 = k->s[h + 2], s3 = k->s[h + 3];
+        nt_f4 g0 = k->a[h], g1 = k->a[h + 1], g2 = k->a[h + 2], g3 = k->a[h + 3];
+        const nt_f4 d0 = (ta[h] - g0) * inv, d1 = (ta[h + 1] - g1) * inv, d2 = (ta[h + 2] - g2) * inv, d3 = (ta[h + 3] - g3) * inv;
+        for (int n = 0; n < frames; n++) {
+            nt_f4 t;
+            t = c0 * cr[h] - s0 * ci[h], s0 = s0 * cr[h] + c0 * ci[h], c0 = t;
+            t = c1 * cr[h + 1] - s1 * ci[h + 1], s1 = s1 * cr[h + 1] + c1 * ci[h + 1], c1 = t;
+            t = c2 * cr[h + 2] - s2 * ci[h + 2], s2 = s2 * cr[h + 2] + c2 * ci[h + 2], c2 = t;
+            t = c3 * cr[h + 3] - s3 * ci[h + 3], s3 = s3 * cr[h + 3] + c3 * ci[h + 3], c3 = t;
+            g0 += d0, g1 += d1, g2 += d2, g3 += d3;
+            acc[n] += (g0 * s0 + g1 * s1) + (g2 * s2 + g3 * s3);
+        }
+        k->c[h] = c0, k->c[h + 1] = c1, k->c[h + 2] = c2, k->c[h + 3] = c3;
+        k->s[h] = s0, k->s[h + 1] = s1, k->s[h + 2] = s2, k->s[h + 3] = s3;
+        for (int j = 0; j < 4; j++) k->a[h + j] = ta[h + j];
+    }
+    /* the leftover noise, two grains half a grain apart */
+    const nt_table_t *rt = &sm->rest;
+    const int l = level_of(rate);
+    const int16_t *tab = rt->level[l];
+    const int shift = SM_FRAC + l;
+    const float fx = 1.0f / (float)(1u << shift);
+    const uint32_t inc = (uint32_t)(2.0f * rate * (float)(1u << SM_FRAC) + 0.5f), end = sm->len << SM_FRAC;
+    /* a grain starts so its middle is where the frames will be then */
+    const float lead = (float)(RS_GRAIN / 2) * (dt * RS_HOP - 2.0f * rate);
+    float gv = k->vel;
+    const float dg = (vel - gv) * inv;
+    const int16_t *own = sm->t.level[l];
+    for (int n = 0; n < frames; n++) {
+        float r = 0.0f;
+        for (int j = 0; j < 2; j++) {
+            if (k->pos[j] < end) {
+                /* noise needs no finer reading than a line: stored at
+                 * twice the rate, the line's error is 50 dB under it at
+                 * 5 kHz and 23 dB at 20, and is only more noise */
+                const uint32_t i = k->pos[j] >> shift;
+                const float x = (float)(k->pos[j] & ((1u << shift) - 1u)) * fx;
+                r += grain_w[k->age[j]] * ((float)tab[i] + (float)(tab[i + 1] - tab[i]) * x);
+            }
+            k->pos[j] += inc;
+            if (++k->age[j] == RS_GRAIN) {
+                float tn = t0 + dt * (float)n;
+                if (loops && tn >= ts + tl) tn = ts + fmodf(tn - ts, tl);
+                k->seed = k->seed * 1664525u + 1013904223u;
+                const float at = tn * RS_HOP + lead + (float)(k->seed >> 24);     /* and a little apart, so the two never match */
+                k->pos[j] = at <= 0.0f ? 0u : at >= (float)sm->len ? end : (uint32_t)at << SM_FRAC;
+                k->age[j] = 0;
+            }
+        }
+        gv += dg;
+        float y = (acc[n][0] + acc[n][1]) + (acc[n][2] + acc[n][3]) + r * gv;
+        if (k->att < RS_GRAIN / 2) {
+            if (k->att < 0 && v->phase >= k->hold_end) k->att = 0;
+            const int i = k->att;
+            const float o = v->phase < end ? nt_read(own, v->phase, shift, fx) * gv : 0.0f;
+            v->phase += inc;
+            /* a note the hit cut fades out over its first 64 samples */
+            const float wr = i >= 0 ? grain_w[i] : k->cut && k->held < 64 ? (float)(64 - k->held) * (1.0f / 64) : 0.0f;
+            y = y * wr + o * (i >= 0 ? grain_w[i + RS_GRAIN / 2] : 1.0f);
+            if (i >= 0) k->att++;
+            else k->held++;
+        }
+        b->buf[n] = y;
+    }
+    k->vel = vel;
+    if (ends) k->over = 1;
 }
 
 int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_block_t *b) {
@@ -398,16 +588,21 @@ int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_bl
     const int lv[2] = { level, b->cross ? v->level : level };
     v->level = level;
     int key;
-    const nt_table_t *tb = source(v, &key);
+    const nt_table_t *tb = source(v, &key), *rd = sm && v->mode == SM_NOISE ? &sm->noise : tb;
     const int frac = !sm ? NT_FRAC : sm->cycle ? CY_FRAC : SM_FRAC;
     for (int l = 0; l < 2; l++) {
-        b->t[l] = tb->level[lv[l]];
+        b->t[l] = rd->level[lv[l]];
         b->shift[l] = frac + lv[l];
         b->fx[l] = 1.0f / (float)(1u << b->shift[l]);
     }
     /* the loop runs at twice the output's rate: two of its samples a sample */
     b->inc = (uint32_t)(2.0f * rate * (float)(1u << frac) + 0.5f);
-    b->shot = sm && !sm->cycle;
+    b->rs = sm && v->mode == SM_RESYNTH;
+    b->shot = sm && !sm->cycle && !b->rs;
+    if (b->rs) {
+        if (v->bank->over) v->env = 0.0f;
+        else rs_block(v, p, frames, hold, rate, b);
+    }
     if (b->shot) {
         /* LOOP fully right plays to the end; lower, it repeats a slice from
          * START, 2 ms long to all that is left, crossing back over its last
@@ -433,7 +628,7 @@ int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_bl
     else v->s1 = v->s2 = 0.0f;      /* so turning COLOR off the centre starts clean */
     b->g = m * (1.0f / 32767.0f) * (sm && !sm->cycle ? SM_GAIN : 1.0f);
     /* a one-shot with DECAY fully right plays to its end, unfaded */
-    const int whole = b->shot && p[P_N_DECAY] >= 0.999f;
+    const int whole = (b->shot && p[P_N_DECAY] >= 0.999f) || b->rs;     /* Resynth: DECAY is its length */
     v->decay = hold || whole ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
     (void)key;
     return v->env > 1e-5f;          /* 100 dB under a full hit */
@@ -441,6 +636,7 @@ int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_bl
 
 void noise_skip(noise_voice_t *v, const float *p, int frames, int hold) {
     v->level = -1;
+    if (v->smp && v->mode == SM_RESYNTH) return;    /* unheard, it waits where it is */
     v->decay = hold ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
     v->env *= powf(v->decay, (float)frames);
 }

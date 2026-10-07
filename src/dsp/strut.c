@@ -9,6 +9,8 @@
 #include "host/plugin_api_v1.h"
 #include "strut.h"
 
+_Static_assert(NT_BLOCK == STRUT_MAX_BLOCK, "Resynth makes a whole block at once");
+
 /* ---- the pads ---- */
 
 void strut_init(strut_t *s) {
@@ -88,6 +90,7 @@ static void strike(strut_t *s, int i, float amp) {
     /* a sample plays only once loaded, and only the one TABLE names */
     const int t = (int)q[P_N_TABLE] - NT_TABLES;
     const smp_t *sm = t >= 0 ? __atomic_load_n(&s->lib.ready[i], __ATOMIC_ACQUIRE) : NULL;
+    v->noise.bank = &v->bank;
     noise_start(&v->noise, q, sm && sm->entry == t ? sm : NULL, s->seed, amp);
     /* Wave as Skin's hit: at least one of Wave's cycles, sized from Wave's
      * harmonics near PITCH. The floor keeps the hit itself, heard directly,
@@ -293,6 +296,8 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
     for (int i = 0; i < STRUT_PADS; i++) {
         const int t = (int)s->pad[i].p[P_N_TABLE] - NT_TABLES, w = t >= 0 ? t : -1;
         if (w != s->lib.want[i]) __atomic_store_n(&s->lib.want[i], w, __ATOMIC_RELAXED);
+        const int m = (int)s->pad[i].p[P_N_MODE];
+        if (m != s->lib.mode[i]) __atomic_store_n(&s->lib.mode[i], m, __ATOMIC_RELAXED);
     }
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];

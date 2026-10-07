@@ -210,19 +210,26 @@ static void store(int16_t *q, const float *x, int n, float g) {
 
 static int levels_n(uint32_t len, int l) { return (int)((len + (1u << l) - 1) >> l); }
 
-/* Room for every copy: each with two samples before and five after, as
- * nt_read reads. */
-static smp_t *alloc_smp(uint32_t len) {
+/* Room for a table of every copy: each with two samples before and five
+ * after, as nt_read reads. */
+static int16_t *alloc_levels(nt_table_t *t, uint32_t len, size_t *bytes) {
     size_t n = 0;
     for (int l = 0; l < NT_LEVELS; l++) n += (size_t)levels_n(len, l) + 7;
+    int16_t *d = calloc(n, sizeof(int16_t));
+    if (!d) return NULL;
+    *bytes = n * sizeof(int16_t);
+    int16_t *q = d + 2;
+    for (int l = 0; l < NT_LEVELS; l++) t->level[l] = q, q += levels_n(len, l) + 7;
+    return d;
+}
+
+static smp_t *alloc_smp(uint32_t len) {
     smp_t *s = calloc(1, sizeof(*s));
     if (!s) return NULL;
-    s->data = calloc(n, sizeof(int16_t));
-    if (!s->data) { free(s); return NULL; }
-    s->bytes = n * sizeof(int16_t) + sizeof(*s);
+    size_t b;
+    if (!(s->data = alloc_levels(&s->t, len, &b))) { free(s); return NULL; }
+    s->bytes = b + sizeof(*s);
     s->len = len;
-    int16_t *q = s->data + 2;
-    for (int l = 0; l < NT_LEVELS; l++) s->t.level[l] = q, q += levels_n(len, l) + 7;
     return s;
 }
 
@@ -230,6 +237,25 @@ static smp_t *alloc_smp(uint32_t len) {
 static void add_band(float *band, float hz, float pw) {
     const int b = (int)floorf(4.0f * log2f(hz / 20.0f));
     if (b >= 0 && b < NT_BANDS) band[b] += pw;
+}
+
+/* Each copy an octave down from the last, from level 0 in y (which it
+ * overwrites); b is scratch for half of it. */
+static void copies(nt_table_t *t, float *y, uint32_t len, float *b) {
+    int m = (int)len;
+    float *src = y, *dst = b;
+    for (int l = 1; l < NT_LEVELS; l++) {
+        const int h = levels_n(len, l);
+        for (int i = 0; i < h; i++) {
+            const float *c = src + 2 * i;
+            float v = dn_c[0] * c[0];
+            for (int k = 1; k <= DN_M; k++) v += dn_c[k] * ((2 * i - k >= 0 ? c[-k] : 0) + (2 * i + k < m ? c[k] : 0));
+            dst[i] = v;
+        }
+        store((int16_t *)t->level[l], dst, h, 32767.0f);
+        float *x = src;
+        src = dst, dst = x, m = h;
+    }
 }
 
 static smp_t *load_cycle(const float *x) {
@@ -311,21 +337,7 @@ static smp_t *load_shot(const float *x, int n) {
         if (at + 4096 >= len) break;
     }
     for (int k = 0; k < NT_BANDS; k++) s->t.var += s->t.band[k];
-    /* each copy an octave down from the last */
-    int m = (int)len;
-    float *src = y, *dst = b + DN_M;
-    for (int l = 1; l < NT_LEVELS; l++) {
-        const int h = levels_n(len, l);
-        for (int i = 0; i < h; i++) {
-            const float *c = src + 2 * i;
-            float v = dn_c[0] * c[0];
-            for (int k = 1; k <= DN_M; k++) v += dn_c[k] * ((2 * i - k >= 0 ? c[-k] : 0) + (2 * i + k < m ? c[k] : 0));
-            dst[i] = v;
-        }
-        store((int16_t *)s->t.level[l], dst, h, 32767.0f);
-        float *t = src;
-        src = dst, dst = t, m = h;
-    }
+    copies(&s->t, y, len, b);
     free(a), free(b), free(re), free(im);
     return s;
 }
@@ -344,8 +356,284 @@ smp_t *smp_load(int entry) {
     return s;
 }
 
+/* ---- Resynth and Noise (MODE) ---- */
+
+#define AN_N 4096       /* the sine waves' window: 46 ms of level 0 at 88.2 kHz, 43 Hz apart */
+#define AN_PEAKS 48     /* the loudest peaks a frame offers the tracks */
+#define NZ_N 512        /* the noise's window: 5.8 ms, so an attack stays sharp */
+#define NZ_HOP 128
+#define PHASES 4096
+
+static float phase_sin[PHASES + PHASES / 4];
+static float an_w[AN_N], nz_w[NZ_N];
+static pthread_once_t analysed = PTHREAD_ONCE_INIT;
+
+static void design_an(void) {
+    for (int i = 0; i < PHASES + PHASES / 4; i++) phase_sin[i] = (float)sin(2 * PI * i / PHASES);
+    for (int i = 0; i < AN_N; i++) an_w[i] = (float)(0.5 - 0.5 * cos(2 * PI * i / AN_N));
+    for (int i = 0; i < NZ_N; i++) nz_w[i] = (float)(0.5 - 0.5 * cos(2 * PI * i / NZ_N));
+}
+
+typedef struct { float f, a; } peak_t;
+
+static int by_amp(const void *x, const void *y) {
+    const float a = ((const peak_t *)x)->a, b = ((const peak_t *)y)->a;
+    return (a < b) - (a > b);
+}
+
+/* One frame's peaks (McAulay and Quatieri): the local highs of the
+ * spectrum, each placed between bins by a parabola through its log level
+ * and its neighbours' (Smith and Serra), louder than floor and than 60 dB
+ * under the frame's loudest, under top; the loudest AN_PEAKS. */
+static int peaks(const float *re, const float *im, float *mag, int kmax, float floor_a, peak_t *pk) {
+    float loud = 0;
+    for (int k = 0; k <= kmax + 1; k++) mag[k] = sqrtf(re[k] * re[k] + im[k] * im[k]), loud = fmaxf(loud, mag[k]);
+    const float least = fmaxf(floor_a * AN_N / 4, loud * 1e-3f);
+    peak_t all[AN_N / 4];
+    int n = 0;
+    for (int k = 2; k <= kmax && n < AN_N / 4; k++) {
+        const float m = mag[k];
+        if (m <= least || m <= mag[k - 1] || m < mag[k + 1]) continue;
+        const float a = logf(mag[k - 1] + 1e-12f), b = logf(m), c = logf(mag[k + 1] + 1e-12f);
+        const float d = a - 2 * b + c;
+        const float x = d < 0 ? fminf(fmaxf(0.5f * (a - c) / d, -0.5f), 0.5f) : 0.0f;
+        all[n].f = ((float)k + x) / AN_N;
+        all[n].a = 4.0f * expf(b - 0.25f * (a - c) * x) / AN_N;    /* a sine of level A peaks at A N / 4 */
+        n++;
+    }
+    qsort(all, (size_t)n, sizeof(peak_t), by_amp);
+    if (n > AN_PEAKS) n = AN_PEAKS;
+    memcpy(pk, all, sizeof(peak_t) * (size_t)n);
+    return n;
+}
+
+/* The sine waves: each frame's peaks joined into tracks, RS_SLOTS at
+ * most, a track kept in its slot from frame to frame so its sine runs on
+ * smoothly (McAulay and Quatieri's matching: each track takes the nearest
+ * peak within 3 %, the loudest tracks first; peaks left over start new
+ * tracks in free slots, the loudest first). */
+static int analyse(smp_t *s, const float *x) {
+    const uint32_t len = s->len;
+    const int nf = (int)(len / RS_HOP) + 1;
+    s->fq = calloc((size_t)nf * RS_SLOTS, sizeof(float));
+    s->am = calloc((size_t)nf * RS_SLOTS, sizeof(float));
+    float *re = malloc(sizeof(float) * AN_N), *im = malloc(sizeof(float) * AN_N);
+    float *mag = malloc(sizeof(float) * (AN_N / 2 + 2));
+    float raw[2][RS_SLOTS] = { { 0 } };     /* each track's level before the gate below, last frame and this */
+    int idle[RS_SLOTS];                     /* frames since each slot's track ended */
+    for (int k = 0; k < RS_SLOTS; k++) idle[k] = 2;
+    if (!s->fq || !s->am || !re || !im || !mag) { free(re), free(im), free(mag); return 0; }
+    float top = 0;
+    for (uint32_t i = 0; i < len; i++) top = fmaxf(top, fabsf(x[i]));
+    const float floor_a = top * 3e-4f;     /* 70 dB under the sample's peak */
+    s->onset = 0;
+    while (s->onset + 1 < len && fabsf(x[s->onset]) < 0.1f * top) s->onset++;
+    /* nothing over 19.8 kHz as the file plays */
+    int kmax = (int)(TOP_HZ / (2.0 * s->speed * STRUT_SR) * AN_N);
+    if (kmax > AN_N / 2 - 2) kmax = AN_N / 2 - 2;
+    double wsum2 = 0, ssum2 = 0;
+    for (int i = 0; i < AN_N; i++) wsum2 += (double)an_w[i] * an_w[i];
+    for (int i = 0; i < AN_N / 2; i++) ssum2 += (double)an_w[2 * i] * an_w[2 * i];
+    for (int f = 0; f < nf; f++) {
+        const long c = (long)f * RS_HOP;
+        double el = 0, es = 0;
+        for (int i = 0; i < AN_N; i++) {
+            const long j = c - AN_N / 2 + i;
+            const float v = j >= 0 && j < (long)len ? x[j] : 0.0f;
+            re[i] = v * an_w[i], im[i] = 0;
+            el += (double)re[i] * re[i];
+            if (i >= AN_N / 4 && i < 3 * AN_N / 4) {
+                const double h = v * an_w[2 * (i - AN_N / 4)];
+                es += h * h;
+            }
+        }
+        /* the window is long, so on its own a sine would rise before the
+         * hit that starts it: each frame's sines are scaled by the level
+         * the middle half of the window heard (through a window of its
+         * own, so a low pitch's swing does not wobble it) against the
+         * level the whole heard; at most 2, which a sine starting at the
+         * middle needs */
+        el /= wsum2, es /= ssum2;
+        const float gate = el > 0 ? (float)fmin(es / el, 2.0) : 0.0f;
+        fft(re, im, AN_N, -1);
+        peak_t pk[AN_PEAKS];
+        const int np = peaks(re, im, mag, kmax, floor_a, pk);
+        float *fq = s->fq + (size_t)f * RS_SLOTS, *am = s->am + (size_t)f * RS_SLOTS;
+        const float *fq0 = f ? fq - RS_SLOTS : NULL;
+        int taken[AN_PEAKS] = { 0 }, done[RS_SLOTS] = { 0 };
+        /* the tracks still going, loudest first */
+        for (;;) {
+            int j = -1;
+            for (int k = 0; k < RS_SLOTS; k++)
+                if (!done[k] && raw[0][k] > 0 && (j < 0 || raw[0][k] > raw[0][j])) j = k;
+            if (j < 0) break;
+            done[j] = 1;
+            int best = -1;
+            const float tol = fmaxf(0.03f * fq0[j], 1.5f / AN_N);
+            for (int p = 0; p < np; p++)
+                if (!taken[p] && fabsf(pk[p].f - fq0[j]) < tol && (best < 0 || fabsf(pk[p].f - fq0[j]) < fabsf(pk[best].f - fq0[j]))) best = p;
+            if (best >= 0) taken[best] = 1, fq[j] = pk[best].f, raw[1][j] = pk[best].a;
+            else fq[j] = fq0[j], raw[1][j] = 0;     /* it ends, fading to nothing at its own pitch */
+        }
+        /* new ones, in the slots free */
+        for (int p = 0, k = 0; p < np; p++) {
+            if (taken[p]) continue;
+            /* a slot rests a frame first, so the track it held fades
+             * out at its own pitch, not gliding to this one's */
+            while (k < RS_SLOTS && (done[k] || idle[k] < 2)) k++;
+            if (k == RS_SLOTS) break;
+            done[k] = 1;
+            fq[k] = pk[p].f, raw[1][k] = pk[p].a;
+            if (f) s->fq[(size_t)(f - 1) * RS_SLOTS + (size_t)k] = pk[p].f;    /* rising from nothing at its own pitch */
+            k++;
+        }
+        for (int k = 0; k < RS_SLOTS; k++) {
+            if (!done[k]) fq[k] = fq0 ? fq0[k] : 0, raw[1][k] = 0;
+            am[k] = raw[1][k] * gate;
+            raw[0][k] = raw[1][k];
+            idle[k] = raw[1][k] > 0 ? 0 : idle[k] + 1;
+        }
+    }
+    s->frames = nf;
+    free(re), free(im), free(mag);
+    return 1;
+}
+
+/* The sine waves as Resynth plays them at the sample's own pitch and
+ * length, into p (level 0's rate): each frame to the next, at the pitch
+ * between them, its level gliding. */
+static void sines(const smp_t *s, float *p) {
+    memset(p, 0, sizeof(float) * s->len);
+    uint32_t r = 0x9E3779B9u;
+    for (int k = 0; k < RS_SLOTS; k++) {
+        r ^= r << 13, r ^= r >> 17, r ^= r << 5;
+        double c = cos(2 * PI * (r >> 20) / 4096), sn = sin(2 * PI * (r >> 20) / 4096);
+        for (int f = 0; f + 1 < s->frames; f++) {
+            const float *q = s->fq + (size_t)f * RS_SLOTS + k, *a = s->am + (size_t)f * RS_SLOTS + k;
+            if (a[0] == 0 && a[RS_SLOTS] == 0) continue;
+            const double w = PI * (q[0] + q[RS_SLOTS]), cr = cos(w), ci = sin(w);
+            const double da = (a[RS_SLOTS] - a[0]) / RS_HOP;
+            double g = a[0];
+            const uint32_t at = (uint32_t)f * RS_HOP;
+            for (uint32_t i = 0; i < RS_HOP && at + i < s->len; i++) {
+                const double t = c * cr - sn * ci;
+                sn = sn * cr + c * ci, c = t;
+                g += da;
+                p[at + i] += (float)(g * sn);
+            }
+            const double m = 1.5 - 0.5 * (c * c + sn * sn);
+            c *= m, sn *= m;
+        }
+    }
+}
+
+/* x's colour as it changes, every pitch taken out, into y: each short
+ * stretch's spectrum kept and its phases thrown away (Serra and Smith's
+ * stochastic part), laid end to end. With sub (the sine waves), what they
+ * account for is taken out first, leaving Resynth's noise. Returns how much
+ * of x's power it keeps. */
+static double colour_of(const float *x, const float *sub, uint32_t len, float speed, float *y) {
+    float re[NZ_N], im[NZ_N], sr[NZ_N], si[NZ_N];
+    int kmax = (int)(TOP_HZ / (2.0 * speed * STRUT_SR) * NZ_N);
+    if (kmax > NZ_N / 2 - 1) kmax = NZ_N / 2 - 1;
+    double ex = 0, ek = 0;
+    uint32_t r = 0x2545F491u;
+    memset(y, 0, sizeof(float) * len);
+    for (long st = -NZ_N + NZ_HOP; st < (long)len; st += NZ_HOP) {
+        for (int i = 0; i < NZ_N; i++) {
+            const long j = st + i;
+            const int in = j >= 0 && j < (long)len;
+            re[i] = in ? x[j] * nz_w[i] : 0, im[i] = 0;
+            if (sub) sr[i] = in ? sub[j] * nz_w[i] : 0, si[i] = 0;
+        }
+        fft(re, im, NZ_N, -1);
+        if (sub) fft(sr, si, NZ_N, -1);
+        float m[NZ_N / 2 + 2] = { 0 };
+        for (int k = 0; k < NZ_N / 2; k++) {
+            const float px = re[k] * re[k] + im[k] * im[k];
+            const float pk = k >= 1 && k <= kmax ? sub ? fmaxf(px - (sr[k] * sr[k] + si[k] * si[k]), 0.0f) : px : 0.0f;
+            ex += px, ek += pk;
+            m[k] = pk;
+        }
+        if (!sub) {
+            /* Noise: the colour, not its lines; each bin's power spread
+             * over two either side, so a note becomes a band of noise
+             * around it and not a pitch */
+            float q[NZ_N / 2];
+            for (int k = 1; k <= kmax; k++) {
+                float a = 3 * m[k];
+                for (int d = 1; d <= 2; d++) a += (float)(3 - d) * ((k - d >= 1 ? m[k - d] : 0) + (k + d <= kmax ? m[k + d] : 0));
+                q[k] = a * (1.0f / 9);
+            }
+            for (int k = 1; k <= kmax; k++) m[k] = q[k];
+        }
+        for (int k = 0; k < NZ_N / 2; k++) m[k] = sqrtf(m[k]);
+        memset(re, 0, sizeof(re)), memset(im, 0, sizeof(im));
+        for (int k = 1; k <= kmax; k++) {
+            r ^= r << 13, r ^= r >> 17, r ^= r << 5;
+            const int ph = (int)(r >> 20);
+            const float c = m[k] * phase_sin[ph + PHASES / 4], sn = m[k] * phase_sin[ph];
+            re[k] = c, im[k] = sn, re[NZ_N - k] = c, im[NZ_N - k] = -sn;
+        }
+        fft(re, im, NZ_N, 1);
+        for (int i = 0; i < NZ_N; i++) {
+            const long j = st + i;
+            if (j >= 0 && j < (long)len) y[j] += re[i] * nz_w[i];
+        }
+    }
+    return ex > 0 ? ek / ex : 0;
+}
+
+/* A table of y (level 0, len samples) at the power of x times keep. */
+static int16_t *as_table(nt_table_t *t, float *y, const float *x, double keep, uint32_t len, float *b, size_t *bytes) {
+    int16_t *d = alloc_levels(t, len, bytes);
+    if (!d) return NULL;
+    double px = 0, py = 0;
+    for (uint32_t i = 0; i < len; i++) px += (double)x[i] * x[i], py += (double)y[i] * y[i];
+    const float g = py > 0 ? (float)sqrt(px * keep / py) / 32767.0f : 0.0f;     /* to floats, as load_shot's */
+    for (uint32_t i = 0; i < len; i++) y[i] *= g;
+    store((int16_t *)t->level[0], y, (int)len, 32767.0f);
+    copies(t, y, len, b);
+    return d;
+}
+
+int smp_build(smp_t *s, int m) {
+    if (s->cycle || (m != SM_RESYNTH && m != SM_NOISE)) return 0;
+    if (s->has & 1 << m) return 1;
+    pthread_once(&analysed, design_an);
+    const uint32_t len = s->len;
+    float *x = malloc(sizeof(float) * len), *y = malloc(sizeof(float) * len);
+    float *b = malloc(sizeof(float) * (len / 2 + 8));
+    float *p = m == SM_RESYNTH ? malloc(sizeof(float) * len) : NULL;
+    int ok = x && y && b && (m != SM_RESYNTH || p);
+    if (ok) {
+        for (uint32_t i = 0; i < len; i++) x[i] = s->t.level[0][i];
+        size_t bytes = 0;
+        if (m == SM_NOISE) {
+            /* as loud as the sample, though it keeps nothing under
+             * 170 Hz, where 5.8 ms is too short to hold a pitch's colour */
+            colour_of(x, NULL, len, s->speed, y);
+            ok = (s->ndata = as_table(&s->noise, y, x, 1.0, len, b, &bytes)) != NULL;
+            if (ok) {
+                memcpy(s->noise.band, s->t.band, sizeof(s->t.band));
+                s->noise.var = s->t.var;
+            }
+        } else if ((ok = analyse(s, x))) {
+            sines(s, p);
+            const double keep = colour_of(x, p, len, s->speed, y);
+            ok = (s->rdata = as_table(&s->rest, y, x, keep, len, b, &bytes)) != NULL;
+            bytes += (size_t)s->frames * RS_SLOTS * 2 * sizeof(float);
+        }
+        if (ok) s->bytes += bytes;
+    }
+    free(x), free(y), free(b), free(p);
+    s->tried |= 1 << m;
+    if (ok) __atomic_or_fetch(&s->has, 1 << m, __ATOMIC_RELEASE);
+    return ok;
+}
+
 void smp_free(smp_t *s) {
-    if (s) free(s->data), free(s);
+    if (s) free(s->data), free(s->ndata), free(s->rdata), free(s->fq), free(s->am), free(s);
 }
 
 /* ---- the loader ---- */
@@ -359,15 +647,19 @@ static int held(const smp_lib_t *lib, const smp_t *s) {
 void smp_service(smp_lib_t *lib, int patience) {
     for (int i = 0; i < SM_PADS; i++) {
         const int w = __atomic_load_n(&lib->want[i], __ATOMIC_RELAXED);
-        if (w != lib->seen[i]) lib->seen[i] = w, lib->still[i] = 0;
+        const int m = __atomic_load_n(&lib->mode[i], __ATOMIC_RELAXED);
+        const int key = w < 0 ? -1 : w * 4 + (m & 3);
+        if (key != lib->seen[i]) lib->seen[i] = key, lib->still[i] = 0;
         else if (lib->still[i] < 1 << 20) lib->still[i]++;
         const smp_t *r = lib->ready[i];
         if (w < 0 || w >= count) {
             if (r) __atomic_store_n(&lib->ready[i], NULL, __ATOMIC_RELEASE);
             continue;
         }
+        /* MODE's other ways are made when first asked for */
+        const int need = m == SM_RESYNTH || m == SM_NOISE ? 1 << m : 0;
         /* a knob turning through the list loads nothing until it rests */
-        if ((r && r->entry == w) || lib->still[i] < patience || lib->still[i] < 0) continue;
+        if ((r && r->entry == w && (r->cycle || !(need & ~r->tried))) || lib->still[i] < patience || lib->still[i] < 0) continue;
         smp_t *s = lib->cache;
         while (s && s->entry != w) s = s->next;
         if (!s && (s = smp_load(w))) {
@@ -375,8 +667,13 @@ void smp_service(smp_lib_t *lib, int patience) {
             lib->cached += s->bytes;
         }
         if (!s) { lib->still[i] = -(1 << 20); continue; }    /* unreadable: not tried again till TABLE moves */
+        if (need & ~s->tried && !s->cycle) {
+            const size_t was = s->bytes;
+            smp_build(s, m);
+            lib->cached += s->bytes - was;
+        }
         s->dead = 0;
-        __atomic_store_n(&lib->ready[i], s, __ATOMIC_RELEASE);
+        if (r != s) __atomic_store_n(&lib->ready[i], s, __ATOMIC_RELEASE);
     }
     /* what no pad has ready is let go: kept while the cache has room, and
      * freed only once two blocks have passed and no voice is using it */

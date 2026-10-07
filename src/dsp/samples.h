@@ -7,7 +7,8 @@
  * priority, off the audio's core). It talks to the audio thread through
  * three arrays of words, each written by one side only:
  *
- *   want   the audio thread: the entry each pad's TABLE names, -1 none
+ *   want   the audio thread: the entry each pad's TABLE names, -1 none,
+ *          and its MODE
  *   ready  the loader: the sample each pad may now play, NULL none
  *   used   the audio thread: the sample each pad's voice is playing
  *
@@ -33,9 +34,14 @@
 #define CY_FRAC 20              /* its read position wraps the cycle by itself */
 #define CY_HZ ((float)NT_SR / CY_N)     /* a cycle's pitch at its own rate, 21.53 Hz */
 
+enum { SM_SAMPLE, SM_RESYNTH, SM_NOISE };   /* MODE */
+
 /* A loaded sample: its copies an octave apart, its bands and its power, in
  * the form of a noise table, so PITCH, COLOR, their level match and Skin's
  * strike treat it as they treat noise. */
+/* MODE's other two ways of playing a one-shot are made from it when a pad
+ * first asks for them (smp_build), and flagged in `has` once made; the
+ * audio thread reads them only after seeing the flag. */
 typedef struct smp {
     nt_table_t t;
     int entry;              /* in the list */
@@ -46,6 +52,18 @@ typedef struct smp {
     size_t bytes;
     struct smp *next;       /* the loader's own list */
     unsigned dead;          /* the block count when no pad had it ready; 0 while one does */
+    int has, tried;         /* MODE's ways made (1 << mode), and tried by the loader */
+    /* Noise: the sample's colour as it changes, every pitch taken out */
+    nt_table_t noise;
+    int16_t *ndata;
+    /* Resynth: its sine waves, RS_SLOTS a frame, RS_HOP apart (each a
+     * frequency in cycles a level-0 sample and a level in level 0's units),
+     * and the noise left over once they are taken out */
+    int frames;
+    float *fq, *am;
+    uint32_t onset;         /* where its hit begins, in level-0 samples: its first sound within 20 dB of its peak */
+    nt_table_t rest;
+    int16_t *rdata;
 } smp_t;
 
 /* The list: built once, when the first instance is made, from module_dir's
@@ -58,10 +76,13 @@ const char *smp_path(int i);
 /* A file read to mono floats at its own rate; the caller frees *x. */
 int smp_read_wav(const char *path, float **x, int *frames, int *rate);
 smp_t *smp_load(int entry);
+/* Makes MODE's way m (SM_RESYNTH or SM_NOISE) of s; 0 if it could not. */
+int smp_build(smp_t *s, int m);
 void smp_free(smp_t *s);
 
 typedef struct {
     int want[SM_PADS];
+    int mode[SM_PADS];      /* the audio thread: each pad's MODE */
     const smp_t *ready[SM_PADS];
     const smp_t *used[SM_PADS];
     unsigned blocks;

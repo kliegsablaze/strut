@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page and the sample library in Noise's Sample mode, 0.6.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page and the sample library in all three of Noise's modes, 0.7.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -11,10 +11,11 @@ can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
 *How Wave works*, *How Noise works*); each pad then has Pad COLOR and the
 Finish page (*How Finish works*), every engine its modulator and CURVE
 (*Modulation*), and the whole kit GLUE, WARM and a room (*How the Kit page
-works*). Noise plays the library's 208 samples, or your own, in Sample mode
-(*The sample library*). Resynth and Noise modes, SOUND and DICE are still
-the plan; their knobs are kept but do nothing yet. On the Move, every pad at its dearest, with every
-effect and modulator: 17.7 % of the CPU (0.4.1).
+works*). Noise plays the library's 208 samples, or your own, as recorded,
+resynthesised or as their colour alone (*The sample library*, *How
+Resynth and Noise work*). SOUND and DICE are still the plan; their knobs
+are kept but do nothing yet. On the Move, every pad at its dearest, with
+every effect and modulator and the Kit page: about 22 % of the CPU (0.6.0).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -485,8 +486,9 @@ four pads, tune them apart and play them as a riff. With a sample chosen:
 
 - **PITCH** is in semitones from the pitch it was recorded at (0 = as
   recorded). Pad TUNE moves it too, so a pad can be tuned to a note.
-- **DECAY** fades the sample out (in Resynth it sets the length instead);
-  turned fully right it plays to its end at its own length.
+- **DECAY** fades the sample out; turned fully right it plays to its end
+  at its own length. In Resynth it sets the length instead: the sample's
+  own at the centre, a quarter of it fully left, four times fully right.
 - **START** picks where in the sample to begin, so one long sample can feed
   several pads, each from its own slice.
 - **LOOP** fully right plays the sample once. Lower, it repeats a slice of that
@@ -572,7 +574,7 @@ Rejected for Noise:
   Metal's lines, Wires' peaks or a sample's colour, and costs a filter per
   colour per voice; a table gives any colour for one read.
 
-#### The sample library (built in part, 0.6.0)
+#### The sample library (built, 0.6.0)
 
 Strut ships with 208 sounds in `src/samples/`, 50 MB, gathered in another
 session (2026-10-07): 23 folders, one per kind (Kick, Snare, Rim, Clap, Hat,
@@ -657,8 +659,6 @@ kind and a number, `Kick 001.wav`.
   second after TABLE comes to rest; samples looped on every pad cost no
   more than noise tables (19.2 %, against 18.9 % with tables in the same
   run).
-- **Still to build:** Resynth and Noise modes; until then MODE plays every
-  sample as Sample.
 - **In the presets** (step 10): the SOUND list and the factory kits use the
   library, and DICE rolls from it by role, a kick pad from Kick/.
 
@@ -666,6 +666,87 @@ Rejected: time-stretching in Sample mode. It costs CPU on every pad and smears
 the attack a drum needs; Resynth is the way to change length and pitch apart.
 Rejected: a second TABLE entry per sample for each way of playing it. It
 triples the list and hides that the three are one sample.
+
+#### How Resynth and Noise work (built, 0.7.0)
+
+MODE's other two ways are made from the sample the first time a pad asks
+for them, on the loader's thread, and kept with it. Until they are made, a
+hit plays the sample as recorded; a note keeps the MODE it was struck
+with. A cycle (Cycle/) is already an oscillator, with pitch and length
+apart, so it plays as itself in every MODE.
+
+- **Resynth's analysis** (McAulay and Quatieri; Serra and Smith). The
+  sample, at twice the output's rate, is cut into frames 5.8 ms apart, each
+  seen through a 46 ms window (Hann), wide enough to part two pitches 43 Hz
+  apart. Each frame's peaks are placed between bins by a parabola through
+  their log levels, and joined into at most 32 tracks: each track takes the
+  nearest peak within 3 %, the loudest tracks first, and the peaks left
+  over start new tracks in free slots, the loudest first. A slot rests a
+  frame after its track ends, so the old track fades out at its own pitch
+  rather than gliding to the new one.
+  - **A long window rises early.** Seen through 46 ms, a sine that starts
+    with a hit is already heard 23 ms before it. Each frame's sines are
+    scaled by the level the window's middle half heard against the level
+    the whole heard (at most 2, which a sine starting at the middle needs).
+    Measured against the middle 5.8 ms alone, a bass's swing wobbled the
+    scale and a kick's body came out 4 dB over.
+- **The noise left over.** The sines are played through once at the
+  sample's own pitch and length, and each 5.8 ms of the sample has their
+  power taken out of its spectrum, bin by bin. What is left is given random
+  phases and laid end to end (Serra and Smith's stochastic part), as a
+  second table of the same length, with the same seven copies.
+  (Rejected: subtracting the sines in time. Their phases are guessed, so
+  the difference added as much as it took away.)
+- **Playing Resynth.** Each sine is a pointer turned a step a sample, its
+  step set each block from the frame reached, PITCH and TUNE; its level
+  glides across the block to the frame's. Four sines share a vector, and
+  four vectors turn side by side (one pointer's turn waits on its last, so
+  one at a time left the processor idle). Sines over 19.8 kHz fall silent.
+  The leftover noise is read in two grains 23 ms long, half a grain apart,
+  each through a sine window so the two keep the power; each grain starts
+  where the frames have got to, so the noise follows DECAY's length while
+  PITCH sets how fast it is read (a drum tuned up is brighter, as on Skin).
+  The grains are read along a straight line between samples, not six
+  points: at twice the rate, its error is 50 dB under the noise at 5 kHz
+  and 23 dB at 20 kHz, and is only more noise.
+- **The hit itself is the sample.** Up to 10 ms past where the sample's
+  hit begins (its first sound within 20 dB of its peak), Resynth plays the
+  recording, then crosses over to the resynthesis by power across 12 ms.
+  Without it, the sines' guessed phases summed at the attack peaked up to
+  6 dB over the recording (a kick 1.06 against 0.73), and a sound starting
+  late (Foley 013, 55 ms in) rose before its hit.
+- **DECAY is the length** in Resynth, not a fade: the frames advance at a
+  quarter to four times the sample's own speed, its own at the centre, and
+  Pad DECAY scales it as it scales every fall. CURVE's Hold stops time:
+  the sound holds where it is. LOOP repeats a slice of the frames from
+  START; a slice shorter than a frame holds one moment still, as a drone.
+  A re-hit carries on from where the sines are, gliding to the new frame,
+  and the note it cut fades over 64 samples under the new attack.
+- **Noise mode** is made the same way as Resynth's leftover noise, but
+  from the whole sample, with each bin's power spread over two either side
+  first, so a note becomes a band of noise around it and not a pitch
+  (tested: a mallet that repeats itself at 0.99 does so at 0.25). It plays
+  exactly as Sample mode does (START, LOOP, DECAY, PITCH as speed), at the
+  same cost. It keeps nothing under about 170 Hz, where 5.8 ms is too short
+  to hold a colour, so it is set to the sample's power, not to what it
+  kept: kicks would otherwise lose 5 dB.
+- **Level.** Across every one-shot in the library, against the sample
+  itself (loudest 400 ms): Resynth −3.6 to +1.7 dB, half of them over
+  +0.3; Noise −0.6 to +1.1 dB. Every one sounds, peaks under 0.95 and ends.
+- **Cost.** On a laptop a 4 s sample's Resynth takes 180 ms to make and its
+  Noise 75; Resynth adds up to 1.5 MB to a sample (2.8 MB in all). Playing,
+  Resynth looped on every pad cost no more than samples looped (5.2 %
+  against 5.0 % on the laptop, with 24 of a pad's 32 sines sounding); the
+  Move's measurement is to come.
+
+Rejected for Resynth:
+
+- **Every sine's phase followed exactly** (McAulay and Quatieri's cubic
+  phase). It would rebuild the attack too, but costs a cubic a sine a
+  sample; the recording plays the attack instead, and after it no ear
+  hears a phase.
+- **Making all three ways when a sample loads.** Resynth more than
+  quintuples a sample's preparation; most pads never ask for it.
 
 ### Finish (the focused pad)
 
@@ -1062,11 +1143,10 @@ own engine, reach most of the same sounds.)
   `filepath` param type. Loading happens off the audio thread, as Ragtag does.
   - **Sample:** an interpolated read (cubic to start; Laakso et al.) at the
     rate PITCH, TUNE and the modulator give.
-  - **Resynth and Noise:** the analysis (short FFT frames, peak tracking into
-    partials, the residual's spectral envelope) runs when the sample loads, on
-    the loading thread, never on the audio thread. Playback is a bank of sine
-    oscillators plus filtered noise. Cap the partials (start at 32 a voice)
-    and measure CPU at step 9; this is the dearest thing a pad can do.
+  - **Resynth and Noise:** built (0.7.0); see *How Resynth and Noise
+    work*. The analysis runs on the loader's thread when a pad first asks
+    for the mode; playback is 32 sines a voice plus two grains of the
+    leftover noise, and cost no more than Sample mode on a laptop.
   - A pad's two voices let a long melodic sample ring under the next hit.
 - **Separate outputs.** Schwung offers `move_plugin_render_split` (per-voice
   buffers; see `plugin_api_v1.h`). Later, not 1.0.
@@ -1111,15 +1191,17 @@ own engine, reach most of the same sounds.)
    the same run (2026-10-07); in a second run (0.6.0) 21.1 % against 18.9,
    its runs reaching 22.0 %. So the kit costs up to about 2 %, and the
    worst case sits near 22 % of the 25 % allowed. Still to do: hear it.
-9. Samples (see *The sample library*):
+9. ~~Samples~~ (see *The sample library*, *How Resynth and Noise work*):
    - ~~ship `src/samples/` in the module and the tarball~~ (0.6.0; the
      tarball is 40 MB; the library installs in 2 s);
    - ~~TABLE past the noise tables: the library, then your own samples~~
      (0.6.0, one long list);
    - ~~load on demand per pad, off the audio thread~~ (0.6.0);
    - ~~Sample mode, START and LOOP; Cycle/ looped and pitched, in copies an
-     octave apart~~ (0.6.0); Resynth and Noise modes still to build;
-   - CPU measured with resynthesis on every pad;
+     octave apart~~ (0.6.0); ~~Resynth and Noise modes~~ (0.7.0);
+   - ~~CPU measured with resynthesis on every pad~~ (0.7.0, on a laptop:
+     no more than samples; still to do: the Move's measurement, and hear
+     it);
    - ~~tests: every file parses, every Cycle file is 2048 samples, the
      tarball holds the library~~ (0.6.0).
 10. The SOUND library, factory kits and DICE, drawing on the sample library
@@ -1189,6 +1271,14 @@ own engine, reach most of the same sounds.)
     a voice plays, and holds under 20 MB after 120 samples; its own thread
     loads a pad's sample while blocks render. CI checks the tarball holds
     every sample and SOURCES.md.
+  - Resynth and Noise (MODE): every one-shot in both sounds, stays finite,
+    peaks under 0.95, ends, and is within 6 dB of the sample (the middle
+    within 1.5); Resynth keeps a bass note's pitch to 2 %, its length at
+    DECAY's centre to 10 %, an octave up at PITCH +12 as long, four times
+    as long at DECAY fully right and a quarter at 0, both at its pitch; a
+    short LOOP holds a moment steady for seconds; Noise takes a mallet's
+    pitch out; a mode not yet made plays the sample, and a cycle plays as
+    itself.
   - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.

@@ -182,7 +182,7 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.6.0)
+## Where things stand (2026-10-07, 0.7.0)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
@@ -199,7 +199,11 @@ When the user moves work back to their local machine:
     from `/data/UserData/schwung/samples/strut/`. Sample mode with START
     and LOOP; Cycle/ looped and pitched from A1. A loader thread an
     instance loads them on demand.
-  - Tests: 1426 checks, plus the host's planner and validator.
+  - Noise > MODE (0.7.0): Resynth (32 sine waves plus the leftover noise;
+    DECAY sets the length, PITCH the pitch; the first 10 ms of the hit
+    are the recording) and Noise (the sample's colour, pitch taken out).
+    Each is made the first time a pad asks, on the loader's thread.
+  - Tests: 1438 checks, plus the host's planner and validator.
 - **Tried on the device:**
   - Skin, its grit fixed (0.0.6), and page titles;
   - Noise "sounds great" (0.2.2);
@@ -214,9 +218,11 @@ When the user moves work back to their local machine:
     tables.
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it, not yet confirmed.
-  - Not yet: Finish, the modulators, the Kit page and samples by ear.
-- **Next:** the rest of step 9: Noise's Resynth and Noise modes (MODE),
-  and their CPU with resynthesis on every pad. Then step 10, presets.
+  - Not yet: Finish, the modulators, the Kit page and samples by ear;
+    0.7.0's Resynth row in the bench, and how long a 4 s sample's Resynth
+    takes to make there (180 ms on a laptop).
+- **Next:** step 10: the SOUND presets, factory kits, DICE by role,
+  help.json and the README.
 - **Open questions for the user:**
   - whether Wave's and Noise's loudness against Skin's suits them (the
     voicing pass, step 11).

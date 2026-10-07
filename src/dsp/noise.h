@@ -19,6 +19,7 @@
 #define NT_LEVELS 7             /* copies an octave duller each, for PITCH up to +72 */
 #define NT_TABLES 8             /* TABLE's options (params.c) */
 #define NT_BANDS 40             /* quarter octaves from 20 Hz, for the level and Skin's strike */
+#define NT_BLOCK 256            /* the longest block, STRUT_MAX_BLOCK (strut.c checks) */
 
 enum { NT_WHITE, NT_PINK, NT_BROWN, NT_HISS, NT_WIRES, NT_METAL, NT_CRACKLE, NT_GRIT };
 
@@ -32,11 +33,37 @@ typedef struct {
 void nt_build(void);
 const nt_table_t *nt_table(int t);
 
+typedef int16_t nt_s4 __attribute__((vector_size(8)));
+typedef float nt_f4 __attribute__((vector_size(16)));
+
 struct smp;
+
+/* Resynth (DESIGN.md, Noise): a sample played as sine waves and the noise
+ * left over. */
+#define RS_SLOTS 32             /* sine waves a voice, four to a vector */
+#define RS_HOP 512              /* its frames: level-0 samples apart, 5.8 ms at 44.1 kHz */
+#define RS_GRAIN 1024           /* the leftover noise is read in grains this long, two overlapping */
+#define RS_ATTACK 441           /* the sample itself plays to 10 ms past its hit, then crosses over half a grain */
+
+typedef struct {
+    /* each sine as a turning pointer, and its level */
+    nt_f4 c[RS_SLOTS / 4], s[RS_SLOTS / 4], a[RS_SLOTS / 4];
+    float t;                    /* where in the sample it has got to, in frames */
+    float vel, vel_to;          /* the hit's strength, gliding to the last hit's */
+    uint32_t pos[2];            /* the grains' read positions, level 0's, SM_FRAC bits of fraction */
+    int age[2];                 /* and their samples in */
+    uint32_t seed;
+    int over;                   /* it has played to its end */
+    int att;                    /* the attack: -1 the sample itself, then samples into crossing over */
+    int held, cut;              /* samples of the sample itself, and whether the hit cut a note */
+    uint32_t hold_end;          /* where the sample itself gives way, as pos */
+} noise_bank_t;
 
 typedef struct {
     uint32_t phase;         /* the read position, NT_FRAC bits of fraction; wraps the loop itself */
     const struct smp *smp;  /* the sample this note plays, NULL a noise table */
+    int mode;               /* and how (SM_SAMPLE ...), as MODE was when it was hit */
+    noise_bank_t *bank;     /* Resynth's state, beside the voice (strut.h) */
     int tab;                /* the noise table it plays */
     uint32_t old;           /* a re-hit sample: where the note it cut had got to */
     float old_g;            /* and that note's level */
@@ -64,6 +91,8 @@ typedef struct {
     int shot;
     uint32_t end, loop, xf_at;
     float xk;
+    int rs;                 /* Resynth: the block is made in buf */
+    float buf[NT_BLOCK];
 } noise_block_t;
 
 /* Starts a note at strength amp. A hit on noise still sounding adds to it
@@ -89,8 +118,6 @@ float noise_strike(noise_voice_t *v, const float *p, float hz, float d, int len)
  * four points, at the output's own rate, left them 4 dB down.) The points
  * are loaded and made floats four at a time, which the Move does in two
  * instructions where one at a time took two each. */
-typedef int16_t nt_s4 __attribute__((vector_size(8)));
-typedef float nt_f4 __attribute__((vector_size(16)));
 
 static inline float nt_read(const int16_t *t, uint32_t ph, int shift, float fx) {
     const int32_t i = (int32_t)(ph >> shift);
@@ -137,13 +164,18 @@ static inline float noise_shot(noise_voice_t *v, const noise_block_t *b, float x
 /* The next sample: raw is the noise through COLOR (Skin's hit), the return
  * it through the fall. n counts the block. */
 static inline float noise_step(noise_voice_t *v, const noise_block_t *b, int n, float *raw) {
-    float x = nt_read(b->t[0], v->phase, b->shift[0], b->fx[0]);
-    if (b->cross) {
-        const float old = nt_read(b->t[1], v->phase, b->shift[1], b->fx[1]);
-        x = old + (x - old) * b->dx * (float)(n + 1);
+    float x;
+    if (b->rs) {
+        x = b->buf[n];
+    } else {
+        x = nt_read(b->t[0], v->phase, b->shift[0], b->fx[0]);
+        if (b->cross) {
+            const float old = nt_read(b->t[1], v->phase, b->shift[1], b->fx[1]);
+            x = old + (x - old) * b->dx * (float)(n + 1);
+        }
+        if (b->shot) x = noise_shot(v, b, x);
+        else v->phase += b->inc;
     }
-    if (b->shot) x = noise_shot(v, b, x);
-    else v->phase += b->inc;
     x *= b->g;
     if (b->filt) {
         float lp, bp, hp;

@@ -21,7 +21,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.6.0"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.7.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -101,6 +101,7 @@ typedef struct {
     skin_voice_t skin;
     wave_voice_t wave;
     noise_voice_t noise;
+    noise_bank_t bank;          /* Noise's Resynth, kept out of the sample loop's copy of the voice */
     wave_voice_t old;           /* the Wave note a hit cut, fading out */
     int old_n;                  /* samples of that fade left */
     finish_t fx;

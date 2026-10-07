@@ -231,6 +231,11 @@ int main(void) {
     const double l0 = now_us();
     smp_t *one = smp_load(0);
     printf("loading a 4 s sample: %.1f ms\n", (now_us() - l0) / 1000.0);
+    for (int m = SM_RESYNTH; m <= SM_NOISE; m++) {
+        const double b0 = now_us();
+        smp_build(one, m);
+        printf("and making its %s: %.1f ms\n", m == SM_RESYNTH ? "Resynth" : "Noise", (now_us() - b0) / 1000.0);
+    }
     smp_free(one);
     set_all(a, p, "n_table", "Kick 001");
     set_all(a, p, "n_loop", "0.5");
@@ -244,6 +249,20 @@ int main(void) {
         for (int k = 0; k < STRUT_PADS; k++) ready &= __atomic_load_n(&st->lib.ready[k], __ATOMIC_ACQUIRE) != NULL;
     }
     run(a, p, "and samples, looped");
+
+    /* and the same in Resynth: every pad's sines and grains */
+    set_all(a, p, "n_mode", "Resynth");
+    for (int i = 0, ready = 0; i < 1000 && !ready; i++) {
+        a->render_block(p, out, 128);
+        const struct timespec ms = { 0, 5000000 };
+        nanosleep(&ms, NULL);
+        ready = 1;
+        for (int k = 0; k < STRUT_PADS; k++) {
+            const smp_t *r = __atomic_load_n(&st->lib.ready[k], __ATOMIC_ACQUIRE);
+            ready &= r && (__atomic_load_n(&r->has, __ATOMIC_ACQUIRE) & 1 << SM_RESYNTH);
+        }
+    }
+    run(a, p, "and Resynth, looped");
     a->destroy_instance(p);
     return 0;
 }
