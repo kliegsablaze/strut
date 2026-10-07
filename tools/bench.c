@@ -166,6 +166,24 @@ int main(void) {
     set_all(a, p, "high", "6");
     set_all(a, p, "pan", "0.3");
     run(a, p, "and every effect");
+
+    /* and every engine's modulator moving something each 32 samples: an
+     * envelope on Skin's pitch, an LFO on Wave's position, an envelope on
+     * Noise's COLOR (its level match worked out anew), every CURVE Soft */
+    set_all(a, p, "s_kind", "Envelope");
+    set_all(a, p, "s_rate", "-0.6");
+    set_all(a, p, "s_depth1", "0.3");
+    set_all(a, p, "w_kind", "LFO");
+    set_all(a, p, "w_aim1", "Wave");
+    set_all(a, p, "w_depth1", "0.5");
+    set_all(a, p, "n_kind", "Envelope");
+    set_all(a, p, "n_rate", "-0.6");
+    set_all(a, p, "n_aim1", "Color");
+    set_all(a, p, "n_depth1", "0.5");
+    set_all(a, p, "s_curve", "Soft");
+    set_all(a, p, "w_curve", "Soft");
+    set_all(a, p, "n_curve", "Soft");
+    run(a, p, "and every modulator");
     a->destroy_instance(p);
     return 0;
 }

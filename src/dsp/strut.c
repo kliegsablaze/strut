@@ -19,6 +19,7 @@ void strut_init(strut_t *s) {
     for (int k = 0; k < G_COUNT; k++) s->g[k] = STRUT_GLOBALS[k].def;
     s->press_at = s->note_at = -1.0;
     s->dither = 0x9E3779B9u;
+    s->bpm = 120.0f;
     s->vol_g = -1.0f;
 }
 
@@ -73,20 +74,26 @@ static void strike(strut_t *s, int i, float amp) {
     }
     v->active = 1;
     s->seed = s->seed * 1664525u + 1013904223u;
-    skin_strike(&v->skin, p->p, s->seed, amp);
-    wave_start(&v->wave, p->p, amp);
+    /* the hit's knobs as the modulators move them at its first instant,
+     * so velocity on SNAP, say, shapes the strike itself */
+    mod_hit(&v->mod, amp, s->seed ^ 0x6A09E667u);
+    float q[P_COUNT];
+    mod_out_t mo;
+    mod_apply(p->p, &v->mod, s->bpm, q, &mo);
+    skin_strike(&v->skin, q, s->seed, amp);
+    wave_start(&v->wave, q, amp);
     noise_start(&v->noise, s->seed, amp);
     /* Wave as Skin's hit: at least one of Wave's cycles, sized from Wave's
      * harmonics near PITCH. The floor keeps the hit itself, heard directly,
      * under full scale. */
     if (v->skin.kind == HIT_WAVE) {
-        const int len = wave_strike_len(p->p, v->skin.len);
+        const int len = wave_strike_len(q, v->skin.len);
         if (len != v->skin.len) v->skin.len = len, v->skin.decay = expf(-5.0f / (float)len);
-        skin_resize(&v->skin, 1.0f / fmaxf(wave_strike(p->p, skin_hz(p->p), v->skin.decay, len), 0.5f));
+        skin_resize(&v->skin, 1.0f / fmaxf(wave_strike(q, skin_hz(q), v->skin.decay, len), 0.5f));
     }
     /* Noise as Skin's hit: sized from Noise's colour at PITCH */
     if (v->skin.kind == HIT_NOISE)
-        skin_resize(&v->skin, 1.0f / noise_strike(&v->noise, p->p, skin_hz(p->p), v->skin.decay, v->skin.len));
+        skin_resize(&v->skin, 1.0f / noise_strike(&v->noise, q, skin_hz(q), v->skin.decay, v->skin.len));
 }
 
 /* FLAM's three hits rise to the one played: a grace note, a second, then
@@ -179,15 +186,25 @@ static void glide(float *last, float now, int frames, float *g, float *d) {
     *last = now;
 }
 
-/* One voice's block, added into out; 0 once it has nothing left to say.
- * Skin runs while it rings; Wave and Noise while they are heard or strike
- * Skin. Wave follows Skin's ring a sample late, which is what lets each
- * feed the other (Skin struck by Wave, Wave bent by Skin) without a loop. */
-static int voice_render(voice_t *restrict v, const float *restrict p, float level, float *restrict out, int frames) {
+/* One voice's stretch of samples, added into out; 0 once it has nothing
+ * left to say. p is the pad's knobs as the modulators have moved them, and
+ * mo what CURVE and Level make of each engine now. Skin runs while it
+ * rings; Wave and Noise while they are heard or strike Skin. Wave follows
+ * Skin's ring a sample late, which is what lets each feed the other (Skin
+ * struck by Wave, Wave bent by Skin) without a loop. */
+static int voice_chunk(voice_t *restrict v, const float *restrict p, float level, const mod_out_t *mo,
+                       float *restrict out, int frames) {
+    /* CURVE has ended an engine: what is left of it stops */
+    if (mo->over[ENG_SKIN]) {
+        for (int k = 0; k < SKIN_PARTIALS; k++) v->skin.zr[k] = v->skin.zi[k] = 0.0f;
+        v->skin.n = v->skin.len;
+    }
+    if (mo->over[ENG_WAVE]) v->wave.env = 0.0f;
+    if (mo->over[ENG_NOISE]) v->noise.env = 0.0f;
     gains_t g;
-    glide(&v->gs, 2.4f * level * strut_fader(p[P_SKIN]), frames, &g.gs, &g.ds);
-    glide(&v->gw, 2.4f * level * strut_fader(p[P_WAVE]), frames, &g.gw, &g.dw);
-    glide(&v->gn, 2.4f * level * strut_fader(p[P_NOISE]), frames, &g.gn, &g.dn);
+    glide(&v->gs, 2.4f * level * strut_fader(p[P_SKIN]) * mo->gain[ENG_SKIN], frames, &g.gs, &g.ds);
+    glide(&v->gw, 2.4f * level * strut_fader(p[P_WAVE]) * mo->gain[ENG_WAVE], frames, &g.gw, &g.dw);
+    glide(&v->gn, 2.4f * level * strut_fader(p[P_NOISE]) * mo->gain[ENG_NOISE], frames, &g.gn, &g.dn);
     const float gw1 = v->gw, gn1 = v->gn;
 
     const int skin_on = skin_alive(&v->skin);
@@ -196,15 +213,15 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
     const int noise_on = g.gn > 0.0f || gn1 > 0.0f || (strikes && v->skin.kind == HIT_NOISE);
     blocks_t b;
     int heard_w = 0, heard_n = 0;
-    if (skin_on) skin_block(&v->skin, p, &b.s);
-    if (wave_on) heard_w = wave_block(&v->wave, p, frames, &b.w) && gw1 > 0.0f;
-    else wave_skip(&v->wave, p, frames);
-    if (noise_on) heard_n = noise_block(&v->noise, p, frames, &b.n) && gn1 > 0.0f;
-    else noise_skip(&v->noise, p, frames);
+    if (skin_on) skin_block(&v->skin, p, mo->hold[ENG_SKIN], &b.s);
+    if (wave_on) heard_w = wave_block(&v->wave, p, frames, mo->hold[ENG_WAVE], &b.w) && gw1 > 0.0f;
+    else wave_skip(&v->wave, p, frames, mo->hold[ENG_WAVE]);
+    if (noise_on) heard_n = noise_block(&v->noise, p, frames, mo->hold[ENG_NOISE], &b.n) && gn1 > 0.0f;
+    else noise_skip(&v->noise, p, frames, mo->hold[ENG_NOISE]);
     /* the note a hit cut, fading out underneath: a few milliseconds */
     if (v->old_n > 0) {
         wave_block_t ob;
-        wave_block(&v->old, p, frames, &ob);
+        wave_block(&v->old, p, frames, 0, &ob);
         const int n1 = v->old_n < frames ? v->old_n : frames;
         float raw;
         for (int n = 0; n < n1; n++)
@@ -217,12 +234,36 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
     return skin_alive(&v->skin) || heard_w || heard_n || v->old_n > 0;
 }
 
+/* One voice's block. While nothing moves, the whole block at once; while
+ * a modulator or CURVE does, a stretch of MOD_SUB samples at a time, the
+ * knobs moved anew for each. */
+static int voice_render(voice_t *restrict v, const float *restrict p, float level, float bpm,
+                        float *restrict out, int frames) {
+    static const mod_out_t still = { { 1.0f, 1.0f, 1.0f }, { 0, 0, 0 }, { 0, 0, 0 } };
+    int alive = 1;
+    if (!mod_any(p)) {
+        alive = voice_chunk(v, p, level, &still, out, frames);
+    } else {
+        float q[P_COUNT];
+        mod_out_t mo;
+        for (int done = 0; done < frames && alive; done += MOD_SUB) {
+            const int n = frames - done < MOD_SUB ? frames - done : MOD_SUB;
+            mod_apply(p, &v->mod, bpm, q, &mo);
+            alive = voice_chunk(v, q, level, &mo, out + done, n);
+            v->mod.t += (float)n / STRUT_SR;
+        }
+        return alive;
+    }
+    v->mod.t += (float)frames / STRUT_SR;
+    return alive;
+}
+
 /* One pad's block, or part of one, through its finish into l and r. */
 static void pad_render(strut_t *s, pad_t *p, float *l, float *r, int frames) {
     voice_t *v = &p->voice;
     if (!v->active) return;
     float x[STRUT_MAX_BLOCK] = { 0 };
-    v->active = voice_render(v, p->p, strut_fader(p->p[P_LEVEL]), x, frames);
+    v->active = voice_render(v, p->p, strut_fader(p->p[P_LEVEL]), s->bpm, x, frames);
     /* choked: a straight fade to nothing, then the voice is done */
     if (v->choke_n) {
         for (int n = 0; n < frames; n++) {
@@ -432,6 +473,11 @@ static void render_block(void *instance, int16_t *out, int frames) {
     __asm__ volatile("msr fpcr, %0" ::"r"(fpcr | (1ull << 24)));
 #endif
     float l[STRUT_MAX_BLOCK], r[STRUT_MAX_BLOCK];
+    /* the tempo, for RATE's synced half; 120 if the host does not say */
+    if (g_host && g_host->get_bpm) {
+        const float bpm = g_host->get_bpm();
+        if (bpm >= 20.0f && bpm <= 400.0f) s->bpm = bpm;
+    }
     for (int done = 0; done < frames;) {
         const int n = frames - done < STRUT_MAX_BLOCK ? frames - done : STRUT_MAX_BLOCK;
         strut_render(s, l, r, n);

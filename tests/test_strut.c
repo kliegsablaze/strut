@@ -717,6 +717,140 @@ static void finish(void) {
     }
 }
 
+/* The modulators and CURVE (DESIGN.md, Modulation). */
+static void modulation(void) {
+    /* Envelope on Skin's pitch: the hit starts high and settles on PITCH,
+     * and the knob itself is never written */
+    {
+        strut_t *s = fresh();
+        float *p = s->pad[0].p;
+        p[P_S_RING] = 0.9f, p[P_S_MODE] = MODE_BAND, p[P_S_PITCH] = 12;
+        p[P_S_KIND] = KIND_ENVELOPE, p[P_S_RATE] = -0.6f, p[P_S_AIM1] = 0, p[P_S_DEPTH1] = 0.5f;
+        hit(s, 1.0f);
+        const double early = crossing_hz(100, 1500), late = crossing_hz(STRUT_SR / 2, STRUT_SR - 1);
+        CHECK(early > 1.5 * late && fabs(late / skin_hz(p) - 1) < 0.02,
+              "Envelope on Skin Pitch: starts high (%.0f Hz), settles on PITCH (%.0f Hz, want %.0f)", early, late, skin_hz(p));
+        CHECK(p[P_S_PITCH] == 12, "the modulator never writes the knob");
+        free(s);
+    }
+
+    /* LFO on Wave's level: the note swells and dips at RATE */
+    {
+        strut_t *s = wave_pad();
+        float *p = s->pad[0].p;
+        p[P_W_DECAY] = 1.0f;
+        p[P_W_KIND] = KIND_LFO, p[P_W_RATE] = -0.55f, p[P_W_AIM1] = 4, p[P_W_DEPTH1] = 0.8f;   /* Level */
+        hit(s, 1.0f);
+        double lo = 1e9, hi = 0;
+        for (int w = 2000; w < 30000; w += 512) {
+            const double r = window_rms(w, 512);
+            lo = fmin(lo, r), hi = fmax(hi, r);
+        }
+        CHECK(20 * log10(hi / lo) > 10, "LFO on Wave Level wobbles (%.1f dB between swell and dip)", 20 * log10(hi / lo));
+        free(s);
+    }
+
+    /* Random on Wave's pitch: two hits, two pitches */
+    {
+        strut_t *s = wave_pad();
+        float *p = s->pad[0].p;
+        p[P_W_DECAY] = 0.8f;
+        p[P_W_KIND] = KIND_RANDOM, p[P_W_AIM1] = 0, p[P_W_DEPTH1] = 0.3f;
+        hit(s, 0.3f);
+        const double a = crossing_hz(2000, 12000);
+        hit(s, 0.3f);
+        const double b = crossing_hz(2000, 12000);
+        CHECK(fabs(a / b - 1) > 0.01, "Random on Wave Pitch: two hits, two pitches (%.1f, %.1f Hz)", a, b);
+        free(s);
+    }
+
+    /* Velocity on Noise's level: a soft hit drops further than velocity
+     * alone makes it */
+    {
+        double r[2][2];
+        for (int m = 0; m < 2; m++)
+            for (int v = 0; v < 2; v++) {
+                strut_t *s = noise_pad(NT_WHITE);
+                float *p = s->pad[0].p;
+                if (m) p[P_N_KIND] = KIND_VELOCITY, p[P_N_AIM1] = 4, p[P_N_DEPTH1] = 1.0f;
+                strut_note_on(s, STRUT_NOTE0, v ? 127 : 40);
+                play(s, 0, 4410);
+                r[m][v] = window_rms(0, 4410);
+                free(s);
+            }
+        const double plain = 20 * log10(r[0][1] / r[0][0]), moved = 20 * log10(r[1][1] / r[1][0]);
+        CHECK(moved > plain + 3, "Velocity on Noise Level widens the hard-soft gap (%.1f dB, from %.1f)", moved, plain);
+    }
+
+    /* CURVE on Wave: Hold stays full then stops; Swell rises; Soft starts
+     * gently; Ping falls faster than Natural */
+    {
+        double e[5][3];
+        for (int c = 0; c < 5; c++) {
+            strut_t *s = wave_pad();
+            float *p = s->pad[0].p;
+            p[P_W_DECAY] = 0.6f, p[P_W_CURVE] = (float)c, p[P_W_PITCH] = 24;
+            const float T = wave_t60(p);
+            hit(s, 2.0f);
+            e[c][0] = peak_of(L, 0, 44);                            /* the first millisecond */
+            e[c][1] = window_rms((int)(0.05f * T * STRUT_SR), 512);
+            e[c][2] = window_rms((int)(0.4f * T * STRUT_SR), 512);
+            CHECK(!s->pad[0].voice.active, "CURVE %s: dies away", STRUT_PAD_PARAMS[P_W_CURVE].options[c]);
+            free(s);
+        }
+        CHECK(20 * log10(e[CURVE_HOLD][2] / e[CURVE_HOLD][1]) > -1.5, "Hold stays full (%+.1f dB at 0.4 of DECAY)",
+              20 * log10(e[CURVE_HOLD][2] / e[CURVE_HOLD][1]));
+        CHECK(e[CURVE_SWELL][2] > 4 * e[CURVE_SWELL][1], "Swell rises (%.1f times by 0.4 of DECAY)", e[CURVE_SWELL][2] / e[CURVE_SWELL][1]);
+        CHECK(e[CURVE_SOFT][0] < 0.5 * e[CURVE_NATURAL][0], "Soft starts gently (%.2f of Natural's first millisecond)",
+              e[CURVE_SOFT][0] / e[CURVE_NATURAL][0]);
+        CHECK(e[CURVE_PING][2] < 0.5 * e[CURVE_NATURAL][2], "Ping falls faster (%.2f of Natural at 0.4 of DECAY)",
+              e[CURVE_PING][2] / e[CURVE_NATURAL][2]);
+    }
+
+    /* Skin's Hold: the ring is kept from falling, then let go */
+    {
+        double r[2];
+        for (int c = 0; c < 2; c++) {
+            strut_t *s = fresh();
+            float *p = s->pad[0].p;
+            p[P_S_RING] = 0.5f, p[P_S_MODE] = MODE_BAND, p[P_S_CURVE] = c ? CURVE_HOLD : CURVE_NATURAL;
+            const float T = skin_t60(p);
+            hit(s, 2.0f);
+            r[c] = window_rms((int)(0.4f * T * STRUT_SR), 1024) / window_rms(400, 1024);
+            CHECK(!s->pad[0].voice.active, "Skin CURVE %d: dies away", c);
+            free(s);
+        }
+        CHECK(20 * log10(r[1]) > -3 && 20 * log10(r[0]) < -15, "Skin Hold rings on (%+.1f dB at 0.4 of RING, Natural %+.1f)",
+              20 * log10(r[1]), 20 * log10(r[0]));
+    }
+
+    /* every KIND on every destination of every engine, at full depth either
+     * way: finite, heard, and it ends */
+    const int first[3] = { P_S_KIND, P_W_KIND, P_N_KIND };
+    for (int e = 0; e < 3; e++) {
+        const param_def_t *aim = &STRUT_PAD_PARAMS[first[e] + 3];
+        for (int k = 0; k < 4; k++)
+            for (int a = 0; a < aim->noptions; a++)
+                for (int d = -1; d <= 1; d += 2) {
+                    strut_t *s = fresh();
+                    float *p = s->pad[0].p;
+                    p[P_SKIN] = 0.6f, p[P_WAVE] = 0.6f, p[P_NOISE] = 0.6f, p[P_N_DECAY] = 0.3f;
+                    p[first[e]] = (float)k, p[first[e] + 1] = -0.3f, p[first[e] + 3] = (float)a, p[first[e] + 4] = (float)d;
+                    const int n = hit(s, 2.0f);
+                    int finite = 1;
+                    for (int j = 0; j < n; j++) finite &= isfinite(L[j]);
+                    const double pk = peak_of(L, 0, n);
+                    char what[96];
+                    snprintf(what, sizeof(what), "%s %s on %s, depth %+d", aim->name,
+                             STRUT_PAD_PARAMS[first[e]].options[k], aim->options[a], d);
+                    CHECK(finite && pk > 0.02 && pk < 2.0, "%s: finite and heard (peak %.3f)", what, pk);
+                    /* Skin's RING pushed to full rings 4 s, past the 2 s heard */
+                    if (!(e == 0 && a == 1 && d > 0)) CHECK(!s->pad[0].voice.active, "%s: dies away", what);
+                    free(s);
+                }
+    }
+}
+
 /* One voice a pad: a new hit strikes the same Skin again, as a drum is
  * struck again, and restarts Wave without a click. */
 static void restrike(void) {
@@ -902,6 +1036,7 @@ int main(int argc, char **argv) {
     wave();
     noise();
     finish();
+    modulation();
     restrike();
     levels();
     tail();

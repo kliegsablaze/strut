@@ -94,7 +94,7 @@ static mix_t frames_at(const float *p) {
     return (mix_t){ i, i + 1, 1 - (f - i), f - i, 0 };
 }
 
-int wave_block(wave_voice_t *w, const float *p, int frames, wave_block_t *b) {
+int wave_block(wave_voice_t *w, const float *p, int frames, int hold, wave_block_t *b) {
     b->sub = (frames + WAVE_SUB - 1) / WAVE_SUB;
     const float step = bend_step(p, WAVE_SUB);
     float hi = 0.0f;
@@ -129,16 +129,16 @@ int wave_block(wave_voice_t *w, const float *p, int frames, wave_block_t *b) {
     }
     b->ca = m.ca, b->cb = m.cb, b->off = m.off;
 
-    w->decay = expf(-6.9078f / (wave_t60(p) * STRUT_SR));
+    w->decay = hold ? 1.0f : expf(-6.9078f / (wave_t60(p) * STRUT_SR));
     return w->env > 1e-5f;      /* 100 dB under a full hit */
 }
 
-void wave_skip(wave_voice_t *w, const float *p, int frames) {
+void wave_skip(wave_voice_t *w, const float *p, int frames, int hold) {
     w->phase += hz_at(p, w->bend) / STRUT_SR * (float)frames;
     w->phase -= floorf(w->phase);
     w->bend *= bend_step(p, frames);
     w->level = -1;          /* rejoining starts on the right copy, no fade */
-    w->decay = expf(-6.9078f / (wave_t60(p) * STRUT_SR));
+    w->decay = hold ? 1.0f : expf(-6.9078f / (wave_t60(p) * STRUT_SR));
     w->env *= powf(w->decay, (float)frames);
     w->n += frames;
 }

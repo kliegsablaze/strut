@@ -76,15 +76,25 @@ static void rack(sb_t *b, const page_def_t *pg) {
 static void level(sb_t *b, const page_def_t *pg) {
     const char *view = pg->view >= 0 ? STRUT_GLOBALS[pg->view].key : NULL;
     const int half = pg->count / 2;   /* an engine page: seven Sound, seven Mod */
+    /* MOD is the first cell of both views (the user's ask, 2026-10-07):
+     * the Mod view reads MOD KIND RATE CURVE over AIM DEPTH AIM DEPTH, and
+     * the Sound view MOD and its first three over its other four. */
+    const int mod_at = view ? 0 : pg->count;
     sb_printf(b, "\"%s\":{\"name\":\"%s\"", pg->level, pg->label);
     if (pg->per_pad) rack(b, pg);
-    if (pg == &STRUT_PAGES[0])
-        sb_printf(b, ",\"child_press_param\":\"pad_press\",\"child_note_base\":%d", STRUT_NOTE0);
+    /* Every pad page names its pads' notes: the header's pad map lights the
+     * pad the page on screen edits, found by its note, so a page without
+     * them drew an empty box (seen on the device, 2026-10-07: only the Pad
+     * page followed). The press vouch needs saying once. */
+    if (pg->per_pad) sb_printf(b, ",\"child_note_base\":%d", STRUT_NOTE0);
+    if (pg == &STRUT_PAGES[0]) sb_printf(b, ",\"child_press_param\":\"pad_press\"");
     if (view) sb_printf(b, ",\"child_key_overrides\":{\"%s\":\"%s\"}", view, view);
 
     sb_printf(b, ",\"knobs\":[");
-    for (int i = 0; i < pg->count; i++) sb_printf(b, "%s\"%s\"", i ? "," : "", page_param(pg, i)->key);
-    if (view) sb_printf(b, ",\"%s\"", view);
+    for (int i = 0; i < pg->count; i++) {
+        if (i == mod_at) sb_printf(b, "\"%s\",", view);
+        sb_printf(b, "%s\"%s\"", i ? "," : "", page_param(pg, i)->key);
+    }
     /* The Kit page's last cell picks the pad the other pages edit. A cell
      * for the focus is what stops the host planning a Selected Pad page of
      * its own (page_plan.mjs, childPickerNeeded); tapping a pad still picks
@@ -92,13 +102,13 @@ static void level(sb_t *b, const page_def_t *pg) {
     if (!pg->per_pad) sb_printf(b, ",\"pad\"");
     sb_printf(b, "],\"params\":[");
     for (int i = 0; i < pg->count; i++) {
+        if (i == mod_at) sb_printf(b, "{\"key\":\"%s\"},", view);
         sb_printf(b, "%s{\"key\":\"%s\"", i ? "," : "", page_param(pg, i)->key);
         if (view)
             sb_printf(b, ",\"visible_if\":{\"param\":\"%s\",\"equals\":\"%s\"}", view,
                       STRUT_VIEW_OPTIONS[i < half ? 0 : 1]);
         sb_printf(b, "}");
     }
-    if (view) sb_printf(b, ",{\"key\":\"%s\"}", view);
     if (!pg->per_pad) sb_printf(b, ",{\"key\":\"pad\"}");
     /* root links every other page, in the order the jog walks them */
     if (pg == &STRUT_PAGES[0])

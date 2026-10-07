@@ -2,15 +2,16 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, 0.3.1 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish and each engine's modulator, 0.4.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
 on every pad, mixed by SKIN, WAVE, NOISE, TUNE, DECAY and LEVEL; Skin's ring
 can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
 *How Wave works*, *How Noise works*); each pad then has Pad COLOR and the
-Finish page (*How Finish works*). Noise's samples, the modulators, the kit's
-effects, SOUND and DICE are still the plan; their knobs are kept but do
+Finish page (*How Finish works*), and every engine its modulator and CURVE
+(*Modulation*). Noise's samples, the kit's effects, SOUND and DICE are still
+the plan; their knobs are kept but do
 nothing yet. On the
 Move, all three engines at their dearest take 11.1 % of the CPU (0.2.0).
 
@@ -206,7 +207,12 @@ How it works in Schwung, as Quilt's Modulation page does already:
 - The page's 14 other knobs are all declared on the one level. Seven are gated
   `visible_if: {"param": "skin_view", "equals": "Sound"}` and seven
   `equals: "Mod"`.
-- Hidden knobs close up, so `MOD` stays in cell 8 either way.
+- Hidden knobs close up, and `MOD` is listed first, so it is cell 1 either
+  way. The Mod view reads MOD, KIND, RATE, CURVE over AIM, DEPTH, AIM,
+  DEPTH, so each destination sits beside its depth on the lower row; the
+  Sound view, MOD and its first three over its other four. (The user's
+  layout, 2026-10-07. MOD was cell 8 first, then cell 4 of the Mod view
+  only, before settling here.)
 - A gate re-plans the grid the moment its own knob writes it
   (`replanIfCondition`), so the swap is immediate.
 - The `*_view` keys are UI state. They are not saved with a sound, and they
@@ -219,7 +225,8 @@ The switch is one key for the whole kit, not one per pad: the engine pages are
 racks keyed `p{index}_{key}`, and `child_key_overrides` maps `skin_view` to
 itself, so switching to Mod and hitting another pad keeps you in Mod. The tests
 plan all eight combinations of the three switches and check that each engine
-page has eight cells with MOD in cell 8.
+page has eight cells with MOD in cell 1, and the Mod view's lower row AIM,
+DEPTH, AIM, DEPTH.
 
 The host titles the first page **Main** whatever the module calls it
 (`page_plan.mjs`, so every module lands on a page with the same name). Strut
@@ -233,6 +240,13 @@ read "Pad 3" and the user could not tell where they were (2026-10-07). So each
 rack's `child_label` is its page's name: Pad 3, Skin 3, Wave 3, Noise 3,
 Finish 3. The tests check the titles, and that the widest, "Finish 16",
 fits the header.
+
+**The header's pad map follows every pad page.** The host lights the pad
+the page on screen edits, finding it by note (`padIconNote`), so every pad
+page names its pads' notes (`child_note_base`), not the Pad page alone. With
+only the Pad page naming them, the map drew an empty box on the other four
+(seen on the device, 2026-10-07; fixed in 0.4.0). The tests check every pad
+page gives the map pads 1 to 16.
 
 **No Selected Pad page.** The host plans a list of the sixteen pads before
 the pad pages unless some page has a cell for the focus itself
@@ -277,14 +291,14 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 
 | Knob | Sound view | | Mod view | |
 |---|---|---|---|---|
-| 1 | PITCH | resonant frequency | KIND | Envelope, LFO, Random or Velocity |
-| 2 | RING | resonance: how long the body rings | RATE | speed; synced right of centre, free left |
-| 3 | HIT | the exciter: Click, Soft, Burst (Skin's own noise burst), Wave or Noise (the other two engines) | CURVE | Skin's envelope shape: Natural, Ping, Soft, Hold |
-| 4 | SNAP | how long the exciter lasts | AIM | destination 1 (below) |
-| 5 | METAL | two extra inharmonic partials, rising and louder | DEPTH | Bi |
-| 6 | TONE | brightness, a 2-pole low-pass | AIM | destination 2 |
-| 7 | MODE | Low, Band or High-pass resonator | DEPTH | Bi |
-| 8 | MOD | Sound / Mod | MOD | Sound / Mod |
+| 1 | MOD | Sound / Mod | MOD | Sound / Mod |
+| 2 | PITCH | resonant frequency | KIND | Envelope, LFO, Random or Velocity |
+| 3 | RING | resonance: how long the body rings | RATE | speed; synced right of centre, free left |
+| 4 | HIT | the exciter: Click, Soft, Burst (Skin's own noise burst), Wave or Noise (the other two engines) | CURVE | Skin's envelope shape: Natural, Ping, Soft, Hold |
+| 5 | SNAP | how long the exciter lasts | AIM | destination 1 (below) |
+| 6 | METAL | two extra inharmonic partials, rising and louder | DEPTH | Bi |
+| 7 | TONE | brightness, a 2-pole low-pass | AIM | destination 2 |
+| 8 | MODE | Low, Band or High-pass resonator | DEPTH | Bi |
 
 Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
 
@@ -318,7 +332,7 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
   band-pass on it (a pure ping), **High** a high-pass an octave below it (the
   click and the partials forward). A 12 dB trapezoidal state-variable filter
   (Zavalishin), as is **TONE**: a low-pass from 150 Hz to 18 kHz.
-- **CURVE** (the Mod view) is Natural, the ring's own fall, until step 7.
+- **CURVE** (the Mod view) shapes the ring's fall (see *Modulation*).
 - **Velocity** sets how hard the hit is, on a gentle curve (to the power
   1.5): it is in the strike, not a level on the output, so each hit's
   strength stays in the ring after it, and a harder hit bends Wave further
@@ -352,14 +366,14 @@ nothing.
 
 | Knob | Sound view | | Mod view | |
 |---|---|---|---|---|
-| 1 | PITCH | | KIND | |
-| 2 | BEND | pitch envelope depth, bi | RATE | |
-| 3 | DECAY | | CURVE | Natural, Ping, Soft, Hold, Swell (inverted) |
-| 4 | TABLE | Analog, then the spectral tables | AIM | |
-| 5 | WAVE | position in the table; at the end of Analog, pulse width | DEPTH | |
-| 6 | FM | Skin into Wave's frequency | AIM | |
-| 7 | RING | ring-modulation; bi: −2 to +2 octaves | DEPTH | |
-| 8 | MOD | | MOD | |
+| 1 | MOD | | MOD | |
+| 2 | PITCH | | KIND | |
+| 3 | BEND | pitch envelope depth, bi | RATE | |
+| 4 | DECAY | | CURVE | Natural, Ping, Soft, Hold, Swell (inverted) |
+| 5 | TABLE | Analog, then the spectral tables | AIM | |
+| 6 | WAVE | position in the table; at the end of Analog, pulse width | DEPTH | |
+| 7 | FM | Skin into Wave's frequency | AIM | |
+| 8 | RING | ring-modulation; bi: −2 to +2 octaves | DEPTH | |
 
 Wave's destinations: Pitch, Wave, FM, Ring, Level.
 
@@ -439,14 +453,14 @@ Rejected for Wave:
 
 | Knob | Sound view | | Mod view | |
 |---|---|---|---|---|
-| 1 | PITCH | speed: ±48 semitones, with TUNE | KIND | |
-| 2 | MODE | samples only: Sample, Resynth or Noise (below) | RATE | |
-| 3 | DECAY | how long it falls | CURVE | |
-| 4 | TABLE | noise tables, then your samples | AIM | |
-| 5 | COLOR | bi: low-pass left, high-pass right | DEPTH | |
-| 6 | START | sample start (samples only) | AIM | |
-| 7 | LOOP | loop length; full = no loop (samples only) | DEPTH | |
-| 8 | MOD | | MOD | |
+| 1 | MOD | | MOD | |
+| 2 | PITCH | speed: ±48 semitones, with TUNE | KIND | |
+| 3 | MODE | samples only: Sample, Resynth or Noise (below) | RATE | |
+| 4 | DECAY | how long it falls | CURVE | |
+| 5 | TABLE | noise tables, then your samples | AIM | |
+| 6 | COLOR | bi: low-pass left, high-pass right | DEPTH | |
+| 7 | START | sample start (samples only) | AIM | |
+| 8 | LOOP | loop length; full = no loop (samples only) | DEPTH | |
 
 Noise's destinations: Pitch, Color, Start, Loop, Level.
 
@@ -712,6 +726,52 @@ kits are presets. SOUND (Pad, knob 1) is the per-pad library.
 - As in Quilt, modulation **never writes a knob**: the knob shows what was set.
 - The Pad page's TUNE and DECAY are the shared "move everything" controls.
 
+### How the modulators work (built, 0.4.0)
+
+- **Each hit restarts them.** Envelope falls from 1 to nothing over RATE's
+  time (exponentially, 60 dB); LFO is a sine starting from zero, a cycle in
+  RATE's time; Random is a new value from −1 to 1 each hit, held; Velocity
+  is the hit's own, 0 to 1.
+- **RATE** is a time. Left of centre it is free: 5 ms at the centre to 4 s
+  fully left. Right of centre it is a note value at the tempo the Move
+  reports (`get_bpm`; 120 if it does not say), from a 64th through
+  triplets to four bars fully right.
+- **DEPTH** is bipolar. On a pitch it is up to four octaves either way,
+  finer near the centre (48 × d × |d| semitones); on Level a factor from
+  silent (−1, an envelope then fades the engine in) to twice (+1, a punch);
+  on any other knob its whole range. Both AIMs may name the same knob, and
+  add.
+- **The modulators never write a knob.** Each stretch of 32 samples, the
+  pad's knobs are copied and the copy is moved, so a knob shows what was
+  set and automation records it. The hit itself is sized with the copy, so
+  velocity on SNAP shapes the strike.
+- **CURVE** is the shape of the engine's own fall, over its RING (Skin) or
+  DECAY (Wave, Noise), as moved:
+  - **Natural:** the fall as it is.
+  - **Ping:** twice as fast.
+  - **Soft:** rises over a tenth of it, 2 to 80 ms.
+  - **Hold:** stays full for half of it, its own fall paused (a ring kept
+    ringing), then lets go over a tenth (at least 5 ms).
+  - **Swell** (Wave and Noise): rises from 60 dB down to full over it, then
+    stops in 10 ms, a sound played backwards. Not on Skin: a resonance swells
+    only by being struck again.
+- **A pad that moves nothing runs as before**, a whole block at once; only
+  one with a depth or a CURVE other than Natural runs in stretches of 32.
+  Noise's level match for a moved COLOR is worked out anew only when COLOR
+  has moved a hundredth of a turn, where every stretch cost 40 tangents. On
+  a laptop, every engine's modulator on every pad: +0.9 % (0.4.0).
+- **Start and Loop** are Noise's sample destinations, and move nothing on a
+  noise table until samples come (step 9).
+
+Rejected for the modulators:
+
+- **Moving the knobs a block at a time** (128 samples, 2.9 ms). A pitch
+  envelope stepped that coarsely zips; 32 samples are smooth and cost a
+  quarter of the block's setup again.
+- **CURVE as the envelope's shape.** It is the engine's own fall, so it is
+  heard with no modulator set; the Envelope is plainly exponential, which is
+  what a pitch drop wants.
+
 (Rejected: a mod matrix with any source to any destination. It is the opposite
 of minimal. Three small modulators, each with its
 own engine, reach most of the same sounds.)
@@ -935,7 +995,8 @@ own engine, reach most of the same sounds.)
 6. ~~**Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects~~ (0.3.0;
    DICE waits for step 10). On the Move, every effect on every pad: 15.3 %
    (0.3.1; 18.7 % before the effects ran in one loop). Still to do: hear it.
-7. **Modulation** (the MOD views).
+7. ~~**Modulation** (the MOD views)~~ (0.4.0). Still to do: hear it, and
+   its CPU on the Move.
 8. **Kit** page: room, glue, warmth.
 9. Samples (see *The sample library*):
    - ship `src/samples/` in the module and the tarball; measure both;
@@ -982,6 +1043,13 @@ own engine, reach most of the same sounds.)
   - One voice a pad: a hit in step with the ring builds it, one against it
     stops it, a soft hit keeps a loud ring (and loud noise), a restarted
     Wave note has no step.
+  - Modulation: an Envelope on Skin's pitch starts high and settles on
+    PITCH, and the knob is never written; an LFO on Wave's level wobbles
+    over 10 dB; Random gives two hits two pitches; Velocity on Noise's
+    level widens the hard-soft gap; Hold stays full and Swell rises, Soft
+    starts gently and Ping falls faster, and Skin's Hold rings on; every
+    KIND on every destination of every engine, at full depth either way, is
+    finite, heard and ends.
   - Finish: every Finish knob and Pad COLOR at its ends and middle, on a
     pad of all three engines, stays finite, sounds and dies away; PAN hard
     left or right is that side alone, at the centre's power to 0.1 dB;

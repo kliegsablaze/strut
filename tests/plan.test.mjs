@@ -14,6 +14,7 @@ const { validateContract } = await load("validate_contract.mjs");
 const { labelVerbatim, HEADER_MIN_LEFT, HEADER_GAP } = await load("render_page_movy.mjs");
 const { fontWidth4x5 } = await load("font4x5.mjs");
 const { resolveChildKey } = await load("child_key.mjs");
+const { voicesOf } = await load("voices.mjs");
 
 const hierarchyText = fs.readFileSync(path.join(dir, "ui_hierarchy.json"), "utf8");
 const chainText = fs.readFileSync(path.join(dir, "chain_params.json"), "utf8");
@@ -86,9 +87,15 @@ for (let mask = 0; mask < 8; mask++) {
         const page = pages.find((p) => p.level === level);
         const want = hierarchy.levels[level].params
             .filter((e) => e.visible_if && e.visible_if.equals === values[view]).map((e) => e.key);
+        /* MOD is cell 1 in both views, and in the Mod view AIM, DEPTH,
+         * AIM, DEPTH make the second row (the user's ask) */
+        const at = 0;
         check(page && page.keys.length === 8, `${tag} ${level}: 8 cells, got ${page && page.keys}`);
-        check(page && page.keys[7] === view, `${tag} ${level}: MOD is cell 8`);
-        check(page && page.keys.slice(0, 7).join() === want.join(), `${tag} ${level}: the ${values[view]} view's seven`);
+        check(page && page.keys[at] === view, `${tag} ${level}: MOD is cell ${at + 1}`);
+        check(page && page.keys.filter((k) => k !== view).join() === want.join(), `${tag} ${level}: the ${values[view]} view's seven`);
+        if (values[view] === "Mod")
+            check(page && page.keys.slice(4).map((k) => byKey[k].short_name).join() === "Aim,Depth,Aim,Depth",
+                  `${tag} ${level}: the second row is AIM DEPTH AIM DEPTH`);
     }
     /* no Selected Pad page: Kit's PAD cell stands in for it */
     const pickers = plan.pages.filter((p) => p.childOf);
@@ -119,6 +126,17 @@ for (const [k, l] of Object.entries(hierarchy.levels)) {
     check(titles.join() === "Pad 16,Skin 16,Wave 16,Noise 16,Finish 16", `pad pages are titled by page, got ${titles}`);
     for (const t of titles) check(fontWidth4x5(t.toUpperCase()) <= pageRoom, `"${t}" fits the header`);
     check(!plan.pages.some((p) => p.childOf), "no Selected Pad page");
+}
+
+// The header's pad map lights the pad the page on screen edits, by its note
+// (page_controller.mjs, padIconNote): every pad page must name sixteen.
+{
+    const voices = voicesOf(hierarchy);
+    for (const [name] of racks) {
+        const notes = voices.filter((v) => v.level === name).map((v) => v.note);
+        check(notes.length === 16 && notes[0] === 36 && notes[15] === 51,
+              `${name}: the pad map can light pads 1..16 (notes ${notes[0]}..${notes[notes.length - 1]}, ${notes.length})`);
+    }
 }
 
 const { findings } = validateContract({ id: "strut", hierarchy, chainParams, capabilities: moduleJson.capabilities });

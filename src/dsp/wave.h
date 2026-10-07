@@ -36,9 +36,10 @@ typedef struct {
 /* Starts a note at strength amp (from velocity). */
 void wave_start(wave_voice_t *w, const float *p, float amp);
 /* Sets up a block of frames; returns 0 once the fall has died away. */
-int wave_block(wave_voice_t *w, const float *p, int frames, wave_block_t *b);
-/* Moves on a block without sounding, so turning WAVE up mid-note joins it. */
-void wave_skip(wave_voice_t *w, const float *p, int frames);
+int wave_block(wave_voice_t *w, const float *p, int frames, int hold, wave_block_t *b);
+/* Moves on a block without sounding, so turning WAVE up mid-note joins it.
+ * hold: CURVE's Hold or Swell, the fall paused for now. */
+void wave_skip(wave_voice_t *w, const float *p, int frames, int hold);
 /* Wave as Skin's hit: how long it lasts, at least one of Wave's cycles
  * (SNAP's len samples, or more), and how strongly it drives a resonance at
  * hz (skin.c's strike, e^(-5n/len), decay d a sample). */

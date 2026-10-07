@@ -46,7 +46,8 @@ typedef struct {
 void skin_strike(skin_voice_t *v, const float *p, uint32_t seed, float amp);
 /* Sets the hit's scale, keeping what already rings at its level. */
 void skin_resize(skin_voice_t *v, float norm);
-void skin_block(skin_voice_t *v, const float *p, skin_block_t *b);
+/* hold: CURVE's Hold or Swell, the ring kept from falling for now */
+void skin_block(skin_voice_t *v, const float *p, int hold, skin_block_t *b);
 /* 0 once the hit is over and the ring has died away. */
 int skin_alive(const skin_voice_t *v);
 

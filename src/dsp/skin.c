@@ -110,8 +110,8 @@ svf_t svf(float hz, float k) {
     return f;
 }
 
-void skin_block(skin_voice_t *v, const float *p, skin_block_t *b) {
-    const float hz = skin_hz(p), t60 = skin_t60(p), metal = p[P_S_METAL];
+void skin_block(skin_voice_t *v, const float *p, int hold, skin_block_t *b) {
+    const float hz = skin_hz(p), t60 = hold ? 12.0f : skin_t60(p), metal = p[P_S_METAL];
     for (int k = 0; k < SKIN_PARTIALS; k++) {
         const float ratio = k ? DRUM_RATIO[k - 1] + metal * (BAR_RATIO[k - 1] - DRUM_RATIO[k - 1]) : 1.0f;
         const float f = hz * ratio;

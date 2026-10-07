@@ -320,7 +320,11 @@ static int bands_kept(float rate) {
 static float matched(noise_voice_t *v, const float *p, float rate, int *filt, float *fc) {
     *filt = color_of(p, fc);
     const int t = (int)p[P_N_TABLE];
-    if (v->match_c == p[P_N_COLOR] && v->match_r == rate && v->match_t == t) return v->match;
+    /* near enough: a modulated COLOR moves a little every 32 samples, and
+     * a level a hundredth of a turn stale is not heard, where working it
+     * out anew each time cost forty tangents */
+    if (fabsf(v->match_c - p[P_N_COLOR]) < 0.01f && (v->match_c == 0.0f) == (p[P_N_COLOR] == 0.0f)
+        && fabsf(v->match_r - rate) < 0.003f * rate && v->match_t == t) return v->match;
     const nt_table_t *tb = nt_table(t);
     double kept = 0;
     for (int b = 0, n = bands_kept(rate); b < n; b++)
@@ -339,7 +343,7 @@ void noise_start(noise_voice_t *v, uint32_t seed, float amp) {
     v->env = sqrtf(v->env * v->env + amp * amp);
 }
 
-int noise_block(noise_voice_t *v, const float *p, int frames, noise_block_t *b) {
+int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_block_t *b) {
     const float rate = rate_of(p);
     const int level = level_of(rate);
     b->cross = v->level >= 0 && v->level != level;
@@ -359,13 +363,13 @@ int noise_block(noise_voice_t *v, const float *p, int frames, noise_block_t *b) 
     if (b->filt) b->f = svf(fc, COLOR_K);
     else v->s1 = v->s2 = 0.0f;      /* so turning COLOR off the centre starts clean */
     b->g = m * (1.0f / 32767.0f);
-    v->decay = expf(-6.9078f / (noise_t60(p) * STRUT_SR));
+    v->decay = hold ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
     return v->env > 1e-5f;          /* 100 dB under a full hit */
 }
 
-void noise_skip(noise_voice_t *v, const float *p, int frames) {
+void noise_skip(noise_voice_t *v, const float *p, int frames, int hold) {
     v->level = -1;
-    v->decay = expf(-6.9078f / (noise_t60(p) * STRUT_SR));
+    v->decay = hold ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
     v->env *= powf(v->decay, (float)frames);
 }
 

@@ -58,8 +58,9 @@ typedef struct {
  * starts somewhere new in the loop (from seed), so no two hits match. */
 void noise_start(noise_voice_t *v, uint32_t seed, float amp);
 /* Sets up a block; returns 0 once the fall has died away. */
-int noise_block(noise_voice_t *v, const float *p, int frames, noise_block_t *b);
-void noise_skip(noise_voice_t *v, const float *p, int frames);
+/* hold: CURVE's Hold or Swell, the fall paused for now */
+int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_block_t *b);
+void noise_skip(noise_voice_t *v, const float *p, int frames, int hold);
 float noise_t60(const float *p);
 /* Noise as Skin's hit: how strongly it drives a resonance at hz, through
  * skin.c's strike (decay d a sample, len samples), as an expected size. */

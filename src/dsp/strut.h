@@ -14,11 +14,12 @@
 #include <stdint.h>
 
 #include "finish.h"
+#include "mod.h"
 #include "noise.h"
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.3.1"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.4.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -96,6 +97,7 @@ typedef struct {
     wave_voice_t old;           /* the Wave note a hit cut, fading out */
     int old_n;                  /* samples of that fade left */
     finish_t fx;
+    mod_t mod;
     int choke_n;                /* choked: samples of its fade left; 0 not choked */
 } voice_t;
 
@@ -119,6 +121,7 @@ typedef struct {
     uint32_t dither;            /* the output's dither, and how deep it is */
     float dither_g, vol_g;
     float shape[2][STRUT_SHAPE];  /* each channel's last rounding errors */
+    float bpm;                  /* the host's tempo, for RATE's synced half */
     int sounding;               /* voices that rendered this block */
 } strut_t;
 

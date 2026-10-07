@@ -182,27 +182,30 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.3.1)
+## Where things stand (2026-10-07, 0.4.0)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
     Skin bending Wave and Wave or Noise striking Skin;
   - the Pad page: SKIN, WAVE and NOISE are the engines' levels, LEVEL the
     pad's, TUNE, DECAY and COLOR;
-  - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH.
-  - Tests: 1129 checks, plus the host's planner and validator.
+  - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH;
+  - each engine's modulator (KIND, RATE, CURVE, two AIM and DEPTH), with
+    MOD on knob 1 of every engine page in both views (the user's layout);
+  - the header's pad map on every pad page (0.4.0).
+  - Tests: 1398 checks, plus the host's planner and validator.
 - **Tried on the device:**
   - Skin, its grit fixed (0.0.6), and page titles;
   - Noise "sounds great" (0.2.2);
-  - CPU, all three engines on every pad at their dearest: 12 %;
-  - load time: 0.51 s (0.2.2), after work on the tables for the Move's
-    memory (DESIGN.md, *Tables are built at load*).
-  - every effect on every pad: 15.3 % (0.3.1; 18.7 % in 0.3.0, before the
-    effects ran in one loop).
-  - Not yet: Finish by ear.
-- **Next:** build step 7, the modulators (the MOD views). Samples are step
-  9: the library in `src/samples/` (208 sounds, from another session) is
-  in DESIGN.md, *The sample library*.
+  - CPU, all three engines on every pad at their dearest: 12.6 %; and
+    every effect on every pad: 15.3 % (0.3.1);
+  - load time: 0.51 s (0.2.2).
+  - The user saw the header's pad map follow only the Pad page (0.3.1);
+    0.4.0 should fix it.
+  - Not yet: Finish and the modulators by ear; the modulators' CPU.
+- **Next:** build step 8, the Kit page (SPACE, SIZE, GLUE, WARM). Samples
+  are step 9: the library in `src/samples/` (208 sounds, from another
+  session) is in DESIGN.md, *The sample library*.
 - **Open questions for the user:**
   - how TABLE should reach 216+ options at step 9 (one long list, the host's
     file browser, or a folder and a number);
