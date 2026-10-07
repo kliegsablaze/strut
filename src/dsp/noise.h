@@ -1,7 +1,8 @@
 /*
  * Noise, the noise source (DESIGN.md, Noise): a three-second loop of noise
  * with its own colour, read at PITCH, falling away by DECAY, and filtered by
- * COLOR. Its samples are build step 9.
+ * COLOR; or a sample from the library, stored the same way (samples.h) and
+ * played once from START, or looped by LOOP.
  */
 #ifndef STRUT_NOISE_H
 #define STRUT_NOISE_H
@@ -31,8 +32,15 @@ typedef struct {
 void nt_build(void);
 const nt_table_t *nt_table(int t);
 
+struct smp;
+
 typedef struct {
     uint32_t phase;         /* the read position, NT_FRAC bits of fraction; wraps the loop itself */
+    const struct smp *smp;  /* the sample this note plays, NULL a noise table */
+    int tab;                /* the noise table it plays */
+    uint32_t old;           /* a re-hit sample: where the note it cut had got to */
+    float old_g;            /* and that note's level */
+    int old_n;              /* samples of its fade left */
     float env, decay;
     float s1, s2;           /* COLOR's filter */
     int level;              /* the copy last read; -1 none yet */
@@ -51,12 +59,20 @@ typedef struct {
     int filt;               /* 0 none, 1 low-pass, 2 high-pass */
     svf_t f;
     float g;                /* to floats, and the level match */
+    /* a one-shot sample: where it ends (or its loop does), how long its
+     * loop is (0 none), and where it starts crossing back to its start */
+    int shot;
+    uint32_t end, loop, xf_at;
+    float xk;
 } noise_block_t;
 
 /* Starts a note at strength amp. A hit on noise still sounding adds to it
  * as two noises do, by power, and reads on from where it is; otherwise it
  * starts somewhere new in the loop (from seed), so no two hits match. */
-void noise_start(noise_voice_t *v, uint32_t seed, float amp);
+/* A sample (smp, as TABLE names in p) restarts from START, the note it cuts
+ * fading out; a sample not yet loaded (smp NULL, TABLE past the tables)
+ * plays nothing. */
+void noise_start(noise_voice_t *v, const float *p, const struct smp *smp, uint32_t seed, float amp);
 /* Sets up a block; returns 0 once the fall has died away. */
 /* hold: CURVE's Hold or Swell, the fall paused for now */
 int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_block_t *b);
@@ -91,6 +107,33 @@ static inline float nt_read(const int16_t *t, uint32_t ph, int shift, float fx) 
     return (y[0] + y[1]) + (y[2] + y[3]);
 }
 
+/* A one-shot's next sample. Near its loop's end it crosses over to the
+ * loop's start, so a loop does not click; past its end it stops. */
+static inline float noise_shot(noise_voice_t *v, const noise_block_t *b, float x) {
+    const uint32_t ph = v->phase;
+    if (ph >= b->xf_at) {
+        const float y = nt_read(b->t[0], ph - b->loop, b->shift[0], b->fx[0]);
+        x += (y - x) * (float)(ph - b->xf_at) * b->xk;
+    }
+    if (v->old_n) {         /* the note a re-hit cut, fading out */
+        x += nt_read(b->t[0], v->old, b->shift[0], b->fx[0]) * v->old_g * (float)v->old_n * (1.0f / 256);
+        v->old_n--;
+        v->old += b->inc;
+        if (v->old >= b->end) v->old_n = 0;
+    }
+    uint32_t next = ph + b->inc;
+    if (next >= b->end) {
+        if (b->loop) {
+            next -= b->loop;
+            if (next >= b->end) next = b->end - b->loop;
+        } else {
+            next = b->end, v->env = 0.0f;
+        }
+    }
+    v->phase = next;
+    return x;
+}
+
 /* The next sample: raw is the noise through COLOR (Skin's hit), the return
  * it through the fall. n counts the block. */
 static inline float noise_step(noise_voice_t *v, const noise_block_t *b, int n, float *raw) {
@@ -99,7 +142,8 @@ static inline float noise_step(noise_voice_t *v, const noise_block_t *b, int n, 
         const float old = nt_read(b->t[1], v->phase, b->shift[1], b->fx[1]);
         x = old + (x - old) * b->dx * (float)(n + 1);
     }
-    v->phase += b->inc;
+    if (b->shot) x = noise_shot(v, b, x);
+    else v->phase += b->inc;
     x *= b->g;
     if (b->filt) {
         float lp, bp, hp;

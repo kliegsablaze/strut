@@ -182,7 +182,7 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.5.0)
+## Where things stand (2026-10-07, 0.6.0)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
@@ -192,27 +192,29 @@ When the user moves work back to their local machine:
   - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH;
   - each engine's modulator (KIND, RATE, CURVE, two AIM and DEPTH), with
     MOD on knob 1 of every engine page in both views (the user's layout);
-  - the Kit page (0.5.0): SPACE and SIZE (Quilt's plate as a room), GLUE
-    (a compressor for the whole kit), WARM (saturation), VOL and PAD;
-  - the header's pad map on every pad page (0.4.0).
-  - Tests: 1410 checks, plus the host's planner and validator.
+  - the Kit page (0.5.0): SPACE and SIZE (Quilt's plate as a room), GLUE,
+    WARM, VOL and PAD;
+  - the sample library (0.6.0): Noise > TABLE is one long list (the user's
+    choice): the noise tables, the 208 library sounds, then the user's own
+    from `/data/UserData/schwung/samples/strut/`. Sample mode with START
+    and LOOP; Cycle/ looped and pitched from A1. A loader thread an
+    instance loads them on demand.
+  - Tests: 1426 checks, plus the host's planner and validator.
 - **Tried on the device:**
   - Skin, its grit fixed (0.0.6), and page titles;
   - Noise "sounds great" (0.2.2);
   - load time: 0.51 s (0.2.2);
   - CPU, every pad at its dearest: all three engines 13.1 %, every effect
-    16.7 %, every modulator 17.7 % (0.4.1; the modulators cost 3.9 % in
-    0.4.0, 1.0 % now).
+    16.7 %, every modulator 17.7 % (0.4.1); the Kit page adds nothing
+    measurable (0.5.0, 19.1 % in a run whose rows spread 17.8 to 20.6 %).
+    One block took 7 ms there, once; watch for it.
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it, not yet confirmed.
-  - the Kit page's effects add nothing measurable: 19.1 % with them, 19.3 %
-    without, in one run whose rows spread 17.8 to 20.6 % (0.5.0). One block
-    took 7 ms there, once; watch for it in later runs.
-  - Not yet: Finish, the modulators and the Kit page by ear.
-- **Next:** build step 9, samples: the library in `src/samples/` (208
-  sounds, from another session) is in DESIGN.md, *The sample library*.
+  - Not yet: Finish, the modulators, the Kit page and samples by ear;
+    loading a sample on the Move (bench: "loading a 4 s sample") and the
+    library's install time.
+- **Next:** the rest of step 9: Noise's Resynth and Noise modes (MODE),
+  and their CPU with resynthesis on every pad. Then step 10, presets.
 - **Open questions for the user:**
-  - how TABLE should reach 216+ options at step 9 (one long list, the host's
-    file browser, or a folder and a number);
   - whether Wave's and Noise's loudness against Skin's suits them (the
     voicing pass, step 11).

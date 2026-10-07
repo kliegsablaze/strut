@@ -22,6 +22,7 @@
 
 #include "fft.h"
 #include "noise.h"
+#include "samples.h"
 #include "strut.h"
 #include "tables.h"
 
@@ -31,6 +32,8 @@
 #define SPAN (2 * NT_N + 7 * NT_LEVELS)
 #define COLOR_K 1.0f        /* COLOR's filter, a touch of peak at its corner */
 #define MATCH_MAX 1000.0f   /* PITCH and COLOR make up at most 60 dB; the tables keep 78 dB under that */
+#define SM_MATCH 4.0f       /* and 12 dB on a sample: there COLOR is a filter, not a colour */
+#define SM_GAIN 2.0f        /* the library (-18 LUFS) about as loud as the tables: half its sounds within 1 dB of White or louder */
 
 static int16_t pool[NT_TABLES][SPAN];
 static nt_table_t tables[NT_TABLES];
@@ -269,6 +272,21 @@ static float rate_of(const float *p) {
     return fminf(fmaxf(exp2f((p[P_N_PITCH] + p[P_TUNE]) / 12.0f), 1.0f / 64), 64.0f);
 }
 
+/* The speed the source is read at: a sample's own rate taken in, and a
+ * cycle's PITCH 0 at A1, 55 Hz, as Skin's and Wave's. */
+static float speed_of(const noise_voice_t *v, const float *p) {
+    const float r = rate_of(p);
+    if (!v->smp) return r;
+    return r * v->smp->speed * (v->smp->cycle ? 55.0f / CY_HZ : 1.0f);
+}
+
+/* What the voice plays, as a table, and its key for the level match's memory. */
+static const nt_table_t *source(const noise_voice_t *v, int *key) {
+    if (v->smp) { *key = NT_TABLES + v->smp->entry; return &v->smp->t; }
+    *key = v->tab;
+    return nt_table(v->tab);
+}
+
 /* The copy to read at a speed: the brightest that folds nothing back under
  * 16 kHz. Each copy keeps up to half an octave over the top of the band,
  * whose fold lands above 16 kHz, where it is only more hiss; so the top
@@ -319,51 +337,105 @@ static int bands_kept(float rate) {
  * pitch or the table moves. */
 static float matched(noise_voice_t *v, const float *p, float rate, int *filt, float *fc) {
     *filt = color_of(p, fc);
-    const int t = (int)p[P_N_TABLE];
+    int t;
+    const nt_table_t *tb = source(v, &t);
     /* near enough: a modulated COLOR moves a little every 32 samples, and
      * a level a hundredth of a turn stale is not heard, where working it
      * out anew each time cost forty tangents */
     if (fabsf(v->match_c - p[P_N_COLOR]) < 0.01f && (v->match_c == 0.0f) == (p[P_N_COLOR] == 0.0f)
         && fabsf(v->match_r - rate) < 0.003f * rate && v->match_t == t) return v->match;
-    const nt_table_t *tb = nt_table(t);
     double kept = 0;
     for (int b = 0, n = bands_kept(rate); b < n; b++)
         kept += tb->band[b] * power_at(*filt, *fc, sqrtf(edge[b] * edge[b + 1]) * rate);
-    v->match = kept > 0 ? fminf(sqrtf((float)(tb->var / kept)), MATCH_MAX) : 1.0f;
+    v->match = kept > 0 ? fminf(sqrtf((float)(tb->var / kept)), v->smp ? SM_MATCH : MATCH_MAX) : 1.0f;
     v->match_c = p[P_N_COLOR], v->match_r = rate, v->match_t = t;
     return v->match;
 }
 
-void noise_start(noise_voice_t *v, uint32_t seed, float amp) {
-    if (v->env < 1e-4f) {
+/* START as a one-shot's read position. */
+static uint32_t start_of(const smp_t *sm, const float *p) {
+    return (uint32_t)(fminf(fmaxf(p[P_N_START], 0.0f), 0.999f) * (float)sm->len) << SM_FRAC;
+}
+
+void noise_start(noise_voice_t *v, const float *p, const struct smp *smp, uint32_t seed, float amp) {
+    const int t = (int)p[P_N_TABLE];
+    const int sounding = v->env >= 1e-4f;
+    if (t >= NT_TABLES) {
+        if (!smp) { v->env = 0.0f; return; }   /* not loaded yet: nothing, never a stale sound */
+        if (!sounding || v->smp != smp) {
+            v->s1 = v->s2 = 0.0f;
+            v->level = -1;
+            v->old_n = 0;
+            v->phase = smp->cycle ? (uint32_t)(fminf(fmaxf(p[P_N_START], 0.0f), 1.0f) * 4294967295.0f) : start_of(smp, p);
+        } else if (!smp->cycle) {
+            /* a sampler restarts; the note cut fades over 256 samples */
+            v->old = v->phase, v->old_g = v->env, v->old_n = 256;
+            v->phase = start_of(smp, p);
+        }   /* a cycle runs on, as an oscillator does */
+        v->smp = smp;
+        v->env = amp;
+        return;
+    }
+    if (!sounding || v->smp) {
         v->phase = seed * 2654435761u;
         v->s1 = v->s2 = 0.0f;
         v->level = -1;
+        v->env = 0.0f;
     }
+    v->smp = NULL, v->tab = t, v->old_n = 0;
     v->env = sqrtf(v->env * v->env + amp * amp);
 }
 
 int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_block_t *b) {
-    const float rate = rate_of(p);
+    /* a noise table follows TABLE as it turns; a sample plays out the note */
+    const int t = (int)p[P_N_TABLE];
+    if (!v->smp && t < NT_TABLES) v->tab = t;
+    const smp_t *sm = v->smp;
+    const float rate = speed_of(v, p);
     const int level = level_of(rate);
     b->cross = v->level >= 0 && v->level != level;
     b->dx = 1.0f / (float)frames;
     const int lv[2] = { level, b->cross ? v->level : level };
     v->level = level;
-    const nt_table_t *tb = nt_table((int)p[P_N_TABLE]);
+    int key;
+    const nt_table_t *tb = source(v, &key);
+    const int frac = !sm ? NT_FRAC : sm->cycle ? CY_FRAC : SM_FRAC;
     for (int l = 0; l < 2; l++) {
         b->t[l] = tb->level[lv[l]];
-        b->shift[l] = NT_FRAC + lv[l];
+        b->shift[l] = frac + lv[l];
         b->fx[l] = 1.0f / (float)(1u << b->shift[l]);
     }
     /* the loop runs at twice the output's rate: two of its samples a sample */
-    b->inc = (uint32_t)(2.0f * rate * (float)(1u << NT_FRAC) + 0.5f);
+    b->inc = (uint32_t)(2.0f * rate * (float)(1u << frac) + 0.5f);
+    b->shot = sm && !sm->cycle;
+    if (b->shot) {
+        /* LOOP fully right plays to the end; lower, it repeats a slice from
+         * START, 2 ms long to all that is left, crossing back over its last
+         * 4 ms (or half of it, or as much as lies before it) */
+        const uint32_t start = start_of(sm, p), len = sm->len << SM_FRAC;
+        const float rest = (float)((len - start) >> SM_FRAC), shortest = 0.002f * NT_SR;
+        const float ls = p[P_N_LOOP] < 0.999f ? shortest * powf(fmaxf(rest / shortest, 1.0f), fmaxf(p[P_N_LOOP], 0.0f)) : rest;
+        if (ls < rest) {
+            b->loop = (uint32_t)ls << SM_FRAC;
+            b->end = start + b->loop;
+            uint32_t xf = (uint32_t)(0.004f * NT_SR) << SM_FRAC;
+            if (xf > b->loop / 2) xf = b->loop / 2;
+            if (xf > start) xf = start;
+            b->xf_at = xf ? b->end - xf : UINT32_MAX;
+            b->xk = xf ? 1.0f / (float)xf : 0.0f;
+        } else {
+            b->loop = 0, b->end = len, b->xf_at = UINT32_MAX, b->xk = 0.0f;
+        }
+    }
     float fc;
     const float m = matched(v, p, rate, &b->filt, &fc);
     if (b->filt) b->f = svf(fc, COLOR_K);
     else v->s1 = v->s2 = 0.0f;      /* so turning COLOR off the centre starts clean */
-    b->g = m * (1.0f / 32767.0f);
-    v->decay = hold ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
+    b->g = m * (1.0f / 32767.0f) * (sm && !sm->cycle ? SM_GAIN : 1.0f);
+    /* a one-shot with DECAY fully right plays to its end, unfaded */
+    const int whole = b->shot && p[P_N_DECAY] >= 0.999f;
+    v->decay = hold || whole ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
+    (void)key;
     return v->env > 1e-5f;          /* 100 dB under a full hit */
 }
 
@@ -394,11 +466,11 @@ static float gathered(float x, float d) {
  * is gathered once, for the band below it and the one above. */
 float noise_strike(noise_voice_t *v, const float *p, float hz, float d, int len) {
     (void)len;      /* the window, d^n, is down 43 dB by its end: taken as endless */
-    const float rate = rate_of(p);
-    int filt;
+    const float rate = speed_of(v, p);
+    int filt, key;
     float fc;
     const float m = matched(v, p, rate, &filt, &fc);
-    const nt_table_t *tb = nt_table((int)p[P_N_TABLE]);
+    const nt_table_t *tb = source(v, &key);
     const float w = 2 * (float)PI * hz / STRUT_SR;
     float drive = 0, power = 0, lo = 0, glo = 0;
     for (int b = 0, n = bands_kept(rate); b <= n; b++) {

@@ -42,7 +42,7 @@ static void param_json(sb_t *b, const param_def_t *d) {
     sb_printf(b, ",{\"key\":\"%s\",\"name\":\"%s\",\"short_name\":\"%s\",", d->key, d->name, d->cell);
     if (d->kind == PK_ENUM) {
         sb_printf(b, "\"type\":\"enum\",\"options\":[");
-        for (int i = 0; i < d->noptions; i++) sb_printf(b, "%s\"%s\"", i ? "," : "", d->options[i]);
+        for (int i = 0, n = param_noptions(d); i < n; i++) sb_printf(b, "%s\"%s\"", i ? "," : "", param_option(d, i));
         sb_printf(b, "],\"options_as_string\":true,\"default\":\"%s\"", d->options[(int)d->def]);
         /* MOD flips on a click; two words need no list over the page. */
         if (d->options == STRUT_VIEW_OPTIONS) sb_printf(b, ",\"peek\":false");

@@ -36,10 +36,15 @@ jobs:
           sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq
           sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq gcc-aarch64-linux-gnu
           ./scripts/build.sh
+          # the tarball carries the library and its sources
+          wavs=$(tar -tzf dist/strut-module.tar.gz | grep -c '^strut/samples/.*\.wav$')
+          echo "tarball: $(du -h dist/strut-module.tar.gz | cut -f1), $wavs samples"
+          test "$wavs" -eq "$(find src/samples -name '*.wav' | wc -l)"
+          tar -tzf dist/strut-module.tar.gz | grep -qx 'strut/samples/SOURCES.md'
           # the bench, static so it runs whatever the Move's C library
           mkdir -p build
           aarch64-linux-gnu-gcc -std=c11 -O3 -ffp-contract=fast -static -Wall -Wextra -Werror -Isrc/dsp \
-            tools/bench.c src/dsp/*.c -o build/bench-aarch64 -lm
+            tools/bench.c src/dsp/*.c -o build/bench-aarch64 -lm -lpthread
       - uses: actions/upload-artifact@v4
         with:
           name: strut-module

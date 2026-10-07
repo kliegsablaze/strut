@@ -3,10 +3,12 @@
  * Writes ui_hierarchy.json and chain_params.json for plan.test.mjs.
  *   tests/run.sh
  */
+#define _POSIX_C_SOURCE 200809L    /* nanosleep, for the loader's own thread */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "host/plugin_api_v1.h"
 #include "strut.h"
@@ -1182,6 +1184,205 @@ static void kit(void) {
     free(k);
 }
 
+/* The loudest 400 ms of L's first n, as the library was matched (its
+ * loudness, momentary). */
+static double loudest(int n) {
+    double best = 0;
+    for (int at = 0; at + STRUT_SR * 2 / 5 <= n; at += STRUT_SR / 20) best = fmax(best, window_rms(at, STRUT_SR * 2 / 5));
+    return best;
+}
+
+static int by_double(const void *a, const void *b) {
+    const double x = *(const double *)a, y = *(const double *)b;
+    return x < y ? -1 : x > y;
+}
+
+/* The library's entry called name, as TABLE's index; -1 none. */
+static int table_of(const char *name) {
+    for (int i = 0; i < smp_count(); i++)
+        if (!strcmp(smp_name(i), name)) return NT_TABLES + i;
+    return -1;
+}
+
+/* Pad 1 on Noise alone, TABLE at t, loaded as the loader would. */
+static strut_t *sample_pad(int t) {
+    strut_t *s = fresh();
+    s->pad[0].p[P_SKIN] = 0, s->pad[0].p[P_NOISE] = 0.8f, s->pad[0].p[P_N_TABLE] = (float)t;
+    s->pad[0].p[P_N_DECAY] = 1;
+    float l[128], r[128];
+    strut_render(s, l, r, 128);     /* the pad says what it wants */
+    smp_service(&s->lib, 0);
+    return s;
+}
+
+/* The last sample above a whisper, from `from`. */
+static int last_heard(const float *x, int from, int n) {
+    int at = from;
+    for (int k = from; k < from + n; k++) if (fabs(x[k]) > 1e-4) at = k;
+    return at;
+}
+
+/* The sample library and Noise's sample mode (DESIGN.md, The sample library). */
+static void samples(void) {
+    CHECK(smp_count() == 208, "the library lists 208 sounds (%d)", smp_count());
+    CHECK(!strcmp(smp_name(0), "Kick 001") && param_noptions(&STRUT_PAD_PARAMS[P_N_TABLE]) == NT_TABLES + smp_count(),
+          "TABLE lists the noise tables, then the library, drums first");
+    /* every file reads, a one-shot at 44.1 kHz and at most 4 s, every
+     * cycle one period of 2048 samples; and every one loads */
+    int bad = 0, cycles = 0, loaded = 0;
+    for (int i = 0; i < smp_count(); i++) {
+        float *x;
+        int n, rate;
+        const int ok = smp_read_wav(smp_path(i), &x, &n, &rate);
+        const int cycle = !strncmp(smp_name(i), "Cycle", 5);
+        if (!ok || rate != 44100 || (cycle ? n != 2048 : n > 4 * 44100)) {
+            printf("  %s: read %d, %d frames at %d Hz\n", smp_name(i), ok, n, rate);
+            bad++;
+        }
+        cycles += cycle && n == 2048;
+        free(x);
+        smp_t *sm = smp_load(i);
+        loaded += sm && sm->cycle == cycle;
+        smp_free(sm);
+    }
+    CHECK(bad == 0, "every file reads: one-shots at 44.1 kHz under 4 s, cycles 2048 samples (%d not)", bad);
+    CHECK(cycles == 36 && loaded == smp_count(), "and every one loads (%d of %d; %d cycles)", loaded, smp_count(), cycles);
+
+    /* named by its name, kept, and served back */
+    void *p = A->create_instance(".", "");
+    A->set_param(p, "p01_n_table", "Snare 001");
+    CHECK(!strcmp(get(p, "p01_n_table"), "Snare 001"), "TABLE takes a sample by name");
+    A->destroy_instance(p);
+
+    /* nothing plays until it has loaded */
+    const int kick = table_of("Kick 001");
+    strut_t *s = fresh();
+    s->pad[0].p[P_SKIN] = 0, s->pad[0].p[P_NOISE] = 0.8f, s->pad[0].p[P_N_TABLE] = (float)kick;
+    int n = hit(s, 0.2f);
+    CHECK(peak_of(L, 0, n) == 0, "a sample not yet loaded plays nothing");
+    free(s);
+
+    /* every sound at its knobs' defaults: sounds, finite, under full
+     * scale, and ends; and how loud they are against each other */
+    double lo = 1e9, hi = 0, ok = 1, top = 0;
+    static double louds[SM_FILES];
+    int nl = 0;
+    for (int i = 0; i < smp_count(); i++) {
+        s = sample_pad(NT_TABLES + i);
+        n = hit(s, 4.0f);
+        int finite = 1;
+        for (int j = 0; j < n; j++) finite &= isfinite(L[j]);
+        const double pk = peak_of(L, 0, n), loud = loudest(n);
+        const int cycle = !strncmp(smp_name(i), "Cycle", 5);
+        if (!finite || pk > 0.95 || pk < 0.01 || (!cycle && s->pad[0].voice.noise.env > 0)) {
+            printf("  %s: finite %d peak %.3f still %d\n", smp_name(i), finite, pk, s->pad[0].voice.noise.env > 0);
+            ok = 0;
+        }
+        if (!cycle) lo = fmin(lo, loud), hi = fmax(hi, loud), louds[nl++] = loud, top = fmax(top, pk);
+        free(s);
+    }
+    s = noise_pad(NT_WHITE);
+    const double white = loudest(hit(s, 1.0f));
+    free(s);
+    qsort(louds, (size_t)nl, sizeof(double), by_double);
+    printf("samples: loudest 400 ms %.1f .. %.1f dB against White's, half of them over %.1f; peaks up to %.2f\n",
+           20 * log10(lo / white), 20 * log10(hi / white), 20 * log10(louds[nl / 2] / white), top);
+    CHECK(ok, "every sound sounds, stays finite, peaks under 0.95 and ends");
+
+    /* PITCH +12 plays it in half the time; START half way, half of it */
+    const int snare = table_of("Snare 001");
+    s = sample_pad(snare);
+    n = hit(s, 3.0f);
+    const int whole = last_heard(L, 0, n);
+    free(s);
+    s = sample_pad(snare);
+    s->pad[0].p[P_N_PITCH] = 12;
+    n = hit(s, 3.0f);
+    const int up = last_heard(L, 0, n);
+    free(s);
+    s = sample_pad(snare);
+    s->pad[0].p[P_N_START] = 0.5f;
+    n = hit(s, 3.0f);
+    const int half = last_heard(L, 0, n);
+    free(s);
+    printf("samples: Snare 001 lasts %d samples, %d an octave up, %d from half way\n", whole, up, half);
+    CHECK(fabs((double)up / whole - 0.5) < 0.05, "PITCH +12 plays a sample in half the time");
+    CHECK(fabs((double)half / whole - 0.5) < 0.05, "START half way plays its second half");
+
+    /* LOOP repeats a slice: the sound goes on past the sample's end, and
+     * what is heard one loop apart is the same */
+    s = sample_pad(snare);
+    s->pad[0].p[P_N_LOOP] = 0.6f, s->pad[0].p[P_N_START] = 0.1f, s->pad[0].p[P_N_DECAY] = 0.8f;
+    n = hit(s, 3.0f);
+    const smp_t *sm = s->pad[0].voice.noise.smp;
+    const double rest = 0.9 * sm->len / 2, shortest = 0.002 * 44100;
+    const int loop = (int)(shortest * pow(rest / shortest, 0.6));
+    double e = 0, d = 0;
+    for (int j = whole; j < whole + STRUT_SR / 4; j++) e += L[j] * L[j], d += (L[j] - L[j - loop]) * (L[j] - L[j - loop]);
+    printf("samples: a loop of %d samples, %.1f dB the same one loop apart\n", loop, 10 * log10(d / e));
+    CHECK(e > 0 && d < 0.05 * e, "LOOP repeats a slice past the sample's end");
+    free(s);
+
+    /* a cycle is looped and pitched from A1: 55 Hz at PITCH 0 */
+    s = sample_pad(table_of("Cycle 001"));
+    s->pad[0].p[P_N_DECAY] = 0.8f;
+    n = hit(s, 1.0f);
+    int best = 0;
+    double bc = -1e9;
+    for (int lag = 600; lag < 1200; lag++) {
+        double c = 0;
+        for (int j = STRUT_SR / 10; j < STRUT_SR / 10 + 4000; j++) c += L[j] * L[j + lag];
+        if (c > bc) bc = c, best = lag;
+    }
+    CHECK(fabs(44100.0 / best - 55) < 0.5, "a cycle plays at 55 Hz at PITCH 0 (%.2f Hz)", 44100.0 / best);
+    CHECK(window_rms(STRUT_SR / 2, 1000) > 1e-3, "and keeps going: it loops");
+    free(s);
+
+    /* the loader keeps a sample while a voice plays it, and lets go of
+     * what nobody uses once it holds too much */
+    s = sample_pad(kick);
+    strut_note_on(s, STRUT_NOTE0, 100);
+    const smp_t *playing = s->pad[0].voice.noise.smp;
+    float l[128], r[128];
+    int kept = 1;
+    for (int i = 1; i < 120; i++) {
+        s->pad[0].p[P_N_TABLE] = (float)(NT_TABLES + i);
+        strut_render(s, l, r, 128);
+        smp_service(&s->lib, 0);
+        strut_render(s, l, r, 128);
+        int found = 0;
+        for (const smp_t *c = s->lib.cache; c; c = c->next) found |= c == playing;
+        kept &= found || !s->pad[0].voice.active;
+    }
+    printf("samples: the loader holds %.1f MB after 120 sounds\n", s->lib.cached / 1048576.0);
+    CHECK(kept, "a sample a voice plays is never let go");
+    CHECK(s->lib.cached < (20u << 20), "and what nobody uses is let go past 16 MB");
+    smp_stop(&s->lib);
+    free(s);
+
+    /* the loader's own thread, as on the Move: a pad's sample arrives
+     * while blocks render */
+    p = A->create_instance(".", "");
+    A->set_param(p, "p01_n_table", "Clap 001");
+    A->set_param(p, "p01_skin", "0");
+    A->set_param(p, "p01_noise", "0.8");
+    int16_t out[256];
+    const smp_t *ready = NULL;
+    strut_t *st = p;
+    for (int i = 0; i < 400 && !ready; i++) {
+        A->render_block(p, out, 128);
+        const struct timespec ms = { 0, 5000000 };
+        nanosleep(&ms, NULL);
+        ready = __atomic_load_n(&st->lib.ready[0], __ATOMIC_ACQUIRE);
+    }
+    CHECK(ready != NULL, "the loader's thread loads a pad's sample");
+    midi3(p, 0x90, STRUT_NOTE0, 100);
+    int peak = 0;
+    rms(p, 40, &peak);
+    CHECK(peak > 1000, "and the pad plays it (peak %d)", peak);
+    A->destroy_instance(p);
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -1204,6 +1405,7 @@ static void focus(void) {
 }
 
 int main(int argc, char **argv) {
+    smp_catalogue("src");    /* the library, as the module's folder holds it on the Move */
     const char *dir = argc > 1 ? argv[1] : ".";
     A = move_plugin_init_v2(NULL);
     CHECK(A && A->api_version == 2, "the v2 API");
@@ -1221,6 +1423,7 @@ int main(int argc, char **argv) {
     levels();
     tail();
     kit();
+    samples();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;

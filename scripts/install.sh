@@ -48,6 +48,24 @@ ssh -o LogLevel=ERROR "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming &&
 version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' dist/strut/module.json)
 echo "Installed Strut $version to $HOST:$REMOTE_DIR"
 
+# The sample library, 50 MB: sent only when it differs from the Move's
+# (a stamp of its files' contents), into a folder beside it, then swapped in.
+if [ -d dist/strut/samples ]; then
+    stamp=$(cd dist/strut && find samples -type f ! -name .stamp -print0 | LC_ALL=C sort -z | xargs -0 cksum | cksum | cut -d' ' -f1)
+    there=$(ssh -o LogLevel=ERROR "$HOST" "cat '$REMOTE_DIR/samples/.stamp' 2>/dev/null || true")
+    if [ "$stamp" != "$there" ]; then
+        echo "Copying the sample library ($(du -sh dist/strut/samples | cut -f1))..."
+        t0=$(date +%s)
+        tar -C dist/strut -cf - samples | ssh -o LogLevel=ERROR "$HOST" "cd '$REMOTE_DIR' && \
+            rm -rf .samples.incoming && mkdir .samples.incoming && tar -xf - -C .samples.incoming && \
+            echo $stamp > .samples.incoming/samples/.stamp && \
+            rm -rf samples && mv .samples.incoming/samples samples && rmdir .samples.incoming"
+        echo "Copied the sample library in $(( $(date +%s) - t0 )) s"
+    else
+        echo "The sample library on the Move is current"
+    fi
+fi
+
 if [ -n "${STRUT_NO_RESTART:-}" ]; then
     echo "Restart the Move now: a slot already playing Strut keeps the old version until then."
     exit 0

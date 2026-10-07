@@ -21,6 +21,7 @@ void strut_init(strut_t *s) {
     s->dither = 0x9E3779B9u;
     s->bpm = 120.0f;
     s->vol_g = -1.0f;
+    for (int i = 0; i < STRUT_PADS; i++) s->lib.want[i] = s->lib.seen[i] = -1;
 }
 
 static void focus(strut_t *s, int pad) {
@@ -84,7 +85,10 @@ static void strike(strut_t *s, int i, float amp) {
     mod_apply(p->p, &v->mod, s->bpm, q, &mo);
     skin_strike(&v->skin, q, s->seed, amp);
     wave_start(&v->wave, q, amp);
-    noise_start(&v->noise, s->seed, amp);
+    /* a sample plays only once loaded, and only the one TABLE names */
+    const int t = (int)q[P_N_TABLE] - NT_TABLES;
+    const smp_t *sm = t >= 0 ? __atomic_load_n(&s->lib.ready[i], __ATOMIC_ACQUIRE) : NULL;
+    noise_start(&v->noise, q, sm && sm->entry == t ? sm : NULL, s->seed, amp);
     /* Wave as Skin's hit: at least one of Wave's cycles, sized from Wave's
      * harmonics near PITCH. The floor keeps the hit itself, heard directly,
      * under full scale. */
@@ -285,6 +289,11 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
     memset(l, 0, sizeof(float) * frames);
     memset(r, 0, sizeof(float) * frames);
     s->sounding = 0;
+    /* tell the loader the samples the pads name */
+    for (int i = 0; i < STRUT_PADS; i++) {
+        const int t = (int)s->pad[i].p[P_N_TABLE] - NT_TABLES, w = t >= 0 ? t : -1;
+        if (w != s->lib.want[i]) __atomic_store_n(&s->lib.want[i], w, __ATOMIC_RELAXED);
+    }
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
         /* FLAM's hits still to come, each at its sample */
@@ -298,7 +307,11 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
         }
         if (p->flams > 0) p->flam_in -= frames - done;
         pad_render(s, p, l + done, r + done, frames - done);
+        /* and the sample each voice plays, so it is not freed under it */
+        const smp_t *u = p->voice.active ? p->voice.noise.smp : NULL;
+        if (u != s->lib.used[i]) __atomic_store_n(&s->lib.used[i], u, __ATOMIC_RELEASE);
     }
+    __atomic_store_n(&s->lib.blocks, s->lib.blocks + 1, __ATOMIC_RELEASE);
     s->now += (double)frames / STRUT_SR;
 }
 
@@ -394,11 +407,12 @@ static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ?
  * Anything else leaves the value alone. */
 static void write_value(const param_def_t *d, float *v, const char *val) {
     if (d->kind == PK_ENUM) {
-        for (int i = 0; i < d->noptions; i++)
-            if (!strcmp(val, d->options[i])) { *v = (float)i; return; }
+        const int n = param_noptions(d);
+        for (int i = 0; i < n; i++)
+            if (!strcmp(val, param_option(d, i))) { *v = (float)i; return; }
         char *end;
         const long i = strtol(val, &end, 10);
-        if (end != val && *end == '\0' && i >= 0 && i < d->noptions) *v = (float)i;
+        if (end != val && *end == '\0' && i >= 0 && i < n) *v = (float)i;
         return;
     }
     char *end;
@@ -408,7 +422,7 @@ static void write_value(const param_def_t *d, float *v, const char *val) {
 }
 
 static int read_value(const param_def_t *d, float v, char *buf, int len) {
-    if (d->kind == PK_ENUM) return snprintf(buf, len, "%s", d->options[(int)v]);
+    if (d->kind == PK_ENUM) return snprintf(buf, len, "%s", param_option(d, (int)v));
     if (d->kind == PK_INT) return snprintf(buf, len, "%d", (int)v);
     return snprintf(buf, len, "%.4f", (double)v);
 }
@@ -418,10 +432,10 @@ static int read_value(const param_def_t *d, float v, char *buf, int len) {
 static const host_api_v1_t *g_host;
 
 static void *create_instance(const char *module_dir, const char *json_defaults) {
-    (void)module_dir;
     (void)json_defaults;
+    smp_catalogue(module_dir);      /* TABLE's list, once for every instance */
     strut_t *s = calloc(1, sizeof(*s));
-    if (s) strut_init(s);
+    if (s) strut_init(s), smp_start(&s->lib);
     /* Reloading a module the host still holds hands back the old code (the
      * host opens the new synth before closing the old, and dlopen() matches
      * by path), so the log says which build is really playing. */
@@ -429,7 +443,11 @@ static void *create_instance(const char *module_dir, const char *json_defaults) 
     return s;
 }
 
-static void destroy_instance(void *instance) { free(instance); }
+static void destroy_instance(void *instance) {
+    strut_t *s = instance;
+    if (s) smp_stop(&s->lib);
+    free(s);
+}
 
 static void on_midi(void *instance, const uint8_t *msg, int len, int source) {
     (void)source;

@@ -7,6 +7,7 @@
 
 #include "strut.h"
 #include "noise.h"
+#include "samples.h"
 #include "tables.h"
 
 #define N(a) (int)(sizeof(a) / sizeof((a)[0]))
@@ -42,6 +43,12 @@ _Static_assert(N(NOISE_TABLES) == NT_TABLES, "one TABLE option for each noise ta
 static const char *const SAMPLE_MODES[] = { "Sample", "Resynth", "Noise" };
 static const char *const CHOKES[] = { "Off", "A", "B", "C", "D" };
 const char *const STRUT_VIEW_OPTIONS[2] = { "Sound", "Mod" };
+
+int param_noptions(const param_def_t *d) { return d->noptions + (d->library ? smp_count() : 0); }
+
+const char *param_option(const param_def_t *d, int i) {
+    return i < d->noptions ? d->options[i] : smp_name(i - d->noptions);
+}
 
 const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_SOUND] = ENUM("sound", "Sound", "Sound", SOUNDS),
@@ -86,7 +93,8 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_N_PITCH] = SEMI("n_pitch", "Pitch", "Noise Pitch", -48, 48),
     [P_N_MODE] = ENUM("n_mode", "Mode", "Sample Mode", SAMPLE_MODES),
     [P_N_DECAY] = UNI("n_decay", "Decay", "Noise Decay", 0.3f),
-    [P_N_TABLE] = ENUM("n_table", "Table", "Noise Table", NOISE_TABLES),
+    /* the noise tables, then the sample library (samples.c) */
+    [P_N_TABLE] = { "n_table", "Table", "Noise Table", PK_ENUM, 0, N(NOISE_TABLES) - 1, 0, NULL, NOISE_TABLES, N(NOISE_TABLES), 1 },
     [P_N_COLOR] = BI("n_color", "Color", "Noise Color"),
     [P_N_START] = UNI("n_start", "Start", "Sample Start", 0.0f),
     [P_N_LOOP] = UNI("n_loop", "Loop", "Sample Loop", 1.0f),

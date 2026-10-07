@@ -12,14 +12,14 @@ out="build/tests"
 mkdir -p "$out"
 CFLAGS="-std=c11 -O3 -ffp-contract=fast -Wall -Wextra -Werror -Isrc/dsp"
 
-cc $CFLAGS tests/test_strut.c src/dsp/*.c -lm -o "$out/test_strut"
+cc $CFLAGS tests/test_strut.c src/dsp/*.c -lm -lpthread -o "$out/test_strut"
 
 rc=0
 "$out/test_strut" "$out" || rc=$?
 
 # The bench and the demo must keep building.
 for t in bench demo; do
-  cc $CFLAGS tools/$t.c src/dsp/*.c -lm -o "$out/$t" || rc=1
+  cc $CFLAGS tools/$t.c src/dsp/*.c -lm -lpthread -o "$out/$t" || rc=1
 done
 
 if command -v node >/dev/null 2>&1 && [ -d "$SCHWUNG/src/shared/param_pages" ]; then

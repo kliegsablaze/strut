@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 
 IMAGE="${STRUT_BUILD_IMAGE:-forgetful-builder}"
 CC_CMD="aarch64-linux-gnu-gcc -std=c11 -g -O3 -ffp-contract=fast -shared -fPIC -Wall -Wextra -Werror \
-  -Isrc/dsp src/dsp/*.c -o dist/strut/dsp.so -lm"
+  -Isrc/dsp src/dsp/*.c -o dist/strut/dsp.so -lm -lpthread"
 
 rm -rf dist
 mkdir -p dist/strut
@@ -21,6 +21,8 @@ fi
 # help.json is what puts "Module Help" one jog from the controls.
 cp src/module.json src/help.json dist/strut/
 cp LICENSE THIRD_PARTY_LICENSES.md dist/strut/
+# the sample library, with SOURCES.md, which travels with it
+cp -r src/samples dist/strut/
 echo "Built dist/strut/"
 
 cd dist

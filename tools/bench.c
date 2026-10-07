@@ -6,11 +6,13 @@
  * at once, which also measures starting a hit.
  */
 #define _POSIX_C_SOURCE 200809L
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 
 #include "noise.h"
 #include "tables.h"
@@ -39,6 +41,34 @@ static void set_all(plugin_api_v2_t *a, void *p, const char *k, const char *v) {
         snprintf(key, sizeof(key), "p%02d_%s", i, k);
         a->set_param(p, key, v);
     }
+}
+
+/* A stand-in library the bench writes for itself, as the Move's copy of
+ * the bench carries none: one sample as long as the library's longest, 4 s
+ * of decaying noise. */
+static const char *fake_library(void) {
+    static const char *dir = "/tmp/strut-bench-lib";
+    mkdir(dir, 0755);
+    mkdir("/tmp/strut-bench-lib/samples", 0755);
+    mkdir("/tmp/strut-bench-lib/samples/Kick", 0755);
+    FILE *f = fopen("/tmp/strut-bench-lib/samples/Kick/Kick 001.wav", "wb");
+    if (!f) return dir;
+    const int n = 4 * STRUT_SR;
+    const unsigned bytes = (unsigned)n * 2;
+    unsigned char h[44] = "RIFF....WAVEfmt ";
+    const unsigned v[] = { 36 + bytes, 16, 1 | 1 << 16, STRUT_SR, STRUT_SR * 2, 2 | 16 << 16 };
+    memcpy(h + 4, &v[0], 4), memcpy(h + 16, &v[1], 4), memcpy(h + 20, &v[2], 4);
+    memcpy(h + 24, &v[3], 4), memcpy(h + 28, &v[4], 4), memcpy(h + 32, &v[5], 4);
+    memcpy(h + 36, "data", 4), memcpy(h + 40, &bytes, 4);
+    fwrite(h, 1, 44, f);
+    unsigned r = 1;
+    for (int i = 0; i < n; i++) {
+        r = r * 1664525u + 1013904223u;
+        const short x = (short)((int)(r >> 16) - 32768) * 0.9f * expf(-3.0f * i / n);
+        fwrite(&x, 2, 1, f);
+    }
+    fclose(f);
+    return dir;
 }
 
 /* Sorts a few numbers, for their middle: one busy moment on the Move
@@ -104,6 +134,7 @@ static void machine(void) {
 int main(void) {
     machine();
     plugin_api_v2_t *a = move_plugin_init_v2(NULL);
+    smp_catalogue(fake_library());
     struct rusage r0, r1;
     getrusage(RUSAGE_SELF, &r0);
     const clock_t c0 = clock();
@@ -194,6 +225,25 @@ int main(void) {
     a->set_param(p, "glue", "1");
     a->set_param(p, "warm", "1");
     run(a, p, "and the kit's effects");
+
+    /* and Noise playing a 4 s sample on every pad instead of a table,
+     * looped (its crossing back each time round), once it has loaded */
+    const double l0 = now_us();
+    smp_t *one = smp_load(0);
+    printf("loading a 4 s sample: %.1f ms\n", (now_us() - l0) / 1000.0);
+    smp_free(one);
+    set_all(a, p, "n_table", "Kick 001");
+    set_all(a, p, "n_loop", "0.5");
+    strut_t *st = p;
+    int16_t out[256];
+    for (int i = 0, ready = 0; i < 400 && !ready; i++) {
+        a->render_block(p, out, 128);
+        const struct timespec ms = { 0, 5000000 };
+        nanosleep(&ms, NULL);
+        ready = 1;
+        for (int k = 0; k < STRUT_PADS; k++) ready &= __atomic_load_n(&st->lib.ready[k], __ATOMIC_ACQUIRE) != NULL;
+    }
+    run(a, p, "and samples, looped");
     a->destroy_instance(p);
     return 0;
 }

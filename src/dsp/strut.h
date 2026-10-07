@@ -17,10 +17,11 @@
 #include "kit.h"
 #include "mod.h"
 #include "noise.h"
+#include "samples.h"
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.5.0"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.6.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -40,7 +41,12 @@ typedef struct {
     const char *unit;           /* NULL: 0..1 or -1..1 shown as a percentage */
     const char *const *options;
     int noptions;
+    int library;                /* TABLE: the sample library follows the options */
 } param_def_t;
+
+/* An enum's options, the sample library's included. */
+int param_noptions(const param_def_t *d);
+const char *param_option(const param_def_t *d, int i);
 
 /* One drum's knobs. Each is declared ONCE, by its bare key; the host
  * multiplies it into p01_<key> ... p16_<key> through the rack's template
@@ -125,6 +131,7 @@ typedef struct {
     float bpm;                  /* the host's tempo, for RATE's synced half */
     int sounding;               /* voices that rendered this block, and the room */
     kit_t kit;
+    smp_lib_t lib;              /* the samples the pads name, loaded off the audio thread */
 } strut_t;
 
 void strut_init(strut_t *s);

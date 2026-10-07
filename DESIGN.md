@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator and the Kit page, 0.5.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page and the sample library in Noise's Sample mode, 0.6.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -11,8 +11,9 @@ can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
 *How Wave works*, *How Noise works*); each pad then has Pad COLOR and the
 Finish page (*How Finish works*), every engine its modulator and CURVE
 (*Modulation*), and the whole kit GLUE, WARM and a room (*How the Kit page
-works*). Noise's samples, SOUND and DICE are still the plan; their knobs are
-kept but do nothing yet. On the Move, every pad at its dearest, with every
+works*). Noise plays the library's 208 samples, or your own, in Sample mode
+(*The sample library*). Resynth and Noise modes, SOUND and DICE are still
+the plan; their knobs are kept but do nothing yet. On the Move, every pad at its dearest, with every
 effect and modulator: 17.7 % of the CPU (0.4.1).
 
 - **Module ID:** `strut`
@@ -553,7 +554,7 @@ Noise has no BEND, unlike Wave: MODE took its cell. A pitch sweep at the start
   through a short hit and not a long one, as they would. Tested, the power
   of 48 hits on each table against Skin's own burst: within 2 dB.
 - **MODE, START and LOOP** do nothing on a noise table; they are for
-  samples (build step 9).
+  samples (*The sample library*).
 
 Rejected for Noise:
 
@@ -571,7 +572,7 @@ Rejected for Noise:
   Metal's lines, Wires' peaks or a sample's colour, and costs a filter per
   colour per voice; a table gives any colour for one read.
 
-#### The sample library (planned, build step 9)
+#### The sample library (built in part, 0.6.0)
 
 Strut ships with 208 sounds in `src/samples/`, 50 MB, gathered in another
 session (2026-10-07): 23 folders, one per kind (Kick, Snare, Rim, Clap, Hat,
@@ -594,28 +595,67 @@ kind and a number, `Kick 001.wav`.
   21.53 Hz. A cycle of 2048 samples holds up to 1024 harmonics, which fold
   back as soon as it is played higher, so each is built into copies an
   octave apart when loaded, as Wave's cycles are.
-- **TABLE** lists the eight noise tables, then the library by folder, then
-  your own samples (from a folder such as
-  `/data/UserData/schwung/samples/strut/`). MODE (Sample, Resynth, Noise),
-  START and LOOP work as above.
-  - Open question for step 9: 216 options and more is a long turn of one
-    knob. The alternatives are the host's file browser (`filepath`), or a
-    folder and a number as two choices; measured against the contract's
-    size and tried on the device.
-- **Kept in memory on demand.** All 50 MB as 16-bit numbers is too much to
-  hold. A pad loads the sample its TABLE names when TABLE changes, off the
-  audio thread, and lets it go when nothing uses it; pads naming the same
-  file share one copy. Sixteen pads of the longest stereo samples are at
-  most 11 MB. Until a sample has loaded, its pad plays nothing (never
-  stale or half-loaded data); a preset's samples load as it is chosen.
-  How to load off the audio thread without a thread whose library call
-  the Move's C library might not have (see *Tables are built at load*) is
-  step 9's first question: Ragtag's way, or work the host already does on
-  its own thread (`set_param`).
-- **Shipping:** `scripts/build.sh` and `scripts/install.sh` copy
-  `src/samples/` into the module (`dist/strut/samples/`, and the same on
-  the Move), and the release tarball carries it. Measure the tarball and
-  the install's time over SSH.
+- **TABLE is one long list** (the user's choice, 2026-10-07): the eight
+  noise tables, then the library by folder, drums first (Kick, Snare, Rim,
+  Clap, Hat, Cymbal, Tom, Percussion, then the rest), then your own
+  samples, every `.wav` in `/data/UserData/schwung/samples/strut/`, by name.
+  216 options with the library alone; the host's full-screen list shows
+  them as the knob turns. The list is read once, when Strut first loads, so
+  a sample added to your folder appears the next time. A preset keeps a
+  sample by its name, so it survives the list changing around it. The
+  library's names added 2.5 KB to the contract (17.3 KB).
+  (Rejected: the host's file browser, and a folder and a number as two
+  knobs; the user chose one list.)
+- **How a sample is kept.** Read as mono (stereo's sides averaged), then
+  stored as a noise table is: at twice the output's rate (a half-band
+  filter, 70 dB down past 24 kHz), as 16-bit numbers, and in seven copies
+  an octave apart, each low-passed to its own top first (70 dB down from
+  0.15 of its rate), with its power in quarter octaves. So a sample is read
+  through Noise's own six points, plays high without folding back, and
+  PITCH, COLOR, their level match and Skin's strike treat it as they treat
+  noise. COLOR's level match makes up at most 12 dB on a sample (60 on a
+  table): there COLOR is a filter, not a colour. A 4 s sample takes 1.3 MB
+  and, on a laptop, 40 ms to prepare (14 ms on average across the library).
+- **A cycle** (Cycle/, 2048 samples) is kept by its harmonics, each copy
+  holding only those under its top, as Wave's are, set to an RMS of 0.2,
+  looped and pitched: PITCH 0 is A1, 55 Hz (tested). START sets where in the
+  cycle it begins, and a re-hit runs on, as an oscillator does.
+- **Playing a one-shot.** From START; to its end, or with LOOP lower,
+  round a slice of it, 2 ms long to all that is left, crossing back over
+  the slice's last 4 ms (or half the slice, or as much as lies before it)
+  so a loop does not click. With DECAY fully right it plays unfaded to its
+  end; lower, it falls as noise does. A re-hit restarts it, the note it
+  cut fading out over 256 samples. Pitch moves its speed with TUNE, as on a
+  sampler (tested: +12 halves its length, START half way plays its second
+  half, a loop repeats one slice apart).
+- **Level.** The library is matched to −18 LUFS. Played back twice as loud
+  (+6 dB), half of it is within 1 dB of White noise's loudness or louder
+  (its loudest 400 ms against White's, −9.5 to +9.4 dB across all of it),
+  peaking at 0.73 at the NOISE level's default.
+- **Kept in memory on demand.** All 50 MB is too much to hold. Every host
+  call, `set_param` included, runs on the audio thread (`plugin_api_v1.h`),
+  so each instance has a loader thread of its own, as Ragtag does. Its
+  first act is to drop to ordinary priority and off core 3, the host's rule
+  for module threads. Schwung itself is built on Debian bookworm and starts
+  threads, so the thread call needs nothing newer than the Move has (the
+  worry under *Tables are built at load*). The loader:
+  - loads what a pad's TABLE names once the knob has rested on it 60 ms, so
+    turning through the list loads nothing on the way;
+  - shares one copy between pads naming the same file;
+  - hands it over by one pointer a pad; until it has, the pad's Noise
+    plays nothing (never a stale or half-loaded sound);
+  - keeps samples nobody uses while it holds under 16 MB, so going back is
+    instant, and frees one only once two blocks have passed since a pad
+    last had it and no voice is playing it, so the audio thread never
+    reads a freed sample (tested, with 120 samples in turn).
+- **Shipping:** `scripts/build.sh` copies `src/samples/` into the module;
+  the tarball is 40 MB, and CI checks it holds every sample and SOURCES.md.
+  `scripts/install.sh` sends the library only when it differs from the
+  Move's (a stamp of its files' contents), into a folder beside it, then
+  swaps it in. Still to measure: the install's time over SSH, and loading
+  on the Move (the bench's "loading a 4 s sample").
+- **Still to build:** Resynth and Noise modes; until then MODE plays every
+  sample as Sample.
 - **In the presets** (step 10): the SOUND list and the factory kits use the
   library, and DICE rolls from it by role, a kick pad from Kick/.
 
@@ -1068,15 +1108,16 @@ own engine, reach most of the same sounds.)
    the same run (2026-10-07); its cost is lost in the runs' spread (17.8 to
    20.6 %). Still to do: hear it.
 9. Samples (see *The sample library*):
-   - ship `src/samples/` in the module and the tarball; measure both;
-   - TABLE past the noise tables: the library, then your own samples;
-   - load on demand per pad, off the audio thread;
-   - Noise's three ways to play a sample (Sample, Resynth, Noise; see
-     *Noise*), START and LOOP; Cycle/ looped and pitched, in copies an
-     octave apart;
+   - ~~ship `src/samples/` in the module and the tarball~~ (0.6.0; the
+     tarball is 40 MB); still to measure: the install's time;
+   - ~~TABLE past the noise tables: the library, then your own samples~~
+     (0.6.0, one long list);
+   - ~~load on demand per pad, off the audio thread~~ (0.6.0);
+   - ~~Sample mode, START and LOOP; Cycle/ looped and pitched, in copies an
+     octave apart~~ (0.6.0); Resynth and Noise modes still to build;
    - CPU measured with resynthesis on every pad;
-   - tests: every file parses, every Cycle file is 2048 samples, the
-     tarball holds the library.
+   - ~~tests: every file parses, every Cycle file is 2048 samples, the
+     tarball holds the library~~ (0.6.0).
 10. The SOUND library, factory kits and DICE, drawing on the sample library
     (DICE by role), `help.json` and README.
 11. Voicing pass with the user listening on the device.
@@ -1134,6 +1175,16 @@ own engine, reach most of the same sounds.)
     2 dB nearer loud ones within 2 dB of the level and 3 of the peaks;
     WARM adds second and third harmonics within 2 dB, centred, and nothing
     at zero.
+  - Samples: the library lists 208 sounds, drums first; every file reads
+    (one-shots at 44.1 kHz under 4 s, cycles 2048 samples) and loads;
+    TABLE takes a sample by name; a sample not loaded plays nothing; every
+    sound at the knobs' defaults sounds, stays finite, peaks under 0.95
+    and ends; PITCH +12 halves a sample's length and START half way plays
+    its second half, to 5 %; LOOP repeats a slice past the end; a cycle
+    plays 55 Hz at PITCH 0 and loops; the loader never lets go of a sample
+    a voice plays, and holds under 20 MB after 120 samples; its own thread
+    loads a pad's sample while blocks render. CI checks the tarball holds
+    every sample and SOURCES.md.
   - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.
