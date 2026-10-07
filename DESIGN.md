@@ -552,6 +552,54 @@ Rejected for Noise:
   Metal's lines, Wires' peaks or a sample's colour, and costs a filter per
   colour per voice; a table gives any colour for one read.
 
+#### The sample library (planned, build step 9)
+
+Strut ships with 208 sounds in `src/samples/`, 50 MB, gathered in another
+session (2026-10-07): 23 folders, one per kind (Kick, Snare, Rim, Clap, Hat,
+Cymbal, Tom, Percussion, Bell, Mallet, Metal, Pluck, Wind, Bowed, Keys, Bass,
+Cycle, Voice, Foley, Toy, Noise, Glitch, Ambient), each file named for its
+kind and a number, `Kick 001.wav`.
+
+- **All CC0 or public domain** (VCSL, The Open Source Drum Kit, Kenney's
+  CC0 packs), or made here from them. `src/samples/SOURCES.md` records each
+  file's origin, processing, loudness and peak. It stays with the library,
+  and no sound is added without an entry there and a licence that allows
+  commercial use with no attribution.
+- **One-shots:** 44.1 kHz, 16-bit, mono or stereo, at most 4 s, silence
+  trimmed, faded out, matched to about −18 LUFS (momentary maximum), peaks
+  at −1 dBFS or lower. Strut needs no level matching of its own for them.
+- **Cycle/** is different: 36 single cycles, each one period of exactly 2048
+  samples, mono, looped. They are oscillators, not hits: always looped and
+  pitched, never played once through. PITCH 0 is A1 (55 Hz), as Skin's and
+  Wave's, so a cycle starts in tune with them; at its own rate a cycle is
+  21.53 Hz. A cycle of 2048 samples holds up to 1024 harmonics, which fold
+  back as soon as it is played higher, so each is built into copies an
+  octave apart when loaded, as Wave's cycles are.
+- **TABLE** lists the eight noise tables, then the library by folder, then
+  your own samples (from a folder such as
+  `/data/UserData/schwung/samples/strut/`). MODE (Sample, Resynth, Noise),
+  START and LOOP work as above.
+  - Open question for step 9: 216 options and more is a long turn of one
+    knob. The alternatives are the host's file browser (`filepath`), or a
+    folder and a number as two choices; measured against the contract's
+    size and tried on the device.
+- **Kept in memory on demand.** All 50 MB as 16-bit numbers is too much to
+  hold. A pad loads the sample its TABLE names when TABLE changes, off the
+  audio thread, and lets it go when nothing uses it; pads naming the same
+  file share one copy. Sixteen pads of the longest stereo samples are at
+  most 11 MB. Until a sample has loaded, its pad plays nothing (never
+  stale or half-loaded data); a preset's samples load as it is chosen.
+  How to load off the audio thread without a thread whose library call
+  the Move's C library might not have (see *Tables are built at load*) is
+  step 9's first question: Ragtag's way, or work the host already does on
+  its own thread (`set_param`).
+- **Shipping:** `scripts/build.sh` and `scripts/install.sh` copy
+  `src/samples/` into the module (`dist/strut/samples/`, and the same on
+  the Move), and the release tarball carries it. Measure the tarball and
+  the install's time over SSH.
+- **In the presets** (step 10): the SOUND list and the factory kits use the
+  library, and DICE rolls from it by role, a kick pad from Kick/.
+
 Rejected: time-stretching in Sample mode. It costs CPU on every pad and smears
 the attack a drum needs; Resynth is the way to change length and pitch apart.
 Rejected: a second TABLE entry per sample for each way of playing it. It
@@ -828,10 +876,18 @@ own engine, reach most of the same sounds.)
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
-9. Samples and `filepath`: Noise's three ways to play a sample (Sample,
-   Resynth, Noise; see *Noise*), and CPU measured with resynthesis on every
-   pad.
-10. The SOUND library, factory kits, DICE, `help.json` and README.
+9. Samples (see *The sample library*):
+   - ship `src/samples/` in the module and the tarball; measure both;
+   - TABLE past the noise tables: the library, then your own samples;
+   - load on demand per pad, off the audio thread;
+   - Noise's three ways to play a sample (Sample, Resynth, Noise; see
+     *Noise*), START and LOOP; Cycle/ looped and pitched, in copies an
+     octave apart;
+   - CPU measured with resynthesis on every pad;
+   - tests: every file parses, every Cycle file is 2048 samples, the
+     tarball holds the library.
+10. The SOUND library, factory kits and DICE, drawing on the sample library
+    (DICE by role), `help.json` and README.
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
 
