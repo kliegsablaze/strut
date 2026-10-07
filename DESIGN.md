@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, 0.3.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, 0.3.1 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -658,6 +658,13 @@ its PAN.
   lift of 18 dB on a loud kick is past full scale; the output's limiter
   rounds it.
 - **DICE** waits for step 10.
+- **CPU.** 0.3.0 ran each effect as its own loop over the block: on the
+  Move, every effect on every pad took the worst case from 11.9 % to 18.7 %
+  (2026-10-07). COLOR, LOW and HIGH are filters whose next sample waits on
+  the last, so one after another the processor waited on each in turn.
+  0.3.1 runs them all in one loop, a sample at a time, and works on them
+  together: on a laptop, every effect from +48 to +16 µs a block. On the
+  Move, still to measure.
 
 Rejected for Finish:
 
@@ -925,8 +932,9 @@ own engine, reach most of the same sounds.)
    tables for the Move's memory and loads in 0.51 s. Still to do: hear it
    on the device.
 6. ~~**Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects~~ (0.3.0;
-   DICE waits for step 10). Still to do: hear it on the device, and its CPU
-   there.
+   DICE waits for step 10). On the Move, every effect on every pad: 18.7 %
+   (0.3.0); 0.3.1 runs the effects in one loop. Still to do: hear it, and
+   measure 0.3.1.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
 9. Samples (see *The sample library*):

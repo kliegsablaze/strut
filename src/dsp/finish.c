@@ -68,54 +68,51 @@ void finish_block(const float *p, finish_block_t *b) {
     b->pl = 1.41421356f * cosf(a), b->pr = 1.41421356f * sinf(a);
 }
 
+/* One loop for every effect, a sample at a time. Each of COLOR, LOW and
+ * HIGH is a filter whose next sample waits on its last; run one after
+ * another, a block each, the processor waited on each in turn (0.3.0: every
+ * effect on every pad took 6.8 % of the Move). In one loop it works on all
+ * of them at once. The tests of which are on cost nothing to speak of:
+ * they come out the same every sample. */
 void finish_run(finish_t *f, const finish_block_t *b, float *x, float *l, float *r, int n) {
-    if (b->color) {
-        float lp, bp, hp;
-        for (int i = 0; i < n; i++) {
-            svf_step(&b->cf, &f->c1, &f->c2, x[i], &lp, &bp, &hp);
-            x[i] = b->color == 1 ? lp : hp;
+    finish_t s = *f;
+    if (!b->color) s.c1 = s.c2 = 0.0f;
+    if (!b->drive) s.du = s.dF = 0.0f;
+    if (!(b->shelf & 1)) s.lo = 0.0f;
+    if (!(b->shelf & 2)) s.hi = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float y = x[i];
+        if (b->color) {
+            float lp, bp, hp;
+            svf_step(&b->cf, &s.c1, &s.c2, y, &lp, &bp, &hp);
+            y = b->color == 1 ? lp : hp;
         }
-    } else {
-        f->c1 = f->c2 = 0.0f;
-    }
-    if (b->drive) {
-        /* the curve, with its fold-back smoothed: its area between this
-         * sample and the last, over the step (Parker, Zavalishin and Le
-         * Bivic, DAFx 2016). A plain curve pushed 30 dB folds a high whine
-         * down under a kick. */
-        for (int i = 0; i < n; i++) {
-            const float u = b->g * x[i], F = area(u), du = u - f->du;
-            const float y = fabsf(du) > 1e-4f ? (F - f->dF) / du : curve(0.5f * (u + f->du));
-            f->du = u, f->dF = F;
-            x[i] = y * b->out;
+        if (b->drive) {
+            /* the curve, with its fold-back smoothed: its area between
+             * this sample and the last, over the step (Parker, Zavalishin
+             * and Le Bivic, DAFx 2016). A plain curve pushed 30 dB folds a
+             * high whine down under a kick. */
+            const float u = b->g * y, F = area(u), du = u - s.du;
+            const float c = fabsf(du) > 1e-4f ? (F - s.dF) / du : curve(0.5f * (u + s.du));
+            s.du = u, s.dF = F;
+            y = c * b->out;
         }
-    } else {
-        f->du = f->dF = 0.0f;
-    }
-    if (b->crush) {
-        for (int i = 0; i < n; i++) {
-            f->ph += b->step;
-            if (f->ph >= 1.0f) f->ph -= 1.0f, f->held = x[i];
-            x[i] = rintf(f->held * b->q) / b->q;
+        if (b->crush) {
+            s.ph += b->step;
+            if (s.ph >= 1.0f) s.ph -= 1.0f, s.held = y;
+            y = rintf(s.held * b->q) / b->q;
         }
-    }
-    if (b->shelf & 1) {
-        for (int i = 0; i < n; i++) {
-            const float v = (x[i] - f->lo) * b->lg, lp = v + f->lo;
-            f->lo = lp + v;
-            x[i] += b->la * lp;
+        if (b->shelf & 1) {
+            const float v = (y - s.lo) * b->lg, lp = v + s.lo;
+            s.lo = lp + v;
+            y += b->la * lp;
         }
-    } else {
-        f->lo = 0.0f;
-    }
-    if (b->shelf & 2) {
-        for (int i = 0; i < n; i++) {
-            const float v = (x[i] - f->hi) * b->hg, lp = v + f->hi;
-            f->hi = lp + v;
-            x[i] += b->ha * (x[i] - lp);
+        if (b->shelf & 2) {
+            const float v = (y - s.hi) * b->hg, lp = v + s.hi;
+            s.hi = lp + v;
+            y += b->ha * (y - lp);
         }
-    } else {
-        f->hi = 0.0f;
+        l[i] += b->pl * y, r[i] += b->pr * y;
     }
-    for (int i = 0; i < n; i++) l[i] += b->pl * x[i], r[i] += b->pr * x[i];
+    *f = s;
 }

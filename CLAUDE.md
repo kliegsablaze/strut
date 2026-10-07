@@ -182,7 +182,7 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.3.0)
+## Where things stand (2026-10-07, 0.3.1)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
@@ -197,7 +197,9 @@ When the user moves work back to their local machine:
   - CPU, all three engines on every pad at their dearest: 12 %;
   - load time: 0.51 s (0.2.2), after work on the tables for the Move's
     memory (DESIGN.md, *Tables are built at load*).
-  - Not yet: Finish (0.3.0) by ear, and its CPU with every effect on.
+  - every effect on every pad: 18.7 % (0.3.0); 0.3.1 runs them in one
+    loop, a third of the cost on a laptop, not yet measured on the Move.
+  - Not yet: Finish by ear.
 - **Next:** build step 7, the modulators (the MOD views). Samples are step
   9: the library in `src/samples/` (208 sounds, from another session) is
   in DESIGN.md, *The sample library*.
