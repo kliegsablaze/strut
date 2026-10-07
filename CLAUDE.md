@@ -46,8 +46,9 @@ DESIGN.md saying what actually runs versus what is planned.
   - a voicing pass with the user listening;
   - level-matched presets;
   - under a quarter of the Move's CPU at full load.
-- **Do not open PRs against Schwung** unless the user asks. Work within what
-  the host already does.
+- **Make no requests to Schwung**: no PRs, issues or proposals (the user
+  declined one for the host's volume-stage rounding, 2026-10-07). Work within
+  what the host already does.
 
 ## House style (from the sibling modules)
 

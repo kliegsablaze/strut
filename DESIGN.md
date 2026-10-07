@@ -484,8 +484,8 @@ own engine, reach most of the same sounds.)
     - Strut cannot reach this: the host takes only 16 bits from a module
       (`render_block`'s `int16_t`), mixes in 16 bits, and does not tell a
       module the master volume. The real fix is dither, or floating point, in
-      the host's volume stage, which is a change to Schwung and waits on the
-      user. (Rejected: louder dither in Strut to survive the volume stage. It
+      the host's volume stage, a change to Schwung that the user has
+      declined to request (2026-10-07). Below full volume it stays. (Rejected: louder dither in Strut to survive the volume stage. It
       fixed moderate volumes in the simulation, not low ones, and adds hiss at
       full volume.)
   - **The dither is noise shaped** (0.0.6). Its rounding errors are fed back
