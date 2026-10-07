@@ -254,20 +254,39 @@ static void tail(void) {
     strut_note_on(ref, STRUT_NOTE0, 100);
     int16_t out[256];
     float l[128], r[128];
-    double worst = 0;
-    int zeros = 0, blocks = 0;
+    /* the error through four one-poles at 2 kHz, where the ear is keen; the
+     * shaped noise must sit well under plain dither's, made alongside */
+    const double a = exp(-2 * 3.14159265358979 * 2000.0 / STRUT_SR);
+    double worst = 0, lp[4] = { 0 }, pl[4] = { 0 }, lp2 = 0, pl2 = 0;
+    uint32_t rs = 12345;
+    int zeros = 0, blocks = 0, quiet = 0;
     for (; blocks < 4000; blocks++) {
         A->render_block(p, out, 128);
         strut_render(ref, l, r, 128);
         int all0 = 1;
         for (int i = 0; i < 128; i++) {
-            if (fabs(l[i]) * 32000 < 40) worst = fmax(worst, fabs(out[2 * i] - l[i] * 32000));
+            if (fabs(l[i]) * 32000 < 40 && (out[2 * i] || out[2 * i + 1])) {
+                const double e = out[2 * i] - l[i] * 32000;
+                worst = fmax(worst, fabs(e));
+                rs ^= rs << 13, rs ^= rs >> 17, rs ^= rs << 5;
+                const double v = l[i] * 32000, tp = ((rs & 0xFFFF) + (rs >> 16)) / 65536.0 - 1;
+                double x = e, y = rint(v + tp) - v;
+                for (int k = 0; k < 4; k++) {
+                    x = lp[k] = a * lp[k] + (1 - a) * x;
+                    y = pl[k] = a * pl[k] + (1 - a) * y;
+                }
+                lp2 += x * x;
+                pl2 += y * y;
+                quiet++;
+            }
             all0 &= out[2 * i] == 0 && out[2 * i + 1] == 0;
         }
         zeros = all0 ? zeros + 1 : 0;
         if (zeros > 50) break;
     }
-    CHECK(worst <= 1.5, "a quiet tail is within 1.5 steps of the exact signal (%.2f)", worst);
+    CHECK(quiet > 1000 && lp2 < 0.5 * pl2, "a quiet tail's noise below 2 kHz is over 3 dB under plain dither's (%.1f dB)",
+          10 * log10(lp2 / (pl2 + 1e-12)));
+    CHECK(worst <= 8, "and the shaper never runs away (%.1f steps at worst)", worst);
     CHECK(zeros > 50, "and ends in true silence, not hiss");
     free(ref);
     A->destroy_instance(p);

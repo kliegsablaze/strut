@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin sounds, 0.0.5 (2026-10-07). Every proposed knob, on every
+**Status:** Skin sounds, 0.0.6 (2026-10-07). Every proposed knob, on every
 page and both views of each engine page, is declared, kept per pad and planned
 by the host's own planner in the tests. **Skin**, the resonator, is built and
 plays on every pad, mixed by SKIN, TUNE, DECAY and LEVEL (see *How Skin
@@ -61,6 +61,12 @@ What the three engines are, and the papers they lean on:
   - T. D. Rossing. *Science of Percussion Instruments.* World Scientific, 2000.
   - J. Bilbao. *Numerical Sound Synthesis.* Wiley, 2009. Chapter 11
     (membranes and plates).
+- **The output**, 16 bits with the rounding noise shaped to the ear:
+  - E. Terhardt. *Calculating Virtual Pitch.* Hearing Research 1, 1979. Its
+    formula for the threshold of hearing is the shaper's target.
+  - M. A. Gerzon, P. G. Craven. *Optimal Noise Shaping and Dither of Digital
+    Signals.* AES 87th Convention, 1989. A shaper can move noise around
+    but not remove it: its mean log gain is at least zero.
 
 Effects are our own, built for drums: a tilt filter, drive, a bit crusher, a
 two-band EQ, a transient shaper, and a kit-wide room and glue. The room can start
@@ -470,11 +476,27 @@ own engine, reach most of the same sounds.)
   - **The host rounds again after us.** Each slot is scaled by its volume
     and the Move's master volume, each time rounded back to 16 bits with no
     dither (`schwung_shim.c`). Below full volume our dither shrinks under a
-    step and is rounded away, so the last few steps of a quiet tail can grit
-    there whatever Strut does. Not yet heard on the device separately from
-    the old build's grit (see *Reinstalling*). If it is heard, the choices
-    are louder dither in Strut (a faint hiss at full volume) or asking the
-    host to dither its volume stage.
+    step and is rounded away, so the last few steps of a quiet tail grit
+    there whatever Strut does. Simulated: below full volume, Strut's dither
+    makes no difference to it. Heard (2026-10-07): with the Move's volume all
+    the way up, the grit was mostly gone, and the dither's hiss was heard
+    instead.
+    - Strut cannot reach this: the host takes only 16 bits from a module
+      (`render_block`'s `int16_t`), mixes in 16 bits, and does not tell a
+      module the master volume. The real fix is dither, or floating point, in
+      the host's volume stage, which is a change to Schwung and waits on the
+      user. (Rejected: louder dither in Strut to survive the volume stage. It
+      fixed moderate volumes in the simulation, not low ones, and adds hiss at
+      full volume.)
+  - **The dither is noise shaped** (0.0.6). Its rounding errors are fed back
+    through nine taps (`SHAPE`, from `tools/noise_shape.py`) that follow the
+    threshold of hearing, so the hiss heard at full volume moves out of 1 to
+    6 kHz, where the ear is keenest. Measured on a tom's tail: 9 to 12 dB
+    less noise below 6 kHz, 11 dB more above 12 kHz; about 11 dB quieter to
+    the ear by the threshold's weighting. Its memory is cleared once the kit
+    is resting, so silence is still exact zeros. It works only where the host
+    passes our samples unchanged (full volume, centre pan); below that the
+    host's own rounding decides.
 - **Reinstalling needs a restart.** The host opens a new synth before
   closing the old one, and `dlopen()` matches by path, so a slot reloaded
   with Strut gets the copy already in memory. The user tested 0.0.4 and heard
@@ -517,8 +539,8 @@ own engine, reach most of the same sounds.)
    Still to try on the device: automation and a step lock on pad 5 land on
    pad 5, and MOD swaps its page at once.
 3. ~~**Skin** engine~~ (0.0.3; 0.0.4 fixed the output's grit and made the
-   levels faders; 0.0.5 titles each page and logs its version). Still to hear
-   0.0.4's fixes on the device, after a restart. Still to do: measure its CPU on the Move
+   levels faders; 0.0.5 titles each page and logs its version; 0.0.6 shapes the dither's
+   noise). SKIN on the device is still to confirm. Still to do: measure its CPU on the Move
    (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
    ringing) and hear it there.
 4. **Wave** engine, its tables, and FM from Skin.

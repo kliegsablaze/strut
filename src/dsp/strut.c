@@ -91,10 +91,34 @@ static inline float dither(uint32_t *d) {
 }
 
 /* Soft above half scale, so a stack of pads rounds off rather than clips. */
-static inline int16_t limit(float x, float dg, uint32_t *d) {
+static inline float limit(float x) {
     float a = fabsf(x);
     if (a > 0.5f) a = 0.5f + 0.5f * tanhf((a - 0.5f) * 2.0f);
-    return (int16_t)lrintf(copysignf(a, x) * 32000.0f + dg * dither(d));
+    return copysignf(a, x);
+}
+
+/* The rounding's noise, shaped to the ear. The error each rounding makes is
+ * fed back through these taps, so the noise left is filtered by 1 + sum h z^-k:
+ * pushed out of 1 to 6 kHz, where hearing is keenest, up towards 20 kHz.
+ * Designed by tools/noise_shape.py: the threshold of hearing (Terhardt 1979)
+ * as the target, zero mean log gain (Gerzon and Craven 1989), made minimum
+ * phase and cut to nine taps. Heard about 11 dB quieter than plain dither,
+ * though it carries about 8 dB more power, all of it high. */
+static const float SHAPE[STRUT_SHAPE] = {
+    -1.69743f, 1.28417f, -0.07158f, -0.47574f, 0.2754f, 0.26476f, -0.182f, -0.0499f,
+};
+
+/* One sample to 16 bits: dg steps of triangular dither, and the shaped
+ * feedback of e, the last errors, newest first. */
+static inline int16_t to16(float x, float dg, uint32_t *d, float *e) {
+    float fb = 0.0f;
+    for (int k = 0; k < STRUT_SHAPE; k++) fb += SHAPE[k] * e[k];
+    const float v = x * 32000.0f + dg * fb;
+    float q = rintf(v + dg * dither(d));
+    q = fminf(fmaxf(q, -32768.0f), 32767.0f);
+    memmove(e + 1, e, sizeof(float) * (STRUT_SHAPE - 1));
+    e[0] = q - v;       /* so the noise is the error filtered by 1 + sum h z^-k */
+    return (int16_t)q;
 }
 
 /* VOL, then 16 bits, rounded with a step of triangular dither. Without it a
@@ -111,11 +135,13 @@ void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int 
     s->vol_g = g1;
     const float d0 = s->dither_g, d1 = s->sounding && g1 > 0.0f ? 1.0f : 0.0f;
     s->dither_g = d1;
+    /* resting: forget the shaper's errors, so silence is exactly zero */
+    if (d0 == 0.0f && d1 == 0.0f) memset(s->shape, 0, sizeof(s->shape));
     for (int i = 0; i < frames; i++) {
         const float x = (float)(i + 1) / (float)frames;
         const float g = g0 + (g1 - g0) * x, dg = d0 + (d1 - d0) * x;
-        out[2 * i] = limit(l[i] * g, dg, &s->dither);
-        out[2 * i + 1] = limit(r[i] * g, dg, &s->dither);
+        out[2 * i] = to16(limit(l[i] * g), dg, &s->dither, s->shape[0]);
+        out[2 * i + 1] = to16(limit(r[i] * g), dg, &s->dither, s->shape[1]);
     }
 }
 

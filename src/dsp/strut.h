@@ -13,12 +13,13 @@
 
 #include "skin.h"
 
-#define STRUT_VERSION "0.0.5"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.0.6"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
 #define STRUT_MAX_BLOCK 256
 #define STRUT_VOICES 2          /* a pad's: a roll's tail rings under the next hit */
+#define STRUT_SHAPE 8           /* the noise shaper's memory (strut.c) */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
 
 typedef enum { PK_FLOAT, PK_INT, PK_ENUM } param_kind_t;
@@ -94,6 +95,7 @@ typedef struct {
     uint32_t seed;              /* the noise behind every hit */
     uint32_t dither;            /* the output's dither, and how deep it is */
     float dither_g, vol_g;
+    float shape[2][STRUT_SHAPE];  /* each channel's last rounding errors */
     int sounding;               /* voices that rendered this block */
 } strut_t;
 
