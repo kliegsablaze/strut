@@ -51,7 +51,7 @@ void strut_note_on(strut_t *s, int note, int vel) {
     const float amp = powf((float)vel / 127.0f, 1.5f);
     if (!v->active) {
         *v = (voice_t){ 0 };
-        v->gs = v->gw = -1.0f;
+        v->gs = v->gw = v->gn = -1.0f;
     } else if (v->wave.env > 1e-4f && strut_fader(p->p[P_WAVE]) > 0.0f) {
         /* the Wave note this hit cuts fades out, not clicks off */
         v->old = v->wave;
@@ -61,6 +61,7 @@ void strut_note_on(strut_t *s, int note, int vel) {
     s->seed = s->seed * 1664525u + 1013904223u;
     skin_strike(&v->skin, p->p, s->seed, amp);
     wave_start(&v->wave, p->p, amp);
+    noise_start(&v->noise, s->seed, amp);
     /* Wave as Skin's hit: at least one of Wave's cycles, sized from Wave's
      * harmonics near PITCH. The floor keeps the hit itself, heard directly,
      * under full scale. */
@@ -69,6 +70,9 @@ void strut_note_on(strut_t *s, int note, int vel) {
         if (len != v->skin.len) v->skin.len = len, v->skin.decay = expf(-5.0f / (float)len);
         skin_resize(&v->skin, 1.0f / fmaxf(wave_strike(p->p, skin_hz(p->p), v->skin.decay, len), 0.5f));
     }
+    /* Noise as Skin's hit: sized from Noise's colour at PITCH */
+    if (v->skin.kind == HIT_NOISE)
+        skin_resize(&v->skin, 1.0f / noise_strike(&v->noise, p->p, skin_hz(p->p), v->skin.decay, v->skin.len));
     s->note_pad = i;
     s->note_at = s->now;
     pair(s);
@@ -80,51 +84,89 @@ float strut_fader(float x) {
     return x <= 0.0f ? 0.0f : powf(10.0f, 1.5f * (fminf(x, 1.0f) - 1.0f));
 }
 
-/* A block's sample loop for one pairing of the engines. Inlined with
- * constant np (Skin's partials) and which engines run, so each pairing is its
- * own loop that decides nothing per sample; and run on copies of the voice's
- * state, which the compiler can keep in registers. (Through the voice
- * itself, every sample reread and rewrote it: out might have aliased it.) */
-typedef struct { float gs, ds, gw, dw; } gains_t;
+/* A block's sample loop for one set of the engines. Inlined with constant
+ * np (Skin's partials) and which engines run, so each set is its own loop
+ * that decides nothing per sample; and run on copies of the voice's state,
+ * which the compiler can keep in registers. (Through the voice itself, every
+ * sample reread and rewrote it: out might have aliased it.) */
+typedef struct { float gs, ds, gw, dw, gn, dn; } gains_t;
+
+typedef struct {
+    skin_block_t s;
+    wave_block_t w;
+    noise_block_t n;
+} blocks_t;
 
 static inline __attribute__((always_inline)) void voice_loop(
-    skin_voice_t *restrict sk, wave_voice_t *restrict wv, const skin_block_t *restrict sb,
-    const wave_block_t *restrict wb, gains_t g, float *restrict out, int frames,
-    const int np, const int skin, const int wave) {
-    skin_voice_t k = *sk;
-    wave_voice_t w = *wv;
-    float raw = 0.0f;
+    voice_t *restrict v, const blocks_t *restrict b, gains_t g, float *restrict out, int frames,
+    const int np, const int skin, const int wave, const int noise) {
+    skin_voice_t k = v->skin;
+    wave_voice_t w = v->wave;
+    noise_voice_t z = v->noise;
+    const int by_noise = k.kind == HIT_NOISE;
+    float rw = 0.0f, rn = 0.0f;
     for (int n = 0; n < frames; n++) {
         const float t = (float)(n + 1);
         float y = 0.0f;
-        if (wave) y += (g.gw + g.dw * t) * wave_step(&w, wb, n, skin ? skin_body(&k) : 0.0f, &raw);
-        if (skin) y += (g.gs + g.ds * t) * skin_step(&k, sb, raw, np);
+        if (noise) y += (g.gn + g.dn * t) * noise_step(&z, &b->n, n, &rn);
+        if (wave) y += (g.gw + g.dw * t) * wave_step(&w, &b->w, n, skin ? skin_body(&k) : 0.0f, &rw);
+        if (skin) y += (g.gs + g.ds * t) * skin_step(&k, &b->s, by_noise ? rn : rw, np);
         out[n] += y;
     }
-    *sk = k;
-    *wv = w;
+    v->skin = k;
+    v->wave = w;
+    v->noise = z;
+}
+
+/* Each set of engines that can run, as its own loop. */
+static void voice_loops(voice_t *restrict v, const blocks_t *restrict b, gains_t g, float *restrict out,
+                        int frames, int skin, int wave, int noise) {
+    const int set = (skin ? (b->s.np == 1 ? 1 : 2) : 0) * 4 + wave * 2 + noise;
+    switch (set) {
+    case 1: voice_loop(v, b, g, out, frames, 0, 0, 0, 1); break;
+    case 2: voice_loop(v, b, g, out, frames, 0, 0, 1, 0); break;
+    case 3: voice_loop(v, b, g, out, frames, 0, 0, 1, 1); break;
+    case 4: voice_loop(v, b, g, out, frames, 1, 1, 0, 0); break;
+    case 5: voice_loop(v, b, g, out, frames, 1, 1, 0, 1); break;
+    case 6: voice_loop(v, b, g, out, frames, 1, 1, 1, 0); break;
+    case 7: voice_loop(v, b, g, out, frames, 1, 1, 1, 1); break;
+    case 8: voice_loop(v, b, g, out, frames, SKIN_PARTIALS, 1, 0, 0); break;
+    case 9: voice_loop(v, b, g, out, frames, SKIN_PARTIALS, 1, 0, 1); break;
+    case 10: voice_loop(v, b, g, out, frames, SKIN_PARTIALS, 1, 1, 0); break;
+    case 11: voice_loop(v, b, g, out, frames, SKIN_PARTIALS, 1, 1, 1); break;
+    default: break;
+    }
+}
+
+/* A level, gliding from the last block's. */
+static void glide(float *last, float now, int frames, float *g, float *d) {
+    *g = *last < 0.0f ? now : *last;
+    *d = (now - *g) / (float)frames;
+    *last = now;
 }
 
 /* One voice's block, added into out; 0 once it has nothing left to say.
- * Skin runs while it rings, Wave while it is heard or strikes Skin. Wave
- * follows Skin's ring a sample late, which is what lets each feed the other
- * (Skin struck by Wave, Wave bent by Skin) without a loop. */
+ * Skin runs while it rings; Wave and Noise while they are heard or strike
+ * Skin. Wave follows Skin's ring a sample late, which is what lets each
+ * feed the other (Skin struck by Wave, Wave bent by Skin) without a loop. */
 static int voice_render(voice_t *restrict v, const float *restrict p, float level, float *restrict out, int frames) {
-    const float gs1 = 2.4f * level * strut_fader(p[P_SKIN]);
-    const float gw1 = 2.4f * level * strut_fader(p[P_WAVE]);
-    const float gs0 = v->gs < 0.0f ? gs1 : v->gs, gw0 = v->gw < 0.0f ? gw1 : v->gw;
-    v->gs = gs1, v->gw = gw1;
-    const gains_t g = { gs0, (gs1 - gs0) / (float)frames, gw0, (gw1 - gw0) / (float)frames };
+    gains_t g;
+    glide(&v->gs, 2.4f * level * strut_fader(p[P_SKIN]), frames, &g.gs, &g.ds);
+    glide(&v->gw, 2.4f * level * strut_fader(p[P_WAVE]), frames, &g.gw, &g.dw);
+    glide(&v->gn, 2.4f * level * strut_fader(p[P_NOISE]), frames, &g.gn, &g.dn);
+    const float gw1 = v->gw, gn1 = v->gn;
 
     const int skin_on = skin_alive(&v->skin);
-    const int strikes = v->skin.kind == HIT_WAVE && v->skin.n < v->skin.len;
-    const int wave_on = gw0 > 0.0f || gw1 > 0.0f || strikes;
-    skin_block_t sb;
-    wave_block_t wb;
-    int heard = 0;
-    if (skin_on) skin_block(&v->skin, p, &sb);
-    if (wave_on) heard = wave_block(&v->wave, p, frames, &wb) && gw1 > 0.0f;
+    const int strikes = v->skin.n < v->skin.len;
+    const int wave_on = g.gw > 0.0f || gw1 > 0.0f || (strikes && v->skin.kind == HIT_WAVE);
+    const int noise_on = g.gn > 0.0f || gn1 > 0.0f || (strikes && v->skin.kind == HIT_NOISE);
+    blocks_t b;
+    int heard_w = 0, heard_n = 0;
+    if (skin_on) skin_block(&v->skin, p, &b.s);
+    if (wave_on) heard_w = wave_block(&v->wave, p, frames, &b.w) && gw1 > 0.0f;
     else wave_skip(&v->wave, p, frames);
+    if (noise_on) heard_n = noise_block(&v->noise, p, frames, &b.n) && gn1 > 0.0f;
+    else noise_skip(&v->noise, p, frames);
     /* the note a hit cut, fading out underneath: a few milliseconds */
     if (v->old_n > 0) {
         wave_block_t ob;
@@ -132,24 +174,13 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
         const int n1 = v->old_n < frames ? v->old_n : frames;
         float raw;
         for (int n = 0; n < n1; n++)
-            out[n] += (gw0 + g.dw * (float)(n + 1)) * (float)(v->old_n - n) * (1.0f / STRUT_DECLICK)
+            out[n] += (g.gw + g.dw * (float)(n + 1)) * (float)(v->old_n - n) * (1.0f / STRUT_DECLICK)
                     * wave_step(&v->old, &ob, n, 0.0f, &raw);
         v->old_n -= n1;
     }
-    if (!skin_on && !heard) return v->old_n > 0;
-
-    skin_voice_t *sk = &v->skin;
-    wave_voice_t *wv = &v->wave;
-    if (skin_on && wave_on) {
-        if (sb.np == 1) voice_loop(sk, wv, &sb, &wb, g, out, frames, 1, 1, 1);
-        else voice_loop(sk, wv, &sb, &wb, g, out, frames, SKIN_PARTIALS, 1, 1);
-    } else if (skin_on) {
-        if (sb.np == 1) voice_loop(sk, wv, &sb, &wb, g, out, frames, 1, 1, 0);
-        else voice_loop(sk, wv, &sb, &wb, g, out, frames, SKIN_PARTIALS, 1, 0);
-    } else {
-        voice_loop(sk, wv, &sb, &wb, g, out, frames, 0, 0, 1);
-    }
-    return skin_alive(&v->skin) || heard || v->old_n > 0;
+    /* with Skin silent, only what is heard runs */
+    voice_loops(v, &b, g, out, frames, skin_on, wave_on && (skin_on || heard_w), noise_on && (skin_on || heard_n));
+    return skin_alive(&v->skin) || heard_w || heard_n || v->old_n > 0;
 }
 
 void strut_render(strut_t *s, float *l, float *r, int frames) {

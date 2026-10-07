@@ -24,7 +24,8 @@ typedef struct {
 /* Samples in level l: four a harmonic, never under 256. */
 #define WT_N(l) ((4 * (WT_H >> (l))) < 256 ? 256 : 4 * (WT_H >> (l)))
 
-/* Builds the tables, once per process; safe to call from every instance. */
+/* Builds the tables, Wave's and Noise's (noise.h), once per process; safe
+ * to call from every instance. */
 void wt_build(void);
 
 /* Frame f of table t. Analog has its three frames (WT_A_*); the others

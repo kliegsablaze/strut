@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 #include "strut.h"
+#include "noise.h"
 #include "tables.h"
 
 #define N(a) (int)(sizeof(a) / sizeof((a)[0]))
@@ -34,8 +35,9 @@ static const char *const NOISE_AIMS[] = { "Pitch", "Color", "Start", "Loop", "Le
 /* Wave's tables, in tables.h's order (DESIGN.md, How Wave works). */
 static const char *const WAVE_TABLES[] = { "Analog", "Sync", "Fold", "Sweep", "Vowel", "Hollow", "Metal", "Glass" };
 _Static_assert(N(WAVE_TABLES) == WT_TABLES, "one TABLE option for each table");
-/* A stand-in until build step 5 computes the real noise tables. */
-static const char *const NOISE_TABLES[] = { "White", "Pink", "Brown", "Hiss", "Metal", "Crackle", "Air", "Grit" };
+/* Noise's tables, in noise.h's order (DESIGN.md, How Noise works). */
+static const char *const NOISE_TABLES[] = { "White", "Pink", "Brown", "Hiss", "Wires", "Metal", "Crackle", "Grit" };
+_Static_assert(N(NOISE_TABLES) == NT_TABLES, "one TABLE option for each noise table");
 /* How Noise plays one of your samples (DESIGN.md, Noise is also a sampler). */
 static const char *const SAMPLE_MODES[] = { "Sample", "Resynth", "Noise" };
 static const char *const CHOKES[] = { "Off", "A", "B", "C", "D" };

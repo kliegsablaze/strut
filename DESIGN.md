@@ -2,15 +2,16 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin and Wave sound, 0.1.0 (2026-10-07). Every proposed knob, on
-every page and both views of each engine page, is declared, kept per pad and
-planned by the host's own planner in the tests. **Skin**, the resonator, and
-**Wave**, the oscillator, are built and play on every pad, mixed by SKIN,
-WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
-strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
-and the effects are still the plan; their knobs are kept but do nothing yet.
-On the Move, Skin and Wave at their dearest take 6.8 % of the CPU (0.1.0, one
-voice a pad; two took 14.1 %).
+**Status:** all three engines sound, 0.2.0 (2026-10-07). Every proposed knob,
+on every page and both views of each engine page, is declared, kept per pad
+and planned by the host's own planner in the tests. **Skin**, the resonator,
+**Wave**, the oscillator, and **Noise**, the noise source, are built and play
+on every pad, mixed by SKIN, WAVE, NOISE, TUNE, DECAY and LEVEL; Skin's ring
+can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
+*How Wave works*, *How Noise works*). Noise's samples, the modulators and the
+effects are still the plan; their knobs are kept but do nothing yet. On the
+Move, Skin and Wave at their dearest take 6.8 % of the CPU (0.1.0, one voice
+a pad; two took 14.1 %); all three are still to be measured there.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -61,7 +62,14 @@ What the three engines are, and the papers they lean on:
     the built-in noise tables are made, and how a sample is resynthesised.
   - T. I. Laakso, V. Välimäki, M. Karjalainen, U. K. Laine. *Splitting the
     Unit Delay.* IEEE Signal Processing Magazine 13(1), 1996. Reading a sample
-    between its stored points, so it can be played at any pitch.
+    between its stored points, so it can be played at any pitch (Noise reads
+    its loops through six points, Lagrange's curve).
+  - N. Guttman, B. Julesz. *Lower Limits of Auditory Periodicity Analysis.*
+    JASA 35(4), 1963. A repeated stretch of noise is heard as repeating
+    even when it is a second or more long: why Noise's loops are three
+    seconds.
+  - IEC 61672, the A weighting: the ear's sensitivity across frequency, by
+    which the noise tables are set to the same loudness.
   - The 808 and 909 hi-hats: six square oscillators at inharmonic
     frequencies through band-pass filters (Werner, above).
 - **Drum physics**, for the presets and the randomiser's sense of what a
@@ -242,9 +250,9 @@ Labels are real words of five letters or fewer. The header shows the full name.
 "Bi" means bipolar, with the centre meaning no change.
 
 Every key below is declared and kept (`src/dsp/params.c`). The ranges and
-option lists are **provisional** until each engine's build step sets them by
-ear: Noise's PITCH is ±48 semitones, the SOUND list and Noise's TABLE list are stand-in
-names, and DICE is a plain number until its turn-to-roll gesture (step 10).
+option lists are **provisional** until the voicing pass sets them by ear:
+the SOUND list is stand-in names, and DICE is a plain number until its
+turn-to-roll gesture (step 10).
 The keys are the bare names in this table with an engine prefix where pages
 share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 
@@ -285,8 +293,7 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
   - **Soft:** a smooth bump, a felt mallet; longer is softer.
   - **Burst:** a short burst of noise, falling away; the snare's hit.
   - **Wave** strikes with Wave's own sound (see *How Wave works*).
-  - **Noise** strikes with Noise once it exists (step 5). Until then it
-    strikes with a burst, so no setting is silent.
+  - **Noise** strikes with Noise's sound (see *How Noise works*).
 - **The ring.** The strike drives a phasor resonator (Mathews and Smith): one
   complex multiply a sample, ringing at PITCH and dying away by RING. The
   strike is scaled so the body always rings at the same level, whatever the
@@ -428,9 +435,9 @@ Rejected for Wave:
 
 | Knob | Sound view | | Mod view | |
 |---|---|---|---|---|
-| 1 | PITCH | | KIND | |
+| 1 | PITCH | speed: ±48 semitones, with TUNE | KIND | |
 | 2 | MODE | samples only: Sample, Resynth or Noise (below) | RATE | |
-| 3 | DECAY | | CURVE | |
+| 3 | DECAY | how long it falls | CURVE | |
 | 4 | TABLE | noise tables, then your samples | AIM | |
 | 5 | COLOR | bi: low-pass left, high-pass right | DEPTH | |
 | 6 | START | sample start (samples only) | AIM | |
@@ -471,6 +478,80 @@ On a noise table, MODE does nothing: the tables are already noise.
 
 Noise has no BEND, unlike Wave: MODE took its cell. A pitch sweep at the start
 (a tape-stop or a dive) is Noise's modulator, KIND Envelope aimed at Pitch.
+
+#### How Noise works (built, 0.2.0)
+
+- **TABLE** picks a loop of noise. Each is a colour drawn as a level at
+  every frequency and given random phases, which is noise of exactly that
+  colour (keep the spectrum, lose the phase, as Serra and Smith). Three
+  are drawn in time instead, because their character is in their shape:
+  - **White:** every frequency alike.
+  - **Pink:** falling 3 dB an octave, as much in each octave; warmer.
+  - **Brown:** falling 6 dB an octave from 60 Hz: rumble.
+  - **Hiss:** white with its top lifted 12 dB from about 5 kHz: bright air.
+  - **Wires:** a band from 1.5 to 10 kHz scattered with sixty narrow peaks:
+    a snare's rattle.
+  - **Metal:** six square waves at unrelated pitches, as an analogue drum
+    machine makes its hats, with the shimmer above 5 kHz brought forward.
+    The pitches are our own.
+  - **Crackle:** small clicks, 3000 a second, as dust on a record.
+  - **Grit:** random steps held 1 to 20 samples, on eight levels: a coarse,
+    digital noise.
+  Every table is set to the same loudness by the ear's weighting (A), then
+  held under full scale. Metal and Crackle, whose peaks are tall for their
+  level, come out about 5 dB quieter; the voicing pass will decide.
+- **The loops are three seconds**, so a long tail does not audibly repeat
+  (Guttman and Julesz), and each hit starts somewhere new in it, so no two
+  hits are the same noise. A hit on a pad whose noise is still sounding adds
+  to it as two noises do, by power, and reads on from where it is (so a
+  roll never drops, and a soft hit on loud noise never quietens it).
+- **PITCH** plays the loop faster or slower, a semitone a step, six octaves
+  either way at most with TUNE: noise played up is brighter and thinner,
+  down is darker. A sampler's pitch, not a filter.
+  - **No folding back.** Each loop is kept at seven brightnesses an octave
+    apart, as Wave's cycles are, and a note reads the brightest whose fold
+    lands above 16 kHz, where it is only more hiss. So what is heard reaches
+    14 to 20 kHz whatever the pitch, and a change of copy fades over a block.
+  - **Read through six points** (Laakso et al.), from loops stored at twice
+    the output's rate with nothing above 20 kHz, so slowed noise carries no
+    hiss of the reading: its images are 40 dB down (tested: White an octave
+    and two down crosses zero half and a quarter as often, to 5 %; at +7
+    nothing shows above 18.5 kHz to −40 dB).
+- **DECAY** is the time to fall 60 dB, 15 ms to 4 s, scaled by Pad DECAY.
+  The noise starts at full strength: its first samples are its attack.
+- **COLOR** is a two-pole filter: low-pass from 18 kHz down to 100 Hz to the
+  left, high-pass from 30 Hz up to 11 kHz to the right, nothing at the
+  centre, with a slight peak at the corner.
+- **PITCH and COLOR keep the level.** What COLOR's filter takes from this
+  table, and what a pitched-up copy leaves out, is worked out from the
+  table's power in quarter-octave bands and made up, up to 60 dB. Turning
+  either changes the colour, not the balance of the pad, and no setting
+  falls silent (tested: every table at both ends of COLOR within 4 dB).
+- **Noise as Skin's hit.** Skin's strike is Noise's sound through COLOR,
+  before Noise's own fall or level, for SNAP's length. It is sized from
+  Noise's colour around Skin's PITCH, gathered through the strike's own
+  spectrum: a short strike hears a wide stretch of the colour, a long one
+  only what is near the pitch, so Metal's lines drive a nearby pitch
+  through a short hit and not a long one, as they would. Tested, the power
+  of 48 hits on each table against Skin's own burst: within 2 dB.
+- **MODE, START and LOOP** do nothing on a noise table; they are for
+  samples (build step 9).
+
+Rejected for Noise:
+
+- **A cubic through four points, at the output's own rate.** Its images of
+  a loop filled to near the top of the band were only 4 dB down: noise
+  played an octave lower carried a second, hissy octave above it.
+- **Copies exactly an octave apart**, nothing allowed to fold. Played a
+  semitone up, a table lost everything from 10 to 20 kHz: Hiss without
+  its hiss.
+- **Loops as floats.** 16 MB where 16-bit numbers take 8, for no difference
+  that can be heard (their floor is 78 dB under the most COLOR makes up).
+- **A loop of a second and a half.** Half the memory and load, but a long
+  tail, or a pitched-up one, repeats audibly.
+- **Noise made live by a random number and filters.** It cannot give
+  Metal's lines, Wires' peaks or a sample's colour, and costs a filter per
+  colour per voice; a table gives any colour for one read.
 
 Rejected: time-stretching in Sample mode. It costs CPU on every pad and smears
 the attack a drum needs; Resynth is the way to change length and pitch apart.
@@ -614,7 +695,10 @@ own engine, reach most of the same sounds.)
 - **Tables are built at load, not shipped.** Wave's tables are computed once
   per process (the first `create_instance`, shared by every slot) by inverse
   FFT: 115 cycles at ten brightnesses, 2.4 MB, 56 ms on a laptop. No data
-  files. Noise's tables will be built the same way (step 5).
+  files. Noise's eight three-second loops are built the same way, two to
+  each transform (one in its real part, one in its imaginary): 8 MB, as
+  16-bit numbers, and about 120 ms more on a laptop; with Wave's, 160 ms
+  (0.2.0). On the Move, still to measure; Wave's alone took 300 to 350 ms.
 - **The output** is Quilt's, with one change. VOL (the Kit page's, wired
   early) glides across the block; a soft limiter above half scale rounds off a
   stack of pads instead of clipping; then 16 bits, rounded with one step of
@@ -698,7 +782,9 @@ own engine, reach most of the same sounds.)
 4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
    Move: 6.8 % with Skin, every pad at its dearest (0.1.0, one voice a
    pad; two voices took 14.1 %). Still to do: hear it on the device.
-5. **Noise** engine and noise tables. Samples come at step 9.
+5. ~~**Noise** engine and noise tables~~ (0.2.0). Samples come at step 9.
+   Still to do: hear it on the device, and measure its CPU and load time
+   there.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
@@ -729,10 +815,17 @@ own engine, reach most of the same sounds.)
     away (within 11.9 dB of each other); a 7 kHz saw has nothing at its
     folded-back frequencies to −70 dB; Skin struck by every table rings
     within 5.5 dB; FM moves Wave's energy off its pitch.
+  - Noise: every table at the ends and middle of PITCH, COLOR and DECAY
+    sounds, stays finite, peaks under 0.9 and dies away; PITCH an octave and
+    two down halves and quarters White's zero crossings, and +12 raises
+    Wires'; at +7 nothing folds back above 18.5 kHz to −40 dB; DECAY within
+    10 %; COLOR darkens and thins White and keeps every table within 4 dB;
+    two hits are not the same noise; Skin struck by every table rings, over
+    48 hits, within 3 dB of its own burst.
   - One voice a pad: a hit in step with the ring builds it, one against it
-    stops it, a soft hit keeps a loud ring, a restarted Wave note has no
-    step.
-  - The faders (SKIN, WAVE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
+    stops it, a soft hit keeps a loud ring (and loud noise), a restarted
+    Wave note has no step.
+  - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.
 - `tools/demo.c` renders a few hand-set sounds and a groove to a WAV, for

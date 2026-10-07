@@ -93,7 +93,7 @@ void skin_strike(skin_voice_t *v, const float *p, uint32_t seed, float amp) {
     } else {
         /* noise: its expected size, from its energy (a uniform sample's
          * variance is a third). Each burst then rings a little differently.
-         * A Wave hit is sized again by the caller (strut.c). */
+         * A Wave or Noise hit is sized again by the caller (strut.c). */
         const float d2 = v->decay * v->decay;
         mag = sqrtf((1.0f - powf(d2, (float)v->len)) / (1.0f - d2) / 3.0f);
         sum = 0.5f * (1.0f - powf(v->decay, (float)v->len)) / (1.0f - v->decay);
@@ -101,7 +101,7 @@ void skin_strike(skin_voice_t *v, const float *p, uint32_t seed, float amp) {
     skin_resize(v, 1.0f / fmaxf(fmaxf(mag, 0.01f * sum), 1e-6f));
 }
 
-static svf_t svf(float hz, float k) {
+svf_t svf(float hz, float k) {
     const float g = tanf(3.14159265f * fminf(fmaxf(hz, 10.0f), NYQ_SAFE) / STRUT_SR);
     svf_t f = { 0, 0, 0, k };
     f.a1 = 1.0f / (1.0f + g * (g + k));

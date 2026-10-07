@@ -28,6 +28,8 @@ typedef struct {
 
 /* A trapezoidal state-variable filter's coefficients. */
 typedef struct { float a1, a2, a3, k; } svf_t;
+/* At hz, damped by k (1.414 flat, less peaks), Zavalishin's form. */
+svf_t svf(float hz, float k);
 
 /* One block's settings. */
 typedef struct {
@@ -59,8 +61,8 @@ static inline uint32_t skin_rng(uint32_t *s) {
     return *s;
 }
 
-/* The hit's next sample. ext is Wave's sound, for a Wave hit. Noise
- * strikes with a burst until it exists (build step 5). */
+/* The hit's next sample. ext is the other engine's sound, for a Wave or
+ * Noise hit. */
 static inline float skin_hit(skin_voice_t *v, float ext) {
     if (v->n >= v->len) return 0.0f;
     float x;
@@ -73,6 +75,7 @@ static inline float skin_hit(skin_voice_t *v, float ext) {
         x = 0.5f - 0.5f * cosf(6.2831853f * (float)v->n / (float)v->len);
         break;
     case HIT_WAVE:
+    case HIT_NOISE:
         x = ext * v->env;
         v->env *= v->decay;
         break;

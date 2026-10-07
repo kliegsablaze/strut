@@ -1,6 +1,7 @@
 /*
- * demo: renders a few hand-set Skin and Wave sounds, one after another, then a short
- * groove made of them, to a WAV file, for listening away from the Move.
+ * demo: renders a few hand-set sounds from the three engines, one after
+ * another, then a short groove made of them, to a WAV file, for listening
+ * away from the Move.
  *   tools/demo <out.wav>
  * The sounds are starting points for the voicing pass, not presets.
  */
@@ -14,24 +15,30 @@ plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host);
 
 static const struct { const char *name, *knobs; } SOUNDS[] = {
     { "deep kick (Skin)", "s_pitch=-7 s_ring=0.75 s_mode=Low s_hit=Click s_snap=0.2 s_tone=0.5" },
-    { "snare body (Skin)", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.55 s_metal=0.25 s_tone=0.8" },
     { "rim (Skin)", "s_pitch=40 s_ring=0.15 s_mode=Band s_hit=Click s_snap=0 s_tone=1" },
-    { "cowbell (Skin)", "s_pitch=38 s_ring=0.45 s_mode=Band s_hit=Click s_snap=0.1 s_metal=0.75 s_tone=0.8" },
     { "sine kick (Wave)", "skin=0 wave=0.9 w_wave=0 w_pitch=-5 w_bend=0.45 w_decay=0.55" },
     { "zap (Wave)", "skin=0 wave=0.75 w_wave=0.5 w_pitch=36 w_bend=0.9 w_decay=0.45" },
-    { "sync blip (Wave)", "skin=0 wave=0.75 w_table=Sync w_wave=0.7 w_pitch=24 w_bend=0.3 w_decay=0.25" },
     { "vowel tom (Wave)", "skin=0 wave=0.85 w_table=Vowel w_wave=0.4 w_pitch=12 w_bend=0.35 w_decay=0.5" },
-    { "glass bell (Wave, ring)", "skin=0 wave=0.75 w_table=Glass w_wave=0.6 w_pitch=36 w_ring=0.35 w_decay=0.8" },
-    { "fold kick (Skin + Wave)", "s_pitch=-5 s_ring=0.4 s_mode=Low skin=0.6 wave=0.8 w_table=Fold w_wave=0.5 w_pitch=-3 w_bend=0.5 w_decay=0.5" },
     { "FM tom (Skin bends Wave)", "s_pitch=7 s_ring=0.6 s_mode=Band skin=0.7 wave=0.8 w_pitch=19 w_fm=0.5 w_decay=0.5" },
     { "metal snare (Wave strikes Skin)", "s_hit=Wave s_pitch=26 s_ring=0.35 s_mode=High s_snap=0.5 s_metal=0.4 wave=0.3 w_table=Metal w_wave=0.7 w_pitch=40 w_decay=0.2" },
+    { "glass bell (Wave, ring)", "skin=0 wave=0.75 w_table=Glass w_wave=0.6 w_pitch=36 w_ring=0.35 w_decay=0.8" },
+    { "closed hat (Noise, Metal)", "skin=0 noise=0.8 n_table=Metal n_color=0.45 n_decay=0.22" },
+    { "open hat (Noise, Metal)", "skin=0 noise=0.75 n_table=Metal n_color=0.45 n_decay=0.6" },
+    { "snare (Skin + Noise, Wires)", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.4 skin=0.7 noise=0.8 n_table=Wires n_color=0.2 n_decay=0.4" },
+    { "shaker (Noise, Hiss)", "skin=0 noise=0.7 n_table=Hiss n_color=0.5 n_decay=0.15" },
+    { "tom (Noise strikes Skin)", "s_hit=Noise s_pitch=14 s_ring=0.5 s_mode=Band s_snap=0.5 n_table=Pink" },
+    { "dusty hit (Noise, Crackle)", "skin=0 noise=0.9 n_table=Crackle n_color=-0.2 n_decay=0.45" },
+    { "thunder (Noise, Brown, down)", "skin=0 noise=0.9 n_table=Brown n_pitch=-12 n_decay=0.85" },
+    { "grit blip (Noise, Grit, up)", "skin=0 noise=0.75 n_table=Grit n_pitch=12 n_color=-0.3 n_decay=0.3" },
 };
 #define NSOUNDS (int)(sizeof(SOUNDS) / sizeof(SOUNDS[0]))
+_Static_assert(NSOUNDS <= STRUT_PADS, "one sound a pad");
 
 /* 16 steps a bar; each step lists the sounds it hits (bit i = sound i). */
+#define B(i) (1u << (i))
 static const unsigned GROOVE[16] = {
-    1 << 9, 0, 1 << 2, 1 << 6, 1 << 11, 0, 1 << 3, 1 << 9,
-    1 << 4, 1 << 2, 1 << 6, 1 << 10, 1 << 11, 1 << 5, 1 << 7, 1 << 8,
+    B(0) | B(8), B(11), B(8), B(11), B(10) | B(8), B(11), B(8), B(1) | B(11),
+    B(0) | B(8), B(11), B(0) | B(8), B(11) | B(13), B(10) | B(8), B(12) | B(11), B(9), B(5),
 };
 
 static FILE *wav;

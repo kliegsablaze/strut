@@ -1,6 +1,6 @@
 /*
  * bench: what a block costs at the worst Strut can be asked for, every pad
- * sounding, the longest rings, Wave at its dearest. Runs natively and on the Move
+ * sounding, the longest rings, each engine at its dearest. Runs natively and on the Move
  * (scripts/bench.sh). The target is a quarter of the Move's 2902 us block
  * (CLAUDE.md). "onset us" is the worst block in which all sixteen pads are hit
  * at once, which also measures starting a hit.
@@ -101,7 +101,7 @@ int main(void) {
     machine();
     plugin_api_v2_t *a = move_plugin_init_v2(NULL);
     double t0 = now_us();
-    void *p = a->create_instance(".", "");     /* the first builds Wave's tables */
+    void *p = a->create_instance(".", "");     /* the first builds the tables */
     printf("load, building the tables: %.1f ms\n", (now_us() - t0) / 1000.0);
     printf("%-26s %8s %8s %7s %9s\n", "", "mean us", "worst us", "block", "onset us");
 
@@ -122,6 +122,15 @@ int main(void) {
     set_all(a, p, "w_bend", "0.5");
     set_all(a, p, "s_hit", "Wave");
     run(a, p, "skin + wave, 16 pads");
+
+    /* Noise at its dearest: COLOR's filter, pitched off its copies' rate,
+     * the longest fall, and striking Skin, which is sized at the hit */
+    set_all(a, p, "noise", "1");
+    set_all(a, p, "n_decay", "1");
+    set_all(a, p, "n_color", "0.3");
+    set_all(a, p, "n_pitch", "5");
+    set_all(a, p, "s_hit", "Noise");
+    run(a, p, "all three, 16 pads");
     a->destroy_instance(p);
     return 0;
 }

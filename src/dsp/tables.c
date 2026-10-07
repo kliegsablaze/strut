@@ -15,6 +15,8 @@
 #include <stdatomic.h>
 #include <string.h>
 
+#include "fft.h"
+#include "noise.h"
 #include "tables.h"
 
 #define PI 3.14159265358979
@@ -31,32 +33,7 @@ const wt_frame_t *wt_frame(int t, int f) {
     return t == WT_ANALOG ? &frames[f] : &frames[3 + (t - 1) * WT_FRAMES + f];
 }
 
-/* ---- an FFT, in place, radix 2: sign -1 forward, +1 inverse (unscaled) ---- */
-
 static double re[TD_N], im[TD_N];
-
-static void fft(int n, int sign) {
-    for (int i = 1, j = 0; i < n; i++) {
-        int bit = n >> 1;
-        for (; j & bit; bit >>= 1) j ^= bit;
-        j |= bit;
-        if (i < j) {
-            double t = re[i]; re[i] = re[j]; re[j] = t;
-            t = im[i]; im[i] = im[j]; im[j] = t;
-        }
-    }
-    for (int len = 2; len <= n; len <<= 1) {
-        const double a = sign * 2 * PI / len;
-        for (int i = 0; i < n; i += len)
-            for (int k = 0; k < len / 2; k++) {
-                const double c = cos(a * k), s = sin(a * k);
-                const int p = i + k, q = p + len / 2;
-                const double xr = re[q] * c - im[q] * s, xi = re[q] * s + im[q] * c;
-                re[q] = re[p] - xr; im[q] = im[p] - xi;
-                re[p] += xr; im[p] += xi;
-            }
-    }
-}
 
 /* ---- a frame from its harmonics: x = sum ca[h] cos(2 pi h t) + sb[h] sin(2 pi h t) ---- */
 
@@ -72,7 +49,7 @@ static void make(wt_frame_t *fr, float *mem, const double *ca, const double *sb)
             re[h] = ca[h] / 2, im[h] = -sb[h] / 2;
             re[n - h] = ca[h] / 2, im[n - h] = sb[h] / 2;
         }
-        fft(n, 1);
+        fft(re, im, n, 1);
         if (l == 0) {       /* no frame peaks over full scale */
             double peak = 0;
             for (int i = 0; i < n; i++) peak = fmax(peak, fabs(re[i]));
@@ -90,7 +67,7 @@ static void make(wt_frame_t *fr, float *mem, const double *ca, const double *sb)
 /* A waveform drawn in time, g over one cycle, measured into harmonics. */
 static void measure(double *ca, double *sb) {
     memset(im, 0, sizeof(im));
-    fft(TD_N, -1);
+    fft(re, im, TD_N, -1);
     for (int h = 1; h <= WT_H; h++) ca[h] = 2 * re[h] / TD_N, sb[h] = -2 * im[h] / TD_N;
 }
 
@@ -216,6 +193,7 @@ static void build(void) {
     }
 
     for (int i = 0; i <= WT_SINE_N; i++) wt_sine[i] = (float)sin(2 * PI * i / WT_SINE_N);
+    nt_build();
 }
 
 void wt_build(void) {

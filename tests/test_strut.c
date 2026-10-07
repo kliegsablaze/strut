@@ -248,7 +248,7 @@ static strut_t *wave_pad(void) {
 
 /* Peak and health of a hit: finite, under full scale, heard, and gone by
  * the end unless it is meant to last. */
-static double sweep_hit(strut_t *s, const char *what, float v, int must_end) {
+static double sweep_hit(strut_t *s, const char *what, float v, int must_end, double heard) {
     const int n = hit(s, 2.0f);
     double peak = 0;
     int finite = 1;
@@ -258,7 +258,7 @@ static double sweep_hit(strut_t *s, const char *what, float v, int must_end) {
     }
     CHECK(finite, "%s %g: finite", what, v);
     CHECK(peak < 0.9, "%s %g: does not clip (peak %.2f)", what, v, peak);
-    CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", what, v, peak);
+    CHECK(peak > heard, "%s %g: sounds (peak %.3f)", what, v, peak);
     if (must_end) CHECK(!s->pad[0].voice.active, "%s %g: dies away", what, v);
     return peak;
 }
@@ -313,7 +313,7 @@ static void wave(void) {
             strut_t *s = wave_pad();
             const float v = d->min + (d->max - d->min) * (float)i / 2;
             s->pad[0].p[knobs[k]] = v;
-            const double peak = sweep_hit(s, d->key, v, !(knobs[k] == P_W_DECAY && i == 2));
+            const double peak = sweep_hit(s, d->key, v, !(knobs[k] == P_W_DECAY && i == 2), 0.05);
             lo = fmin(lo, peak), hi = fmax(hi, peak);
             free(s);
         }
@@ -325,7 +325,7 @@ static void wave(void) {
             s->pad[0].p[P_W_WAVE] = (float)i / 4;
             char what[64];
             snprintf(what, sizeof(what), "w_table %s, w_wave", STRUT_PAD_PARAMS[P_W_TABLE].options[t]);
-            const double peak = sweep_hit(s, what, (float)i / 4, 1);
+            const double peak = sweep_hit(s, what, (float)i / 4, 1, 0.05);
             lo = fmin(lo, peak), hi = fmax(hi, peak);
             free(s);
         }
@@ -360,7 +360,7 @@ static void wave(void) {
             s->pad[0].p[P_W_PITCH] = (float)(t * 7 % 30);
             char what[64];
             snprintf(what, sizeof(what), "Skin hit by %s, case", STRUT_PAD_PARAMS[P_W_TABLE].options[t]);
-            const double peak = sweep_hit(s, what, (float)k, 1);
+            const double peak = sweep_hit(s, what, (float)k, 1, 0.05);
             lo = fmin(lo, peak), hi = fmax(hi, peak);
             free(s);
         }
@@ -381,7 +381,7 @@ static void wave(void) {
         s->pad[0].p[P_S_RING] = 0.8f;
         s->pad[0].p[P_W_DECAY] = 0.8f;
         s->pad[0].p[P_W_FM] = 0.8f;             /* a swing of 2.6 times: little left at the pitch */
-        sweep_hit(s, "w_fm with a long ring", 0.8f, 0);
+        sweep_hit(s, "w_fm with a long ring", 0.8f, 0, 0.05);
         hit(s, 0.5f);
         const double bent = level_at(wave_hz(s->pad[0].p), 2205, 4096);
         CHECK(bent < 0.5 * plain, "FM moves Wave's energy off its pitch (%.2f of it left)", bent / plain);
@@ -390,6 +390,186 @@ static void wave(void) {
 }
 
 /* Renders n samples of whatever is sounding into L from `at`. */
+/* A pad of Noise alone, on table t, falling slowly enough to measure. */
+static strut_t *noise_pad(int t) {
+    strut_t *s = fresh();
+    s->pad[0].p[P_SKIN] = 0;
+    s->pad[0].p[P_NOISE] = 0.8f;
+    s->pad[0].p[P_N_TABLE] = (float)t;
+    s->pad[0].p[P_N_DECAY] = 1.0f;
+    return s;
+}
+
+/* Zero crossings a second: rises and falls with where noise's power is. */
+static double crossings(int from, int n) {
+    int c = 0;
+    for (int k = from; k < from + n - 1; k++) c += (L[k] <= 0) != (L[k + 1] <= 0);
+    return c * (double)STRUT_SR / n;
+}
+
+/* The mean level from lo to hi Hz, in 50 Hz steps. */
+static double band_level(double lo, double hi, int from, int n) {
+    double a = 0;
+    int k = 0;
+    for (double f = lo; f <= hi; f += 50, k++) a += level_at(f, from, n) * level_at(f, from, n);
+    return sqrt(a / k);
+}
+
+static void noise(void) {
+    const int nt = STRUT_PAD_PARAMS[P_N_TABLE].noptions;
+
+    /* every table at the ends and middle of PITCH, COLOR and DECAY: it
+     * sounds, it is finite, it does not clip, and it dies away. Heard means
+     * over -30 dB here: deep in COLOR's low-pass, a short noise's peak is
+     * all chance (its level is checked below). */
+    const int knobs[] = { P_N_PITCH, P_N_COLOR, P_N_DECAY };
+    double lo = 1e9, hi = 0;
+    for (int t = 0; t < nt; t++)
+        for (int k = 0; k < 3; k++)
+            for (int i = 0; i < 3; i++) {
+                const param_def_t *d = &STRUT_PAD_PARAMS[knobs[k]];
+                strut_t *s = noise_pad(t);
+                s->pad[0].p[P_N_DECAY] = 0.3f;
+                const float v = d->min + (d->max - d->min) * (float)i / 2;
+                s->pad[0].p[knobs[k]] = v;
+                char what[64];
+                snprintf(what, sizeof(what), "%s %s", STRUT_PAD_PARAMS[P_N_TABLE].options[t], d->key);
+                const double peak = sweep_hit(s, what, v, !(knobs[k] == P_N_DECAY && i == 2), 0.03);
+                lo = fmin(lo, peak), hi = fmax(hi, peak);
+                free(s);
+            }
+    printf("noise: peak over every table and knob end %.3f .. %.3f (%.1f dB)\n", lo, hi, 20 * log10(hi / lo));
+
+    /* the tables' levels, for the record */
+    printf("noise: tables' RMS");
+    for (int t = 0; t < nt; t++) {
+        strut_t *s = noise_pad(t);
+        hit(s, 0.3f);
+        printf(" %s %.3f", STRUT_PAD_PARAMS[P_N_TABLE].options[t], window_rms(0, STRUT_SR / 4));
+        free(s);
+    }
+    printf("\n");
+
+    /* PITCH: White an octave down crosses zero half as often, two down a quarter */
+    {
+        double z[3];
+        for (int i = 0; i < 3; i++) {
+            strut_t *s = noise_pad(NT_WHITE);
+            s->pad[0].p[P_N_PITCH] = (float)(-12 * i);
+            hit(s, 0.5f);
+            z[i] = crossings(0, STRUT_SR / 2);
+            free(s);
+        }
+        CHECK(fabs(z[1] / z[0] - 0.5) < 0.05 && fabs(z[2] / z[0] - 0.25) < 0.03,
+              "PITCH -12 and -24 move White down an octave and two (%.3f, %.3f)", z[1] / z[0], z[2] / z[0]);
+        double w[2];
+        for (int i = 0; i < 2; i++) {
+            strut_t *s = noise_pad(NT_WIRES);
+            s->pad[0].p[P_N_PITCH] = (float)(12 * i);
+            hit(s, 0.5f);
+            w[i] = crossings(0, STRUT_SR / 2);
+            free(s);
+        }
+        CHECK(w[1] / w[0] > 1.3, "PITCH +12 moves Wires up (%.2f times the crossings)", w[1] / w[0]);
+    }
+
+    /* played above its table's rate, nothing folds back: White at +7 has
+     * nothing above 15 kHz, so all that is there is the cubic's images */
+    {
+        strut_t *s = noise_pad(NT_WHITE);
+        s->pad[0].p[P_N_PITCH] = 7;
+        hit(s, 0.3f);
+        const double in = band_level(2000, 10000, 2000, 8192), out = band_level(18500, 21500, 2000, 8192);
+        CHECK(20 * log10(out / in) < -40, "White at +7 st: nothing folds back above 18.5 kHz (%.1f dB)",
+              20 * log10(out / in));
+        free(s);
+    }
+
+    /* DECAY is the fall: the drop between two windows, as a T60 */
+    const float decays[] = { 0.5f, 0.8f };
+    for (int i = 0; i < 2; i++) {
+        strut_t *s = noise_pad(NT_WHITE);
+        s->pad[0].p[P_N_DECAY] = decays[i];
+        const float want = noise_t60(s->pad[0].p);
+        hit(s, 2.0f);
+        const int a = (int)(0.2f * want * STRUT_SR), b = (int)(0.6f * want * STRUT_SR), w = 2048;
+        const double t60 = 60.0 * (b - a) / STRUT_SR / (20 * log10(window_rms(a, w) / window_rms(b, w)));
+        CHECK(fabs(t60 / want - 1) < 0.1, "Noise DECAY %.1f falls in %.3f s, want %.3f", decays[i], t60, want);
+        free(s);
+    }
+
+    /* COLOR changes the colour, not the level: darker to the left, thinner
+     * to the right, and every table within a few dB of the centre */
+    {
+        const float colors[] = { -1, -0.5f, 0.5f, 1 };
+        double worst = 0;
+        for (int t = 0; t < nt; t++) {
+            strut_t *s = noise_pad(t);
+            hit(s, 0.2f);
+            const double r0 = window_rms(0, STRUT_SR / 5), z0 = crossings(0, STRUT_SR / 5);
+            free(s);
+            for (int c = 0; c < 4; c++) {
+                s = noise_pad(t);
+                s->pad[0].p[P_N_COLOR] = colors[c];
+                hit(s, 0.2f);
+                const double db = 20 * log10(window_rms(0, STRUT_SR / 5) / r0), z = crossings(0, STRUT_SR / 5);
+                if (fabs(db) > fabs(worst)) worst = db;
+                CHECK(fabs(db) < 4, "%s COLOR %+.1f keeps the level (%+.1f dB)",
+                      STRUT_PAD_PARAMS[P_N_TABLE].options[t], colors[c], db);
+                if (t == NT_WHITE && colors[c] == -1) CHECK(z < 0.1 * z0, "COLOR left darkens White (%.2f the crossings)", z / z0);
+                if (t == NT_WHITE && colors[c] == 1) CHECK(z > 1.2 * z0, "COLOR right thins White (%.2f the crossings)", z / z0);
+                free(s);
+            }
+        }
+        printf("noise: COLOR's level, worst %+.1f dB from the centre\n", worst);
+    }
+
+    /* each hit starts somewhere new in the loop */
+    {
+        strut_t *s = noise_pad(NT_WHITE);
+        s->pad[0].p[P_N_DECAY] = 0.2f;
+        hit(s, 1.0f);
+        float first[64];
+        memcpy(first, L, sizeof(first));
+        hit(s, 0.1f);
+        CHECK(memcmp(first, L, sizeof(first)) != 0, "two hits are not the same noise");
+        free(s);
+    }
+
+    /* Skin struck by Noise rings about as loud as struck by its own burst,
+     * whatever the colour, with NOISE itself off. Each hit is a little
+     * different, as noise is, so the power of 48 is compared. */
+    {
+        const int hits[] = { -1, NT_WHITE, NT_PINK, NT_BROWN, NT_HISS, NT_WIRES, NT_METAL, NT_CRACKLE, NT_GRIT };
+        double ref = 0, lo = 1e9, hi = -1e9;
+        for (int i = 0; i < 9; i++) {
+            double pw = 0;
+            for (int h = 0; h < 48; h++) {
+                strut_t *s = fresh();
+                s->seed = 7919u * (uint32_t)h;
+                s->pad[0].p[P_S_PITCH] = 24;
+                s->pad[0].p[P_S_RING] = 0.6f;
+                s->pad[0].p[P_S_MODE] = 1;
+                s->pad[0].p[P_S_SNAP] = 0.4f;
+                s->pad[0].p[P_S_HIT] = hits[i] < 0 ? HIT_BURST : HIT_NOISE;
+                if (hits[i] >= 0) s->pad[0].p[P_N_TABLE] = (float)hits[i];
+                hit(s, 0.15f);
+                const double r = window_rms(STRUT_SR / 20, STRUT_SR / 10);
+                pw += r * r / 48;
+                free(s);
+            }
+            if (i == 0) ref = pw;
+            else {
+                const double db = 10 * log10(pw / ref);
+                lo = fmin(lo, db), hi = fmax(hi, db);
+                CHECK(fabs(db) < 3, "Skin struck by %s rings within 3 dB of its burst (%+.1f dB)",
+                      STRUT_PAD_PARAMS[P_N_TABLE].options[hits[i]], db);
+            }
+        }
+        printf("noise: Skin struck by Noise, %+.1f .. %+.1f dB from its burst\n", lo, hi);
+    }
+}
+
 static void play(strut_t *s, int at, int n) {
     for (int k = 0; k < n; k += 128) strut_render(s, L + at + k, R + at + k, n - k < 128 ? n - k : 128);
 }
@@ -433,6 +613,23 @@ static void restrike(void) {
         free(s);
     }
 
+    /* Noise: a soft hit on loud noise adds to it, as two noises do, against
+     * the same note left alone */
+    {
+        double r[2];
+        for (int c = 0; c < 2; c++) {
+            strut_t *s = noise_pad(NT_WHITE);
+            s->pad[0].p[P_N_DECAY] = 0.9f;
+            strut_note_on(s, STRUT_NOTE0, 127);
+            play(s, 0, 8820);
+            if (c) strut_note_on(s, STRUT_NOTE0, 20);
+            play(s, 8820, 8820);
+            r[c] = window_rms(8820, 4096);
+            free(s);
+        }
+        CHECK(r[1] > 0.98 * r[0], "a soft hit does not drop loud noise (%.2f of it)", r[1] / r[0]);
+    }
+
     /* Wave: a restarted note fades the old one out, so no step */
     {
         strut_t *s = wave_pad();
@@ -455,12 +652,12 @@ static void restrike(void) {
 /* The level knobs are faders: off at zero, then a few dB a tenth of a turn,
  * so a turn is always heard. */
 static void levels(void) {
-    const int keys[] = { P_SKIN, P_WAVE, P_LEVEL };
-    for (int k = 0; k < 3; k++) {
+    const int keys[] = { P_SKIN, P_WAVE, P_NOISE, P_LEVEL };
+    for (int k = 0; k < 4; k++) {
         double prev = 0;
         int even = 1;
         for (int i = 0; i <= 10; i++) {
-            strut_t *s = keys[k] == P_WAVE ? wave_pad() : fresh();
+            strut_t *s = keys[k] == P_WAVE ? wave_pad() : keys[k] == P_NOISE ? noise_pad(NT_WHITE) : fresh();
             s->pad[0].p[keys[k]] = (float)i / 10;
             const int n = hit(s, 0.3f);
             double peak = 0;
@@ -560,6 +757,7 @@ int main(int argc, char **argv) {
     keys();
     skin();
     wave();
+    noise();
     restrike();
     levels();
     tail();

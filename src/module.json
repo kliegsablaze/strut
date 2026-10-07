@@ -2,7 +2,7 @@
   "id": "strut",
   "name": "Strut",
   "abbrev": "STR",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "dsp": "dsp.so",
   "api_version": 2,
   "component_type": "sound_generator",
