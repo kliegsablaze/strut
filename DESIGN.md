@@ -1063,8 +1063,10 @@ own engine, reach most of the same sounds.)
 7. ~~**Modulation** (the MOD views)~~ (0.4.0). On the Move, every
    modulator on every pad: 20.0 % with every effect (0.4.0), 17.7 % once
    their setup was halved (0.4.1). Still to do: hear it.
-8. ~~**Kit** page: room, glue, warmth~~ (0.5.0). Still to do: measure it on
-   the Move, and hear it.
+8. ~~**Kit** page: room, glue, warmth~~ (0.5.0). On the Move, the room at
+   its longest with GLUE and WARM full: 19.1 %, against 19.3 % without in
+   the same run (2026-10-07); its cost is lost in the runs' spread (17.8 to
+   20.6 %). Still to do: hear it.
 9. Samples (see *The sample library*):
    - ship `src/samples/` in the module and the tarball; measure both;
    - TABLE past the noise tables: the library, then your own samples;

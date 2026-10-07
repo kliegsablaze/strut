@@ -205,8 +205,10 @@ When the user moves work back to their local machine:
     0.4.0, 1.0 % now).
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it, not yet confirmed.
-  - Not yet: Finish, the modulators and the Kit page by ear; the Kit page's
-    CPU (the bench's "and the kit's effects" row).
+  - the Kit page's effects add nothing measurable: 19.1 % with them, 19.3 %
+    without, in one run whose rows spread 17.8 to 20.6 % (0.5.0). One block
+    took 7 ms there, once; watch for it in later runs.
+  - Not yet: Finish, the modulators and the Kit page by ear.
 - **Next:** build step 9, samples: the library in `src/samples/` (208
   sounds, from another session) is in DESIGN.md, *The sample library*.
 - **Open questions for the user:**
