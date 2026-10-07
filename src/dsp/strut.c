@@ -474,6 +474,111 @@ static int read_value(const param_def_t *d, float v, char *buf, int len) {
     return snprintf(buf, len, "%.4f", (double)v);
 }
 
+/* ---- state ----
+ *
+ * The host saves a slot by reading `state` and loads it by writing it back
+ * (on its loader thread, before any note). It is one flat JSON object of the
+ * same keys set_param takes, holding only what differs from the defaults:
+ *
+ *   {"v":1,"p01_s_pitch":"0.3125","p03_n_table":"Kick 003","space":"0.2000"}
+ *
+ * Values are written as get_param serves them, so an enum is its option
+ * name and a sample comes back by name even if the user's folder changes.
+ * DICE is a turn, not a value, and the MOD switches only choose a view, so
+ * neither is kept: loading a kit never rolls. Reading starts from the
+ * defaults and ignores keys it does not know, so older and newer saves load. */
+
+static int saved(int pad, int k) {
+    if (pad >= 0) return k != P_DICE;
+    return k != G_DICE && k != G_SKIN_VIEW && k != G_WAVE_VIEW && k != G_NOISE_VIEW;
+}
+
+static int put_value(char *buf, int len, int at, const char *key, const char *val) {
+    if (at < 0) return -1;
+    int n = snprintf(buf + at, (size_t)(len - at), ",\"%s\":\"", key);
+    if (n < 0 || at + n >= len) return -1;
+    at += n;
+    for (const char *c = val; *c; c++) {
+        if (at + 3 >= len) return -1;
+        if (*c == '"' || *c == '\\') buf[at++] = '\\';
+        buf[at++] = *c;
+    }
+    buf[at++] = '"';
+    buf[at] = '\0';
+    return at;
+}
+
+static int write_state(const strut_t *s, char *buf, int len) {
+    char key[64], val[256];
+    int at = snprintf(buf, (size_t)len, "{\"v\":1");
+    if (at < 0 || at >= len) return -1;
+    for (int i = 0; i < STRUT_PADS; i++)
+        for (int k = 0; k < P_COUNT; k++) {
+            const param_def_t *d = &STRUT_PAD_PARAMS[k];
+            if (!saved(i, k) || s->pad[i].p[k] == d->def) continue;
+            snprintf(key, sizeof(key), "p%02d_%s", i + 1, d->key);
+            read_value(d, s->pad[i].p[k], val, sizeof(val));
+            at = put_value(buf, len, at, key, val);
+        }
+    for (int k = 0; k < G_COUNT; k++) {
+        const param_def_t *d = &STRUT_GLOBALS[k];
+        if (!saved(-1, k) || s->g[k] == d->def) continue;
+        read_value(d, s->g[k], val, sizeof(val));
+        at = put_value(buf, len, at, d->key, val);
+    }
+    if (at < 0 || at + 2 > len) return -1;
+    buf[at++] = '}';
+    buf[at] = '\0';
+    return at;
+}
+
+/* One "key":value pair from p, unescaped; a number is taken as written.
+ * Returns where the next pair starts, or NULL at the end. */
+static const char *next_pair(const char *p, char *key, int klen, char *val, int vlen) {
+    while (*p && *p != '"' && *p != '}') p++;
+    if (*p != '"') return NULL;
+    int n = 0;
+    for (p++; *p && *p != '"'; p++)
+        if (n < klen - 1) key[n++] = *p;
+    key[n] = '\0';
+    if (!*p) return NULL;
+    for (p++; *p == ' ' || *p == ':'; p++) {}
+    n = 0;
+    if (*p == '"') {
+        for (p++; *p && *p != '"'; p++) {
+            if (*p == '\\' && p[1]) p++;
+            if (n < vlen - 1) val[n++] = *p;
+        }
+        if (!*p) return NULL;
+        p++;
+    } else {
+        for (; *p && *p != ',' && *p != '}'; p++)
+            if (n < vlen - 1 && *p != ' ') val[n++] = *p;
+    }
+    val[n] = '\0';
+    return p;
+}
+
+static void read_state(strut_t *s, const char *json) {
+    const char *p = strchr(json, '{');
+    if (!p) return;
+    for (int i = 0; i < STRUT_PADS; i++) {
+        for (int k = 0; k < P_COUNT; k++) s->pad[i].p[k] = STRUT_PAD_PARAMS[k].def;
+        s->pad[i].dice = (dice_hist_t){ 0, 0 };
+    }
+    for (int k = 0; k < G_COUNT; k++)
+        if (saved(-1, k)) s->g[k] = STRUT_GLOBALS[k].def;
+    s->dice = (dice_hist_t){ 0, 0 };
+    char key[64], val[256];
+    int pad, k;
+    while ((p = next_pair(p, key, sizeof(key), val, sizeof(val)))) {
+        if ((k = pad_key(key, &pad)) >= 0 && saved(pad, k))
+            write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
+        else if ((k = global_key(key)) >= 0 && saved(-1, k))
+            write_value(&STRUT_GLOBALS[k], &s->g[k], val);
+    }
+}
+
 /* ---- the v2 API ---- */
 
 static const host_api_v1_t *g_host;
@@ -510,6 +615,8 @@ static void set_param(void *instance, const char *key, const char *val) {
         if (n >= 1 && n <= STRUT_PADS) focus(s, n - 1);
     } else if (!strcmp(key, "pad_press")) {
         strut_press(s);
+    } else if (!strcmp(key, "state")) {
+        read_state(s, val);
     } else if ((k = pad_key(key, &pad)) >= 0) {
         write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
         if (k == P_DICE) strut_dice(s, pad, (int)s->pad[pad].p[k]);
@@ -525,6 +632,7 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     if (!strcmp(key, "ui_hierarchy")) return strut_contract_hierarchy(buf, buf_len);
     if (!strcmp(key, "chain_params")) return strut_contract_params(buf, buf_len);
     if (!strcmp(key, "pad")) return snprintf(buf, buf_len, "%d", s->focus + 1);
+    if (!strcmp(key, "state")) return write_state(s, buf, buf_len);
     if ((k = pad_key(key, &pad)) >= 0) return read_value(&STRUT_PAD_PARAMS[k], s->pad[pad].p[k], buf, buf_len);
     if ((k = global_key(key)) >= 0) return read_value(&STRUT_GLOBALS[k], s->g[k], buf, buf_len);
     return -1;

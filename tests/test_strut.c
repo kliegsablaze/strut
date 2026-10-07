@@ -1732,6 +1732,41 @@ static void dice(void) {
     }
 }
 
+/* `state` saves the kit and loads it back exactly, keeps no DICE turn, and
+ * answers even for an untouched kit (the host retries a slot that does not). */
+static void state(void) {
+    static char buf[131072];
+    void *a = A->create_instance(".", ""), *b = A->create_instance(".", "");
+    strut_t *sa = a, *sb = b;
+    int n = A->get_param(a, "state", buf, sizeof(buf));
+    CHECK(n > 0 && !strcmp(buf, "{\"v\":1}"), "an untouched kit saves as nothing but its version");
+    A->set_param(a, "p01_dice", "Roll");
+    A->set_param(a, "kit_dice", "Roll");
+    A->set_param(a, "p03_decay", "0.25");
+    A->set_param(a, "p16_n_table", param_option(&STRUT_PAD_PARAMS[P_N_TABLE], NT_TABLES + 3));
+    A->set_param(a, "space", "0.4");
+    A->set_param(a, "skin_view", "Mod");
+    n = A->get_param(a, "state", buf, sizeof(buf));
+    CHECK(n > 0 && n < 32768, "a rolled kit saves in under 32 KB");
+    CHECK(!strstr(buf, "dice") && !strstr(buf, "_view"), "DICE and the MOD views are not saved");
+    A->set_param(b, "p05_s_pitch", "0.9");
+    A->set_param(b, "state", buf);
+    int same = 1;
+    for (int i = 0; i < STRUT_PADS; i++)
+        for (int k = 0; k < P_COUNT; k++)
+            if (k != P_DICE && fabsf(sa->pad[i].p[k] - sb->pad[i].p[k]) > 1e-4f) same = 0;
+    for (int k = 0; k < G_COUNT; k++)
+        if (k != G_DICE && k != G_SKIN_VIEW && fabsf(sa->g[k] - sb->g[k]) > 1e-4f) same = 0;
+    CHECK(same, "every saved value loads back, and what was not saved returns to its default");
+    CHECK(sb->g[G_SKIN_VIEW] == 0 && sb->dice.newest == 0, "loading rolls nothing and keeps no history");
+    A->set_param(b, "state", "{\"v\":9,\"p02_nothing\":\"1\",\"p02_decay\":0.5,\"glue\":\"x\"}");
+    CHECK(fabsf(sb->pad[1].p[P_DECAY] - 0.5f) < 1e-6f && sb->pad[0].p[P_DECAY] == STRUT_PAD_PARAMS[P_DECAY].def,
+          "unknown keys are skipped, bare numbers read, the rest reset");
+    CHECK(A->get_param(a, "state", buf, 20) < 0, "a short buffer is refused, not overrun");
+    A->destroy_instance(a);
+    A->destroy_instance(b);
+}
+
 int main(int argc, char **argv) {
     smp_catalogue("src");    /* the library, as the module's folder holds it on the Move */
     const char *dir = argc > 1 ? argv[1] : ".";
@@ -1756,6 +1791,7 @@ int main(int argc, char **argv) {
     focus();
     sample_levels();
     dice();
+    state();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;
 }

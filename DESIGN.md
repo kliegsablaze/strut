@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -837,7 +837,7 @@ a swelling noise is a reverse cymbal.
 
 (Rejected: SWING. Move's own sequencer swings.)
 
-Kits are to be Schwung presets: the whole kit saved in `state` (not yet built; step 10), and the factory
+Kits are to be Schwung presets: the whole kit saved in `state` (built, 0.8.1: a flat object of the set_param keys that differ from their defaults, enums by name, so a sample comes back by name; DICE and the MOD views are left out, so loading never rolls), and the factory
 kits are presets. SOUND (Pad, knob 1) is the per-pad library.
 
 ### How the Kit page works (built, 0.5.0)
@@ -1065,7 +1065,7 @@ own engine, reach most of the same sounds.)
   "Roll" played back rolls again every time it passes. A trigger is never
   locked, but a trigger fires the same either way, with no Back. And a
   kit saved before 0.8.0, or a host restoring every key one by one, writes
-  DICE's word back: `state` (next) leaves DICE out.
+  DICE's word back: `state` (0.8.1) leaves DICE out.
 
 Rejected for DICE:
 
@@ -1303,7 +1303,9 @@ Rejected for DICE:
     (DICE by role), `help.json` and README:
     - ~~DICE, Finish's and the Kit page's, by role, with eight steps
       back, level-matched~~ (0.8.0; still to do: hear it);
-    - `state`, so a kit saves and loads whole, without DICE;
+    - ~~`state`, so a kit saves and loads whole, without DICE~~ (0.8.1;
+      a module that does not answer `state` makes the host retry every
+      few seconds on the channel the knobs read through);
     - the SOUND library and factory kits;
     - `help.json` and the README.
 11. Voicing pass with the user listening on the device.

@@ -182,57 +182,24 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.7.0)
+## Where things stand (2026-10-07, 0.8.1)
 
-- **What works:**
-  - all three engines: Skin, Wave and Noise (eight noise tables), with
-    Skin bending Wave and Wave or Noise striking Skin;
-  - the Pad page: SKIN, WAVE and NOISE are the engines' levels, LEVEL the
-    pad's, TUNE, DECAY and COLOR;
-  - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH;
-  - each engine's modulator (KIND, RATE, CURVE, two AIM and DEPTH), with
-    MOD on knob 1 of every engine page in both views (the user's layout);
-  - the Kit page (0.5.0): SPACE and SIZE (Quilt's plate as a room), GLUE,
-    WARM, VOL and PAD;
-  - the sample library (0.6.0): Noise > TABLE is one long list (the user's
-    choice): the noise tables, the 208 library sounds, then the user's own
-    from `/data/UserData/schwung/samples/strut/`. Sample mode with START
-    and LOOP; Cycle/ looped and pitched from A1. A loader thread an
-    instance loads them on demand.
-  - Noise > MODE (0.7.0): Resynth (32 sine waves plus the leftover noise;
-    DECAY sets the length, PITCH the pitch; the first 10 ms of the hit
-    are the recording) and Noise (the sample's colour, pitch taken out).
-    Each is made the first time a pad asks, on the loader's thread.
-  - Tests: 1438 checks, plus the host's planner and validator.
-- **Tried on the device:**
-  - Skin, its grit fixed (0.0.6), and page titles;
-  - Noise "sounds great" (0.2.2);
-  - load time: 0.51 s (0.2.2);
-  - CPU, every pad at its dearest: all three engines 13.1 %, every effect
-    16.7 %, every modulator 17.7 % (0.4.1); the Kit page adds nothing
-    measurable in one run (0.5.0) and about 2 % in another (0.6.0: 21.1 %,
-    runs up to 22.0 %), so the worst case is near 22 % of the 25 % allowed.
-    One block took 7 ms there, once (0.5.0); not seen since.
-  - samples (0.6.0): the library installs in 2 s; a 4 s sample is ready
-    181 ms after loading starts; samples on every pad cost no more than
-    tables.
-  - The user saw the header's pad map follow only the Pad page (0.3.1);
-    0.4.0 should fix it, not yet confirmed.
-  - Resynth (0.7.0): on every pad, looped, with every effect and
-    modulator, 20.5 % (runs to 22.3 %) against 17.0 % for samples; a 4 s
-    sample's Resynth takes 496 ms to make, its Noise 190.
-  - Not yet: Finish, the modulators, the Kit page and samples by ear.
-- **Next:** step 10: the SOUND presets, factory kits, DICE by role,
-  help.json and the README. Start with DICE, as decided with the user
-  (2026-10-07; DESIGN.md, *Sounds, presets and the randomiser*):
-  Finish > DICE for the focused pad and a new Kit > DICE for the whole
-  kit, each a roll counter with eight steps of undo. Nothing of it is
-  written yet; the session moved to the user's machine here.
-- **Working locally now** (2026-10-07): the user moved this work from the
-  cloud session to their own machine, so commands like the install and
-  bench can run directly rather than being pasted.
-- **Open questions for the user:**
-  - whether Wave's and Noise's loudness against Skin's suits them (the
-    voicing pass, step 11);
-  - the kit layout DICE rolls by (DESIGN.md has a proposal);
-  - how Resynth and Noise mode sound (0.7.0, not yet heard).
+- **New since 0.7.0:**
+  - DICE (0.8.0): Finish > DICE rolls the focused pad, Kit > DICE the whole
+    kit, by the role layout in DESIGN.md, eight steps back, level-matched
+    by a measured table (`src/dsp/levels.c`, made by `tools/levels.c`);
+  - `state` (0.8.1): kits save and load with the set, DICE never rolls on
+    load;
+  - `scripts/build.sh` works with the local gcc 12 image again (no fmax
+    reductions in loops: gcc 12 crashes vectorising them).
+  - 0.8.1 is installed on the user's Move; nothing heard yet.
+- **Before release** (the user asked to release soon, 2026-10-07): hear
+  DICE, Finish, the modulators, the Kit page, samples and Resynth; the
+  knob-minimum and voicing checks; then ask for the go-ahead.
+- **Next:** the SOUND library and factory kits, help.json (cover DICE),
+  the README.
+- **Open questions for the user:** the kit layout DICE rolls by; Skin with
+  HIT Soft, MODE High and high PITCH peaks near 1.5 (DICE avoids it); a
+  held step while turning DICE locks a roll to the step.
+- **Earlier** (0.7.0 and before): see git history for the fuller notes;
+  CPU worst case near 22 % of the 25 % allowed.
