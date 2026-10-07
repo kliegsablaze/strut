@@ -2,15 +2,15 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin and Wave sound, 0.0.9 (2026-10-07). Every proposed knob, on
+**Status:** Skin and Wave sound, 0.1.0 (2026-10-07). Every proposed knob, on
 every page and both views of each engine page, is declared, kept per pad and
 planned by the host's own planner in the tests. **Skin**, the resonator, and
 **Wave**, the oscillator, are built and play on every pad, mixed by SKIN,
 WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
 strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
 and the effects are still the plan; their knobs are kept but do nothing yet.
-On the Move, Skin and Wave at their dearest took 14.1 % of the CPU in 0.0.8;
-0.0.9 makes them cheaper, still to measure there.
+On the Move, Skin and Wave at their dearest took 14.1 % of the CPU in 0.0.9
+with two voices a pad; 0.1.0 has one, about half, still to measure there.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -168,8 +168,9 @@ matter here.
 ## Pages, and the page within a page
 
 Schwung shows eight knobs a page, and Shift+jog-click opens a list of every
-page. Strut keeps that list short. Before them comes the host's **Selected Pad**
-list, one for all the per-pad pages, because they share one focus (`pad`):
+page. Strut keeps that list short. You pick the pad the pages edit by
+tapping it, or with the Kit page's **PAD** knob; there is no Selected Pad
+page (see below):
 
 | Page | For | Shows |
 |---|---|---|
@@ -218,8 +219,16 @@ is the rack's `child_label` and the pad's number, and the level's name is
 used only in the list of pages. With every rack labelled "Pad", every page
 read "Pad 3" and the user could not tell where they were (2026-10-07). So each
 rack's `child_label` is its page's name: Pad 3, Skin 3, Wave 3, Noise 3,
-Finish 3. The picker keeps "Selected Pad", from the first rack. The tests
-check the titles, and that the widest, "Finish 16", fits the header.
+Finish 3. The tests check the titles, and that the widest, "Finish 16",
+fits the header.
+
+**No Selected Pad page.** The host plans a list of the sixteen pads before
+the pad pages unless some page has a cell for the focus itself
+(`page_plan.mjs`, `childPickerNeeded`). The user asked why it was needed
+when tapping a pad picks it (2026-10-07), so the Kit page's last cell is
+**PAD**, the focus, and the list is gone. Tapping is the usual way; PAD is
+the way when the host's page-follow is off. The tests plan every view and
+check there is no picker and PAD is Kit's last cell.
 
 (Rejected: a real pop-up page. Schwung has no knob page that opens over another.
 Its "doors" are canvas pages that hand the jog to the module, which would need a
@@ -299,9 +308,23 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
   click and the partials forward). A 12 dB trapezoidal state-variable filter
   (Zavalishin), as is **TONE**: a low-pass from 150 Hz to 18 kHz.
 - **CURVE** (the Mod view) is Natural, the ring's own fall, until step 7.
-- **Velocity** sets the level, on a gentle curve (to the power 1.5).
-- **Two voices a pad.** A new hit takes the other voice, so the last one keeps
-  ringing under it.
+- **Velocity** sets how hard the hit is, on a gentle curve (to the power
+  1.5): it is in the strike, not a level on the output, so each hit's
+  strength stays in the ring after it, and a harder hit bends Wave further
+  through FM.
+- **One voice a pad (0.1.0).** A new hit strikes the same drum again. What
+  still rings goes on; the hit adds to it, so a roll builds and swells, and
+  a hit landing against the ring partly stops it, as on a real drum. Wave
+  restarts its note on each hit; the note it cuts fades out over 256 samples
+  (6 ms), so it does not click. Tested: a hit in step with the ring builds
+  it by more than 4 dB, one against it takes it down by more than 6; a soft
+  hit keeps a loud ring; a restarted Wave note has no step. If the hit's
+  scale changes (another SNAP or HIT), what rings is rescaled to keep its
+  level. (Rejected: two voices a pad, each hit taking the other, the old one
+  ringing under the new. It doubled the cost, 14.1 % of the Move's CPU for
+  Skin and Wave at their dearest, and a struck drum is one drum. The user
+  chose this over computing four voices at once, which would keep the
+  sound and is still open if room runs short.)
 - **Levels glide.** A voice's level moves across a block, not in one step, so
   turning SKIN or LEVEL while a drum rings does not crackle.
 
@@ -478,10 +501,10 @@ a swelling noise is a reverse cymbal.
 | 2 | SIZE | Room size. |
 | 3 | GLUE | Kit compression, transient-aware, one knob. |
 | 4 | WARM | Saturation of the whole kit. |
-| 5 | SWING | Rejected for now: Move's own sequencer swings. Listed so it is not re-proposed. |
-| 6 | | |
-| 7 | | |
-| 8 | VOL | Kit volume, in dB. |
+| 5 | VOL | Kit volume, in dB. |
+| 6 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
+
+(Rejected: SWING. Move's own sequencer swings.)
 
 Kits are Schwung presets: the whole kit is saved in `state`, and the factory
 kits are presets. SOUND (Pad, knob 1) is the per-pad library.
@@ -533,7 +556,7 @@ own engine, reach most of the same sounds.)
 
 - **CPU.** Sixteen pads × three engines, at most two voices a pad, so a fast
   roll's tail can overlap the next hit. Target: under a quarter of the Move's
-  time with every pad sounding. `tools/bench.c` plays all 32 voices with the
+  time with every pad sounding. `tools/bench.c` plays all sixteen pads with the
   longest rings and strikes; `scripts/bench.sh` builds it for the Move and
   runs it there over ssh, as Quilt's does.
   - On a laptop (2026-10-07), all 32 voices ringing: Skin alone **1.5 %** of
@@ -573,7 +596,13 @@ own engine, reach most of the same sounds.)
     resonators in an array. Now each block runs on a copy of the voice in
     locals, with `restrict`, and one loop for each pairing of engines and
     each partial count, chosen when the block starts. Skin's ARM loop touches
-    memory only for the output; Wave's, for its table reads.
+    memory only for the output; Wave's, for its table reads. Measured on the
+    Move: no change (7.9 % and 14.1 %); the Move's GCC had evidently kept
+    them in registers already, and the cost is the arithmetic itself, about
+    84 cycles a voice a sample. Kept: it costs nothing and is the shape any
+    further saving builds on.
+  - **0.1.0: one voice a pad** (see *How Skin works*), half the worst case:
+    1.9 % on a laptop for Skin and Wave at their dearest, from 3.7 %.
   - The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
@@ -664,8 +693,9 @@ own engine, reach most of the same sounds.)
    noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
    at full Move volume. Its CPU is inside step 4's measurement.
 4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
-   Move: 14.1 % with Skin, every voice at its dearest (0.0.8); 0.0.9 keeps
-   the voices in registers, still to measure. Still to do: hear it on the device.
+   Move: 14.1 % with Skin, every voice at its dearest, two voices a pad
+   (0.0.9, no better than 0.0.8 for keeping voices in registers); 0.1.0 has
+   one voice a pad, still to measure. Still to do: hear it on the device.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
@@ -685,8 +715,7 @@ own engine, reach most of the same sounds.)
   - the host's own planner and validator on the contract, in all eight
     combinations of the MOD switches; every label through the host's fitter;
     the contract's size; module.json's template against the served one.
-    The validator's one warning, that `pad` is on no level, is expected: the
-    host's Selected Pad list is how it is reached.
+    No Selected Pad page is planned; PAD is Kit's last cell.
   - Skin: PITCH within 1 % by zero crossings, RING within 10 % by the fall
     between two windows, and every Skin knob (and TUNE and DECAY) at its ends
     and middle, every option of each list: it sounds, stays finite, peaks
@@ -698,6 +727,9 @@ own engine, reach most of the same sounds.)
     away (within 11.9 dB of each other); a 7 kHz saw has nothing at its
     folded-back frequencies to −70 dB; Skin struck by every table rings
     within 5.5 dB; FM moves Wave's energy off its pitch.
+  - One voice a pad: a hit in step with the ring builds it, one against it
+    stops it, a soft hit keeps a loud ring, a restarted Wave note has no
+    step.
   - The faders (SKIN, WAVE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.

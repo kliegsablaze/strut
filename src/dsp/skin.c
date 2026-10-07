@@ -46,10 +46,22 @@ static int hit_len(const float *p) {
     return (int)(0.0002f * powf(250.0f, p[P_S_SNAP]) * STRUT_SR) + 1;
 }
 
-void skin_start(skin_voice_t *v, const float *p, uint32_t seed) {
-    *v = (skin_voice_t){ 0 };
+void skin_resize(skin_voice_t *v, float norm) {
+    /* the resonators hold the ring before scaling, so rescale them, or a
+     * new hit's scale would jump what still rings */
+    if (v->norm > 0.0f)
+        for (int k = 0; k < SKIN_PARTIALS; k++) {
+            v->zr[k] *= v->norm / norm;
+            v->zi[k] *= v->norm / norm;
+        }
+    v->norm = norm;
+}
+
+void skin_strike(skin_voice_t *v, const float *p, uint32_t seed, float amp) {
     v->kind = (int)p[P_S_HIT];
     v->seed = seed | 1u;
+    v->amp = amp;
+    v->n = 0;
     const int len = hit_len(p);
     if (v->kind == HIT_CLICK) {
         /* an exponential pulse whose time constant is a fifth of SNAP */
@@ -81,12 +93,12 @@ void skin_start(skin_voice_t *v, const float *p, uint32_t seed) {
     } else {
         /* noise: its expected size, from its energy (a uniform sample's
          * variance is a third). Each burst then rings a little differently.
-         * A Wave hit is sized by the caller (strut.c). */
+         * A Wave hit is sized again by the caller (strut.c). */
         const float d2 = v->decay * v->decay;
         mag = sqrtf((1.0f - powf(d2, (float)v->len)) / (1.0f - d2) / 3.0f);
         sum = 0.5f * (1.0f - powf(v->decay, (float)v->len)) / (1.0f - v->decay);
     }
-    v->norm = 1.0f / fmaxf(fmaxf(mag, 0.01f * sum), 1e-6f);
+    skin_resize(v, 1.0f / fmaxf(fmaxf(mag, 0.01f * sum), 1e-6f));
 }
 
 static svf_t svf(float hz, float k) {

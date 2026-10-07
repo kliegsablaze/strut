@@ -85,6 +85,11 @@ static void level(sb_t *b, const page_def_t *pg) {
     sb_printf(b, ",\"knobs\":[");
     for (int i = 0; i < pg->count; i++) sb_printf(b, "%s\"%s\"", i ? "," : "", page_param(pg, i)->key);
     if (view) sb_printf(b, ",\"%s\"", view);
+    /* The Kit page's last cell picks the pad the other pages edit. A cell
+     * for the focus is what stops the host planning a Selected Pad page of
+     * its own (page_plan.mjs, childPickerNeeded); tapping a pad still picks
+     * it, and this is the way to when page-follow is off. */
+    if (!pg->per_pad) sb_printf(b, ",\"pad\"");
     sb_printf(b, "],\"params\":[");
     for (int i = 0; i < pg->count; i++) {
         sb_printf(b, "%s{\"key\":\"%s\"", i ? "," : "", page_param(pg, i)->key);
@@ -94,6 +99,7 @@ static void level(sb_t *b, const page_def_t *pg) {
         sb_printf(b, "}");
     }
     if (view) sb_printf(b, ",{\"key\":\"%s\"}", view);
+    if (!pg->per_pad) sb_printf(b, ",{\"key\":\"pad\"}");
     /* root links every other page, in the order the jog walks them */
     if (pg == &STRUT_PAGES[0])
         for (int p = 1; p < STRUT_NPAGES; p++)
@@ -114,7 +120,7 @@ int strut_contract_hierarchy(char *buf, int len) {
 
 int strut_contract_params(char *buf, int len) {
     sb_t b = { buf, len, 0 };
-    sb_printf(&b, "[{\"key\":\"pad\",\"name\":\"Pad\",\"short_name\":\"Pad\",\"type\":\"int\",\"min\":1,\"max\":%d}",
+    sb_printf(&b, "[{\"key\":\"pad\",\"name\":\"Selected Pad\",\"short_name\":\"Pad\",\"type\":\"int\",\"min\":1,\"max\":%d}",
               STRUT_PADS);
     for (int k = 0; k < P_COUNT; k++) param_json(&b, &STRUT_PAD_PARAMS[k]);
     for (int k = 0; k < G_COUNT; k++) param_json(&b, &STRUT_GLOBALS[k]);

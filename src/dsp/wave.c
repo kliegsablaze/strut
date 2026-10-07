@@ -50,9 +50,9 @@ static float hz_at(const float *p, float bend) {
     return fminf(fmaxf(hz, 1.0f), TOP);
 }
 
-void wave_start(wave_voice_t *w, const float *p) {
+void wave_start(wave_voice_t *w, const float *p, float amp) {
     *w = (wave_voice_t){ 0 };
-    w->env = 1.0f;
+    w->env = amp;
     w->level = -1;
     w->bend = bend_start(p);
     w->rphase = 0.25f;      /* the ring's sine at its peak, so a slow one starts open */
@@ -130,7 +130,7 @@ int wave_block(wave_voice_t *w, const float *p, int frames, wave_block_t *b) {
     b->ca = m.ca, b->cb = m.cb, b->off = m.off;
 
     w->decay = expf(-6.9078f / (wave_t60(p) * STRUT_SR));
-    return w->env > 1e-5f;      /* 100 dB down */
+    return w->env > 1e-5f;      /* 100 dB under a full hit */
 }
 
 void wave_skip(wave_voice_t *w, const float *p, int frames) {

@@ -18,6 +18,7 @@ typedef struct {
     int kind, n, len;
     uint32_t seed;
     float decay, env;
+    float amp;              /* the hit's strength, from velocity */
     float norm;             /* scales the hit so the body rings at one */
     /* three phasor resonators (Mathews and Smith), real and imaginary */
     float zr[SKIN_PARTIALS], zi[SKIN_PARTIALS];
@@ -36,9 +37,13 @@ typedef struct {
     int mode;
 } skin_block_t;
 
-/* Starts a hit with the pad's knobs p (STRUT_PAD_PARAMS order). A Wave hit
- * leaves norm for the caller, who knows Wave (wave_strike). */
-void skin_start(skin_voice_t *v, const float *p, uint32_t seed);
+/* Strikes the drum with the pad's knobs p (STRUT_PAD_PARAMS order), at
+ * strength amp: a new hit on whatever is still ringing, as a real drum is
+ * struck again. A Wave hit's size is left to the caller, who knows Wave
+ * (wave_strike), through skin_resize. */
+void skin_strike(skin_voice_t *v, const float *p, uint32_t seed, float amp);
+/* Sets the hit's scale, keeping what already rings at its level. */
+void skin_resize(skin_voice_t *v, float norm);
 void skin_block(skin_voice_t *v, const float *p, skin_block_t *b);
 /* 0 once the hit is over and the ring has died away. */
 int skin_alive(const skin_voice_t *v);
@@ -77,7 +82,7 @@ static inline float skin_hit(skin_voice_t *v, float ext) {
         break;
     }
     v->n++;
-    return x;
+    return x * v->amp;
 }
 
 static inline void svf_step(const svf_t *f, float *s1, float *s2, float x, float *lp, float *bp, float *hp) {

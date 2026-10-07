@@ -33,7 +33,8 @@ typedef struct {
     float fm, ratio, rmix;          /* FM index, ring ratio and amount */
 } wave_block_t;
 
-void wave_start(wave_voice_t *w, const float *p);
+/* Starts a note at strength amp (from velocity). */
+void wave_start(wave_voice_t *w, const float *p, float amp);
 /* Sets up a block of frames; returns 0 once the fall has died away. */
 int wave_block(wave_voice_t *w, const float *p, int frames, wave_block_t *b);
 /* Moves on a block without sounding, so turning WAVE up mid-note joins it. */

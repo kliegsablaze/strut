@@ -90,8 +90,11 @@ for (let mask = 0; mask < 8; mask++) {
         check(page && page.keys[7] === view, `${tag} ${level}: MOD is cell 8`);
         check(page && page.keys.slice(0, 7).join() === want.join(), `${tag} ${level}: the ${values[view]} view's seven`);
     }
+    /* no Selected Pad page: Kit's PAD cell stands in for it */
     const pickers = plan.pages.filter((p) => p.childOf);
-    check(pickers.length === 1, `${tag}: one pad picker for every rack, got ${pickers.length}`);
+    check(pickers.length === 0, `${tag}: no pad picker page, got ${pickers.length}`);
+    const kit = pages.find((p) => p.level === "kit");
+    check(kit && kit.keys[kit.keys.length - 1] === "pad", `${tag}: Kit's last cell is PAD`);
     check([...(plan.conditionKeys || [])].sort().join() === [...views].sort().join(),
           `${tag}: the gates are the three MOD switches, got ${[...(plan.conditionKeys || [])]}`);
     if (mask === 0 || mask === 7) {
@@ -115,7 +118,7 @@ for (const [k, l] of Object.entries(hierarchy.levels)) {
         .map((p) => `${p.childLevel.child_label} 16`);
     check(titles.join() === "Pad 16,Skin 16,Wave 16,Noise 16,Finish 16", `pad pages are titled by page, got ${titles}`);
     for (const t of titles) check(fontWidth4x5(t.toUpperCase()) <= pageRoom, `"${t}" fits the header`);
-    check(plan.pages.some((p) => p.childOf && p.name === "Selected Pad"), "the picker is still Selected Pad");
+    check(!plan.pages.some((p) => p.childOf), "no Selected Pad page");
 }
 
 const { findings } = validateContract({ id: "strut", hierarchy, chainParams, capabilities: moduleJson.capabilities });

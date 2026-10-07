@@ -208,7 +208,7 @@ static void skin(void) {
             CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", d->key, v, peak);
             /* the longest ring, 12 s, may still be going after two */
             if (!(knobs[k] == P_S_RING && i == 2) && !(knobs[k] == P_DECAY && i == 2))
-                CHECK(!s->pad[0].voice[0].active && !s->pad[0].voice[1].active, "%s %g: dies away", d->key, v);
+                CHECK(!s->pad[0].voice.active, "%s %g: dies away", d->key, v);
             free(s);
         }
     }
@@ -259,7 +259,7 @@ static double sweep_hit(strut_t *s, const char *what, float v, int must_end) {
     CHECK(finite, "%s %g: finite", what, v);
     CHECK(peak < 0.9, "%s %g: does not clip (peak %.2f)", what, v, peak);
     CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", what, v, peak);
-    if (must_end) CHECK(!s->pad[0].voice[0].active && !s->pad[0].voice[1].active, "%s %g: dies away", what, v);
+    if (must_end) CHECK(!s->pad[0].voice.active, "%s %g: dies away", what, v);
     return peak;
 }
 
@@ -389,6 +389,69 @@ static void wave(void) {
     }
 }
 
+/* Renders n samples of whatever is sounding into L from `at`. */
+static void play(strut_t *s, int at, int n) {
+    for (int k = 0; k < n; k += 128) strut_render(s, L + at + k, R + at + k, n - k < 128 ? n - k : 128);
+}
+
+/* One voice a pad: a new hit strikes the same Skin again, as a drum is
+ * struck again, and restarts Wave without a click. */
+static void restrike(void) {
+    /* Skin: a second hit in step with the ring builds it, one against it
+     * stops it, as on a real drum. 220.5 Hz: 200 samples a cycle exactly. */
+    double once = 0, with = 0, against = 0;
+    for (int c = 0; c < 3; c++) {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_PITCH] = 24;
+        s->pad[0].p[P_S_RING] = 1.0f;
+        s->pad[0].p[P_S_MODE] = 1;
+        s->pad[0].p[P_S_SNAP] = 0;
+        s->pad[0].p[P_TUNE] = 0;
+        strut_note_on(s, STRUT_NOTE0, 100);
+        const int second = c == 1 ? 2000 : 2100;     /* ten cycles, or ten and a half */
+        play(s, 0, second);
+        if (c) strut_note_on(s, STRUT_NOTE0, 100);
+        play(s, second, 8000 - second);
+        const double r = window_rms(6000, 2000);
+        if (c == 0) once = r; else if (c == 1) with = r; else against = r;
+        free(s);
+    }
+    CHECK(20 * log10(with / once) > 4, "a hit in step with the ring builds it (%+.1f dB)", 20 * log10(with / once));
+    CHECK(20 * log10(against / once) < -6, "a hit against it stops it (%+.1f dB)", 20 * log10(against / once));
+
+    /* a soft hit on a loud ring keeps the ring: velocity is in the hit */
+    {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_RING] = 0.9f;
+        strut_note_on(s, STRUT_NOTE0, 127);
+        play(s, 0, 4410);
+        const double before = window_rms(2205, 2205);
+        strut_note_on(s, STRUT_NOTE0, 10);
+        play(s, 4410, 4410);
+        const double after = window_rms(4410 + 1000, 2205);
+        CHECK(after > 0.5 * before, "a soft hit does not drop a loud ring (%.2f of it)", after / before);
+        free(s);
+    }
+
+    /* Wave: a restarted note fades the old one out, so no step */
+    {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_DECAY] = 1.0f;
+        strut_note_on(s, STRUT_NOTE0, 100);
+        play(s, 0, 5000);
+        strut_note_on(s, STRUT_NOTE0, 100);
+        play(s, 5000, 3000);
+        double peak = 0, step = 0;
+        for (int n = 1; n < 8000; n++) {
+            peak = fmax(peak, fabs(L[n]));
+            if (n > 4900 && n < 5600) step = fmax(step, fabs(L[n] - L[n - 1]));
+        }
+        CHECK(step < 0.1 * peak, "a restarted Wave note does not click (a step of %.3f of the peak)", step / peak);
+        CHECK(s->pad[0].voice.old_n == 0, "and the old note is gone after its fade");
+        free(s);
+    }
+}
+
 /* The level knobs are faders: off at zero, then a few dB a tenth of a turn,
  * so a turn is always heard. */
 static void levels(void) {
@@ -497,6 +560,7 @@ int main(int argc, char **argv) {
     keys();
     skin();
     wave();
+    restrike();
     levels();
     tail();
     focus();

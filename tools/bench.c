@@ -1,6 +1,6 @@
 /*
  * bench: what a block costs at the worst Strut can be asked for, every pad
- * sounding with both voices, the longest rings, Wave at its dearest. Runs natively and on the Move
+ * sounding, the longest rings, Wave at its dearest. Runs natively and on the Move
  * (scripts/bench.sh). The target is a quarter of the Move's 2902 us block
  * (CLAUDE.md). "onset us" is the worst block in which all sixteen pads are hit
  * at once, which also measures starting a hit.
@@ -44,7 +44,7 @@ static void sort(double *x, int n) {
         for (int j = i; j > 0 && x[j] < x[j - 1]; j--) { const double t = x[j]; x[j] = x[j - 1]; x[j - 1] = t; }
 }
 
-/* Every pad hit twice so both voices ring, then blocks timed in five runs;
+/* Every pad hit, then blocks timed in five runs;
  * and the worst block in which all sixteen are hit at once. */
 static void run(plugin_api_v2_t *a, void *p, const char *name) {
     int16_t out[256];
@@ -110,7 +110,7 @@ int main(void) {
     set_all(a, p, "s_snap", "1");           /* the longest hit, measured at its start */
     set_all(a, p, "s_metal", "1");
     set_all(a, p, "s_hit", "Burst");
-    run(a, p, "skin, 32 voices");
+    run(a, p, "skin, 16 pads");
 
     /* Wave at its dearest: four table reads (the pulse), the ring, FM, the
      * longest fall, and striking Skin, which is sized at the hit */
@@ -121,7 +121,7 @@ int main(void) {
     set_all(a, p, "w_ring", "0.5");
     set_all(a, p, "w_bend", "0.5");
     set_all(a, p, "s_hit", "Wave");
-    run(a, p, "skin + wave, 32 voices");
+    run(a, p, "skin + wave, 16 pads");
     a->destroy_instance(p);
     return 0;
 }

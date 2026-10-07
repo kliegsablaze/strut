@@ -15,12 +15,12 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.0.9"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.1.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
 #define STRUT_MAX_BLOCK 256
-#define STRUT_VOICES 2          /* a pad's: a roll's tail rings under the next hit */
+#define STRUT_DECLICK 256       /* samples a restarted Wave note fades out over */
 #define STRUT_SHAPE 8           /* the noise shaper's memory (strut.c) */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
 
@@ -79,19 +79,21 @@ typedef struct {
 extern const page_def_t STRUT_PAGES[STRUT_NPAGES];
 extern const char *const STRUT_VIEW_OPTIONS[2];   /* "Sound", "Mod" */
 
-/* One hit: Skin and Wave together, a sample at a time. */
+/* A pad's drum: Skin and Wave together, a sample at a time. One a pad: a
+ * new hit strikes the same Skin again and restarts Wave (DESIGN.md, One
+ * voice a pad). */
 typedef struct {
     int active;
-    float vel;
     float gs, gw;               /* the last block's levels, so a turn glides; -1 none yet */
     skin_voice_t skin;
     wave_voice_t wave;
+    wave_voice_t old;           /* the Wave note a hit cut, fading out */
+    int old_n;                  /* samples of that fade left */
 } voice_t;
 
 typedef struct {
     float p[P_COUNT];
-    voice_t voice[STRUT_VOICES];
-    int last;
+    voice_t voice;
 } pad_t;
 
 typedef struct {

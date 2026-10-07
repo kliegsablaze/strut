@@ -47,22 +47,27 @@ void strut_note_on(strut_t *s, int note, int vel) {
     const int i = note - STRUT_NOTE0;
     if (i < 0 || i >= STRUT_PADS || vel <= 0) return;
     pad_t *p = &s->pad[i];
-    /* the other voice, so the last hit keeps ringing under this one */
-    p->last = (p->last + 1) % STRUT_VOICES;
-    voice_t *v = &p->voice[p->last];
+    voice_t *v = &p->voice;
+    const float amp = powf((float)vel / 127.0f, 1.5f);
+    if (!v->active) {
+        *v = (voice_t){ 0 };
+        v->gs = v->gw = -1.0f;
+    } else if (v->wave.env > 1e-4f && strut_fader(p->p[P_WAVE]) > 0.0f) {
+        /* the Wave note this hit cuts fades out, not clicks off */
+        v->old = v->wave;
+        v->old_n = STRUT_DECLICK;
+    }
     v->active = 1;
-    v->vel = powf((float)vel / 127.0f, 1.5f);
-    v->gs = v->gw = -1.0f;
     s->seed = s->seed * 1664525u + 1013904223u;
-    skin_start(&v->skin, p->p, s->seed);
-    wave_start(&v->wave, p->p);
+    skin_strike(&v->skin, p->p, s->seed, amp);
+    wave_start(&v->wave, p->p, amp);
     /* Wave as Skin's hit: at least one of Wave's cycles, sized from Wave's
      * harmonics near PITCH. The floor keeps the hit itself, heard directly,
      * under full scale. */
     if (v->skin.kind == HIT_WAVE) {
         const int len = wave_strike_len(p->p, v->skin.len);
         if (len != v->skin.len) v->skin.len = len, v->skin.decay = expf(-5.0f / (float)len);
-        v->skin.norm = 1.0f / fmaxf(wave_strike(p->p, skin_hz(p->p), v->skin.decay, len), 0.5f);
+        skin_resize(&v->skin, 1.0f / fmaxf(wave_strike(p->p, skin_hz(p->p), v->skin.decay, len), 0.5f));
     }
     s->note_pad = i;
     s->note_at = s->now;
@@ -105,8 +110,8 @@ static inline __attribute__((always_inline)) void voice_loop(
  * follows Skin's ring a sample late, which is what lets each feed the other
  * (Skin struck by Wave, Wave bent by Skin) without a loop. */
 static int voice_render(voice_t *restrict v, const float *restrict p, float level, float *restrict out, int frames) {
-    const float gs1 = 2.4f * v->vel * level * strut_fader(p[P_SKIN]);
-    const float gw1 = 2.4f * v->vel * level * strut_fader(p[P_WAVE]);
+    const float gs1 = 2.4f * level * strut_fader(p[P_SKIN]);
+    const float gw1 = 2.4f * level * strut_fader(p[P_WAVE]);
     const float gs0 = v->gs < 0.0f ? gs1 : v->gs, gw0 = v->gw < 0.0f ? gw1 : v->gw;
     v->gs = gs1, v->gw = gw1;
     const gains_t g = { gs0, (gs1 - gs0) / (float)frames, gw0, (gw1 - gw0) / (float)frames };
@@ -120,7 +125,18 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
     if (skin_on) skin_block(&v->skin, p, &sb);
     if (wave_on) heard = wave_block(&v->wave, p, frames, &wb) && gw1 > 0.0f;
     else wave_skip(&v->wave, p, frames);
-    if (!skin_on && !heard) return 0;
+    /* the note a hit cut, fading out underneath: a few milliseconds */
+    if (v->old_n > 0) {
+        wave_block_t ob;
+        wave_block(&v->old, p, frames, &ob);
+        const int n1 = v->old_n < frames ? v->old_n : frames;
+        float raw;
+        for (int n = 0; n < n1; n++)
+            out[n] += (gw0 + g.dw * (float)(n + 1)) * (float)(v->old_n - n) * (1.0f / STRUT_DECLICK)
+                    * wave_step(&v->old, &ob, n, 0.0f, &raw);
+        v->old_n -= n1;
+    }
+    if (!skin_on && !heard) return v->old_n > 0;
 
     skin_voice_t *sk = &v->skin;
     wave_voice_t *wv = &v->wave;
@@ -133,7 +149,7 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
     } else {
         voice_loop(sk, wv, &sb, &wb, g, out, frames, 0, 0, 1);
     }
-    return skin_alive(&v->skin) || heard;
+    return skin_alive(&v->skin) || heard || v->old_n > 0;
 }
 
 void strut_render(strut_t *s, float *l, float *r, int frames) {
@@ -142,11 +158,9 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
         const float level = strut_fader(p->p[P_LEVEL]);
-        for (int v = 0; v < STRUT_VOICES; v++) {
-            if (!p->voice[v].active) continue;
-            s->sounding++;
-            p->voice[v].active = voice_render(&p->voice[v], p->p, level, l, frames);
-        }
+        if (!p->voice.active) continue;
+        s->sounding++;
+        p->voice.active = voice_render(&p->voice, p->p, level, l, frames);
     }
     memcpy(r, l, sizeof(float) * frames);   /* PAN comes with Finish (step 6) */
     s->now += (double)frames / STRUT_SR;
