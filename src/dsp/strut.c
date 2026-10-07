@@ -324,6 +324,16 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, int frames) {
         v->choke_n -= frames;
         if (v->choke_n <= 0) v->active = 0;
     }
+    /* A voice gone to inf or NaN would keep itself alive and, mixed in,
+     * silence the room and every pad after it until Strut is reloaded.
+     * Drop it instead, so the next hit starts from silence, and say so. */
+    float sum = 0.0f;
+    for (int n = 0; n < frames; n++) sum += x[n] * x[n];
+    if (!isfinite(sum)) {
+        v->active = 0;
+        s->healed |= 1u << (p - s->pad);
+        return;
+    }
     finish_block_t fb;
     finish_block(p->p, &fb);
     finish_run(&v->fx, &fb, x, l, r, frames);
@@ -629,6 +639,13 @@ static void set_param(void *instance, const char *key, const char *val) {
 static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     strut_t *s = instance;
     int pad, k;
+    /* the host asks often, off the voices' path, so a dropped sound is told here */
+    if (s->healed) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "strut: dropped a sound gone bad (pads bitmask 0x%x, bit 16 the room)", s->healed);
+        if (g_host && g_host->log) g_host->log(msg);
+        s->healed = 0;
+    }
     if (!strcmp(key, "ui_hierarchy")) return strut_contract_hierarchy(buf, buf_len);
     if (!strcmp(key, "chain_params")) return strut_contract_params(buf, buf_len);
     if (!strcmp(key, "pad")) return snprintf(buf, buf_len, "%d", s->focus + 1);
@@ -664,6 +681,15 @@ static void render_block(void *instance, int16_t *out, int frames) {
         const int n = frames - done < STRUT_MAX_BLOCK ? frames - done : STRUT_MAX_BLOCK;
         strut_render(s, l, r, n);
         strut_kit(s, l, r, n);
+        float sum = 0.0f;   /* the same for the room and the finish, which every pad passes through */
+        for (int i = 0; i < n; i++) sum += l[i] * l[i] + r[i] * r[i];
+        if (!isfinite(sum)) {
+            memset(&s->kit, 0, sizeof(s->kit));
+            for (int i = 0; i < STRUT_PADS; i++) s->pad[i].voice.active = 0;
+            memset(l, 0, sizeof(float) * (size_t)n);
+            memset(r, 0, sizeof(float) * (size_t)n);
+            s->healed |= 1u << STRUT_PADS;
+        }
         strut_output(s, l, r, out + 2 * done, n);
         done += n;
     }

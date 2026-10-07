@@ -1767,6 +1767,35 @@ static void state(void) {
     A->destroy_instance(b);
 }
 
+/* A sound gone to inf or NaN is dropped, not left to silence Strut until it
+ * is reloaded: the next hit plays. */
+static void heal(void) {
+    static int16_t out[2 * 128];
+    void *p = A->create_instance(".", "");
+    strut_t *s = p;
+    A->set_param(p, "space", "0.5");
+    for (int bad = 0; bad < 2; bad++) {
+        uint8_t on[3] = { 0x90, STRUT_NOTE0, 100 };
+        A->on_midi(p, on, 3, 0);
+        A->render_block(p, out, 128);
+        if (bad) s->kit.damp[0] = NAN;      /* the room */
+        else s->pad[0].voice.gs = NAN;      /* one pad */
+        for (int b = 0; b < 50; b++) A->render_block(p, out, 128);
+        A->on_midi(p, on, 3, 0);
+        int pk = 0;
+        for (int b = 0; b < 100; b++) {
+            A->render_block(p, out, 128);
+            for (int i = 0; i < 256; i++) pk = abs(out[i]) > pk ? abs(out[i]) : pk;
+        }
+        CHECK(pk > 1000 && s->healed, "%s gone to NaN is dropped and the next hit plays (peak %d)",
+              bad ? "the room" : "a pad", pk);
+        char buf[64];
+        A->get_param(p, "pad", buf, sizeof(buf));
+        CHECK(!s->healed, "and it is logged once");
+    }
+    A->destroy_instance(p);
+}
+
 int main(int argc, char **argv) {
     smp_catalogue("src");    /* the library, as the module's folder holds it on the Move */
     const char *dir = argc > 1 ? argv[1] : ".";
@@ -1792,6 +1821,7 @@ int main(int argc, char **argv) {
     sample_levels();
     dice();
     state();
+    heal();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;
 }

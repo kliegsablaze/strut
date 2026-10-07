@@ -850,7 +850,7 @@ Every knob glides across a block.
 
 - **SPACE** sends the whole kit, high-passed at 150 Hz so the kicks do not
   boom in it, to the room; full up, the room is about 6 dB under a beat's
-  dry sound. The default, 0.15, is a touch of air, about 22 dB under.
+  dry sound. The default is 0, a dry kit (the user's choice, 2026-10-07; it was 0.15, a touch of air about 22 dB under).
 - **The room** is Dattorro's plate (JAES 1997), Quilt's: four diffusing
   all-passes into two cross-fed loops, each a slowly wandering all-pass, a
   delay, damping and another all-pass and delay, tapped at seven points a

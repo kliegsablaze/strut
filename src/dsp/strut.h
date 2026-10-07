@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.8.1"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.8.2"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -135,6 +135,7 @@ typedef struct {
     float shape[2][STRUT_SHAPE];  /* each channel's last rounding errors */
     float bpm;                  /* the host's tempo, for RATE's synced half */
     int sounding;               /* voices that rendered this block, and the room */
+    unsigned healed;            /* pads (bit 16 the room) dropped for going to inf or NaN, not yet logged */
     kit_t kit;
     smp_lib_t lib;              /* the samples the pads name, loaded off the audio thread */
     dice_hist_t dice;           /* Kit > DICE's rolls of every pad */
