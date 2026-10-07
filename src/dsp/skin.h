@@ -91,11 +91,12 @@ static inline void svf_step(const svf_t *f, float *s1, float *s2, float x, float
     *hp = x - f->k * v1 - v2;
 }
 
-/* The next sample, before any level. */
-static inline float skin_step(skin_voice_t *v, const skin_block_t *b, float ext) {
+/* The next sample, before any level. np is b->np, passed as a constant so
+ * the partials unroll and the voice's state stays in registers. */
+static inline float skin_step(skin_voice_t *v, const skin_block_t *b, float ext, const int np) {
     const float x = skin_hit(v, ext);
     float y = 0.0f;
-    for (int k = 0; k < b->np; k++) {
+    for (int k = 0; k < np; k++) {
         const float zr = v->zr[k] * b->pr[k] - v->zi[k] * b->pi[k] + x;
         v->zi[k] = v->zr[k] * b->pi[k] + v->zi[k] * b->pr[k];
         v->zr[k] = zr;

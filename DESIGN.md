@@ -2,15 +2,15 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin and Wave sound, 0.0.8 (2026-10-07). Every proposed knob, on
+**Status:** Skin and Wave sound, 0.0.9 (2026-10-07). Every proposed knob, on
 every page and both views of each engine page, is declared, kept per pad and
 planned by the host's own planner in the tests. **Skin**, the resonator, and
 **Wave**, the oscillator, are built and play on every pad, mixed by SKIN,
 WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
 strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
 and the effects are still the plan; their knobs are kept but do nothing yet.
-On the Move, Skin and Wave at their dearest took 13.8 % of the CPU in 0.0.7;
-0.0.8 makes them cheaper, still to measure there.
+On the Move, Skin and Wave at their dearest took 14.1 % of the CPU in 0.0.8;
+0.0.9 makes them cheaper, still to measure there.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -559,6 +559,21 @@ own engine, reach most of the same sounds.)
     - The bench now plays METAL up (Skin's dearest), runs five times and
       reports the middle and the spread, and names the processor and its
       clock.
+  - **The Move's processor** is a quad Cortex-A72 at 1.5 GHz (`CPU part
+    0xd08`, a Raspberry Pi compute module). Building the tables there takes
+    350 ms at load.
+  - **0.0.8 on the Move:** Skin with METAL up **7.6 %** (0.0.7 was 8.6 % with
+    METAL down, a third of the work), Skin and Wave **14.1 %**: Wave itself
+    no cheaper.
+  - **0.0.9: the voice's state in registers.** Counting instructions
+    (valgrind) and reading the ARM code (clang) showed every sample
+    rereading and rewriting each voice's state in memory, two dozen loads a
+    sample: the output pointer might have pointed into the voice, as far as
+    the compiler knew, and a partial count decided at run time kept Skin's
+    resonators in an array. Now each block runs on a copy of the voice in
+    locals, with `restrict`, and one loop for each pairing of engines and
+    each partial count, chosen when the block starts. Skin's ARM loop touches
+    memory only for the output; Wave's, for its table reads.
   - The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
@@ -649,8 +664,8 @@ own engine, reach most of the same sounds.)
    noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
    at full Move volume. Its CPU is inside step 4's measurement.
 4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
-   Move: 13.8 % with Skin, every voice at its dearest; 0.0.8 cuts it, still
-   to measure. Still to do: hear it on the device.
+   Move: 14.1 % with Skin, every voice at its dearest (0.0.8); 0.0.9 keeps
+   the voices in registers, still to measure. Still to do: hear it on the device.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
