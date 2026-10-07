@@ -500,8 +500,8 @@ own engine, reach most of the same sounds.)
 - **Reinstalling needs a restart.** The host opens a new synth before
   closing the old one, and `dlopen()` matches by path, so a slot reloaded
   with Strut gets the copy already in memory. The user tested 0.0.4 and heard
-  0.0.3's grit and dead SKIN knob (2026-10-07). `scripts/install.sh` now says
-  to restart the Move, and Strut logs `strut <version> loaded` to
+  0.0.3's grit and dead SKIN knob (2026-10-07). `scripts/install.sh` now restarts
+  the Move itself (`reboot` as root, as the host's installer does), and Strut logs `strut <version> loaded` to
   `/data/UserData/schwung/debug.log` when it starts.
 - **The level knobs are faders.** SKIN, WAVE, NOISE and LEVEL began as the
   square of the knob, moving half a percent a detent; the user turned SKIN
