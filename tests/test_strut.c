@@ -208,7 +208,7 @@ static void skin(void) {
             CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", d->key, v, peak);
             /* the longest ring, 12 s, may still be going after two */
             if (!(knobs[k] == P_S_RING && i == 2) && !(knobs[k] == P_DECAY && i == 2))
-                CHECK(!s->pad[0].active[0] && !s->pad[0].active[1], "%s %g: dies away", d->key, v);
+                CHECK(!s->pad[0].voice[0].active && !s->pad[0].voice[1].active, "%s %g: dies away", d->key, v);
             free(s);
         }
     }
@@ -216,15 +216,188 @@ static void skin(void) {
            20 * log10(hi / lo));
 }
 
+/* Zero-crossing pitch of L from `from` to n. */
+static double crossing_hz(int from, int n) {
+    int cross = 0, first = -1, last = 0;
+    for (int k = from; k < n - 1; k++)
+        if (L[k] <= 0 && L[k + 1] > 0) { if (first < 0) first = k; last = k; cross++; }
+    return cross > 1 ? (cross - 1) * (double)STRUT_SR / (last - first) : 0;
+}
+
+/* Goertzel through a Hann window: the level of L at hz over n samples from
+ * `from`, as an amplitude. The window keeps a loud partial from leaking
+ * into a quiet frequency being measured. */
+static double level_at(double hz, int from, int n) {
+    const double w = 2 * 3.14159265358979 * hz / STRUT_SR, c = 2 * cos(w);
+    double s1 = 0, s2 = 0, sum = 0;
+    for (int k = 0; k < n; k++) {
+        const double h = 0.5 - 0.5 * cos(2 * 3.14159265358979 * k / n);
+        const double s0 = h * L[from + k] + c * s1 - s2;
+        s2 = s1, s1 = s0, sum += h;
+    }
+    return 2 * sqrt(fmax(s1 * s1 + s2 * s2 - c * s1 * s2, 0)) / sum;
+}
+
+/* A pad of Wave alone. */
+static strut_t *wave_pad(void) {
+    strut_t *s = fresh();
+    s->pad[0].p[P_SKIN] = 0;
+    s->pad[0].p[P_WAVE] = 0.8f;
+    return s;
+}
+
+/* Peak and health of a hit: finite, under full scale, heard, and gone by
+ * the end unless it is meant to last. */
+static double sweep_hit(strut_t *s, const char *what, float v, int must_end) {
+    const int n = hit(s, 2.0f);
+    double peak = 0;
+    int finite = 1;
+    for (int j = 0; j < n; j++) {
+        finite &= isfinite(L[j]);
+        peak = fmax(peak, fabs(L[j]));
+    }
+    CHECK(finite, "%s %g: finite", what, v);
+    CHECK(peak < 0.9, "%s %g: does not clip (peak %.2f)", what, v, peak);
+    CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", what, v, peak);
+    if (must_end) CHECK(!s->pad[0].voice[0].active && !s->pad[0].voice[1].active, "%s %g: dies away", what, v);
+    return peak;
+}
+
+static void wave(void) {
+    /* PITCH is the pitch, on the sine */
+    const float pitches[] = { -12, 0, 12, 31, 60 };
+    for (int i = 0; i < 5; i++) {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_PITCH] = pitches[i];
+        s->pad[0].p[P_W_DECAY] = 1.0f;
+        const int n = hit(s, 1.0f);
+        const double hz = crossing_hz(STRUT_SR / 10, n), want = wave_hz(s->pad[0].p);
+        CHECK(fabs(hz / want - 1) < 0.01, "Wave PITCH %+g st plays %.1f Hz, want %.1f", pitches[i], hz, want);
+        free(s);
+    }
+
+    /* DECAY is the fall, as a T60 */
+    const float decays[] = { 0.3f, 0.6f, 0.9f };
+    for (int i = 0; i < 3; i++) {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_DECAY] = decays[i];
+        s->pad[0].p[P_W_PITCH] = 24;
+        const float want = wave_t60(s->pad[0].p);
+        hit(s, 4.0f);
+        const int a = (int)(0.2f * want * STRUT_SR), b = (int)(0.6f * want * STRUT_SR), w = 2048;
+        const double db = 20 * log10(window_rms(a, w) / window_rms(b, w));
+        const double t60 = 60.0 * (b - a) / STRUT_SR / db;
+        CHECK(fabs(t60 / want - 1) < 0.1, "Wave DECAY %.1f falls in %.3f s, want %.3f", decays[i], t60, want);
+        free(s);
+    }
+
+    /* BEND starts the pitch away and brings it home */
+    {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_BEND] = 0.5f;           /* a fall of an octave */
+        s->pad[0].p[P_W_PITCH] = 24;
+        s->pad[0].p[P_W_DECAY] = 0.8f;
+        const int n = hit(s, 1.0f);
+        const double start = crossing_hz(0, 400), end = crossing_hz(n / 2, n), want = wave_hz(s->pad[0].p);
+        CHECK(start > 1.6 * want, "BEND starts high (%.0f Hz against %.0f)", start, want);
+        CHECK(fabs(end / want - 1) < 0.01, "and settles on PITCH (%.1f Hz)", end);
+        free(s);
+    }
+
+    /* Every Wave knob at its ends and middle, every table across WAVE */
+    const int knobs[] = { P_W_PITCH, P_W_BEND, P_W_DECAY, P_W_WAVE, P_W_FM, P_W_RING };
+    double lo = 1e9, hi = 0;
+    for (size_t k = 0; k < sizeof(knobs) / sizeof(knobs[0]); k++) {
+        const param_def_t *d = &STRUT_PAD_PARAMS[knobs[k]];
+        for (int i = 0; i < 3; i++) {
+            strut_t *s = wave_pad();
+            const float v = d->min + (d->max - d->min) * (float)i / 2;
+            s->pad[0].p[knobs[k]] = v;
+            const double peak = sweep_hit(s, d->key, v, !(knobs[k] == P_W_DECAY && i == 2));
+            lo = fmin(lo, peak), hi = fmax(hi, peak);
+            free(s);
+        }
+    }
+    for (int t = 0; t < WT_TABLES; t++)
+        for (int i = 0; i <= 4; i++) {
+            strut_t *s = wave_pad();
+            s->pad[0].p[P_W_TABLE] = (float)t;
+            s->pad[0].p[P_W_WAVE] = (float)i / 4;
+            char what[64];
+            snprintf(what, sizeof(what), "w_table %s, w_wave", STRUT_PAD_PARAMS[P_W_TABLE].options[t]);
+            const double peak = sweep_hit(s, what, (float)i / 4, 1);
+            lo = fmin(lo, peak), hi = fmax(hi, peak);
+            free(s);
+        }
+    printf("wave: peak over every knob setting %.3f .. %.3f (%.1f dB)\n", lo, hi, 20 * log10(hi / lo));
+
+    /* A high saw does not alias: its 4th to 6th harmonics would fold back
+     * to 15.9, 8.9 and 1.9 kHz */
+    {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_WAVE] = 0.5f;           /* the saw */
+        s->pad[0].p[P_W_PITCH] = 60;
+        s->pad[0].p[P_TUNE] = 24;               /* 7040 Hz */
+        s->pad[0].p[P_W_DECAY] = 1.0f;
+        hit(s, 0.5f);
+        const int from = 4410, n = 8192;
+        const double f0 = wave_hz(s->pad[0].p), top = level_at(f0, from, n);
+        double worst = 0;
+        for (int h = 4; h <= 6; h++) worst = fmax(worst, level_at(STRUT_SR - h * f0, from, n));
+        CHECK(20 * log10(worst / top) < -70, "a 7 kHz saw does not alias (%.0f dB)", 20 * log10(worst / top));
+        free(s);
+    }
+
+    /* Skin struck by Wave rings at Skin's PITCH, sized like any hit */
+    lo = 1e9, hi = 0;
+    for (int t = 0; t < WT_TABLES; t++)
+        for (int k = 0; k < 9; k++) {
+            strut_t *s = fresh();
+            s->pad[0].p[P_S_HIT] = HIT_WAVE;
+            s->pad[0].p[P_W_TABLE] = (float)t;
+            s->pad[0].p[P_W_WAVE] = (float)(k % 3) / 2;
+            s->pad[0].p[P_S_SNAP] = (float)(k / 3) / 2;
+            s->pad[0].p[P_W_PITCH] = (float)(t * 7 % 30);
+            char what[64];
+            snprintf(what, sizeof(what), "Skin hit by %s, case", STRUT_PAD_PARAMS[P_W_TABLE].options[t]);
+            const double peak = sweep_hit(s, what, (float)k, 1);
+            lo = fmin(lo, peak), hi = fmax(hi, peak);
+            free(s);
+        }
+    printf("wave: Skin hit by Wave, peak %.3f .. %.3f (%.1f dB)\n", lo, hi, 20 * log10(hi / lo));
+
+    /* FM: Skin's ring bends Wave, and changes it. Wave 17 semitones over
+     * Skin, so no sideband folds back onto Wave's pitch (at 1:1 they do). */
+    {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_W_PITCH] = 17;
+        s->pad[0].p[P_S_RING] = 0.8f;
+        s->pad[0].p[P_W_DECAY] = 0.8f;
+        hit(s, 0.5f);
+        const double plain = level_at(wave_hz(s->pad[0].p), 2205, 4096);
+        free(s);
+        s = wave_pad();
+        s->pad[0].p[P_W_PITCH] = 17;
+        s->pad[0].p[P_S_RING] = 0.8f;
+        s->pad[0].p[P_W_DECAY] = 0.8f;
+        s->pad[0].p[P_W_FM] = 0.8f;             /* a swing of 2.6 times: little left at the pitch */
+        sweep_hit(s, "w_fm with a long ring", 0.8f, 0);
+        hit(s, 0.5f);
+        const double bent = level_at(wave_hz(s->pad[0].p), 2205, 4096);
+        CHECK(bent < 0.5 * plain, "FM moves Wave's energy off its pitch (%.2f of it left)", bent / plain);
+        free(s);
+    }
+}
+
 /* The level knobs are faders: off at zero, then a few dB a tenth of a turn,
  * so a turn is always heard. */
 static void levels(void) {
-    const int keys[] = { P_SKIN, P_LEVEL };
-    for (int k = 0; k < 2; k++) {
+    const int keys[] = { P_SKIN, P_WAVE, P_LEVEL };
+    for (int k = 0; k < 3; k++) {
         double prev = 0;
         int even = 1;
         for (int i = 0; i <= 10; i++) {
-            strut_t *s = fresh();
+            strut_t *s = keys[k] == P_WAVE ? wave_pad() : fresh();
             s->pad[0].p[keys[k]] = (float)i / 10;
             const int n = hit(s, 0.3f);
             double peak = 0;
@@ -323,6 +496,7 @@ int main(int argc, char **argv) {
     pads();
     keys();
     skin();
+    wave();
     levels();
     tail();
     focus();

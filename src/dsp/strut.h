@@ -3,8 +3,9 @@
  * built from three engines (DESIGN.md).
  *
  * Every key the design proposes is declared and kept. What sounds so far is
- * Skin (build step 3), mixed by SKIN, TUNE, DECAY and LEVEL; Wave, Noise,
- * the modulators and the effects follow in DESIGN.md's Build order.
+ * Skin and Wave (build steps 3 and 4), mixed by SKIN, WAVE, TUNE, DECAY and
+ * LEVEL; Noise, the modulators and the effects follow in DESIGN.md's Build
+ * order.
  */
 #ifndef STRUT_H
 #define STRUT_H
@@ -12,8 +13,9 @@
 #include <stdint.h>
 
 #include "skin.h"
+#include "wave.h"
 
-#define STRUT_VERSION "0.0.6"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.0.7"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -77,11 +79,19 @@ typedef struct {
 extern const page_def_t STRUT_PAGES[STRUT_NPAGES];
 extern const char *const STRUT_VIEW_OPTIONS[2];   /* "Sound", "Mod" */
 
+/* One hit: Skin and Wave together, a sample at a time. */
+typedef struct {
+    int active;
+    float vel;
+    float gs, gw;               /* the last block's levels, so a turn glides; -1 none yet */
+    skin_voice_t skin;
+    wave_voice_t wave;
+} voice_t;
+
 typedef struct {
     float p[P_COUNT];
-    int active[STRUT_VOICES], last;
-    float vel[STRUT_VOICES];
-    skin_voice_t skin[STRUT_VOICES];
+    voice_t voice[STRUT_VOICES];
+    int last;
 } pad_t;
 
 typedef struct {

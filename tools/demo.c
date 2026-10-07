@@ -1,5 +1,5 @@
 /*
- * demo: renders a few hand-set Skin sounds, one after another, then a short
+ * demo: renders a few hand-set Skin and Wave sounds, one after another, then a short
  * groove made of them, to a WAV file, for listening away from the Move.
  *   tools/demo <out.wav>
  * The sounds are starting points for the voicing pass, not presets.
@@ -13,22 +13,25 @@
 plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host);
 
 static const struct { const char *name, *knobs; } SOUNDS[] = {
-    { "deep kick", "s_pitch=-7 s_ring=0.75 s_mode=Low s_hit=Click s_snap=0.2 s_tone=0.5" },
-    { "short kick", "s_pitch=0 s_ring=0.5 s_mode=Low s_hit=Click s_snap=0.1 s_tone=0.6" },
-    { "low tom", "s_pitch=10 s_ring=0.6 s_mode=Band s_hit=Soft s_snap=0.35 s_tone=0.6" },
-    { "high tom", "s_pitch=17 s_ring=0.55 s_mode=Band s_hit=Soft s_snap=0.3 s_tone=0.65" },
-    { "snare body", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.55 s_metal=0.25 s_tone=0.8" },
-    { "rim", "s_pitch=40 s_ring=0.15 s_mode=Band s_hit=Click s_snap=0 s_tone=1" },
-    { "cowbell", "s_pitch=38 s_ring=0.45 s_mode=Band s_hit=Click s_snap=0.1 s_metal=0.75 s_tone=0.8" },
-    { "metal ping", "s_pitch=45 s_ring=0.8 s_mode=High s_hit=Click s_snap=0 s_metal=1 s_tone=0.9" },
-    { "wood block", "s_pitch=44 s_ring=0.1 s_mode=Band s_hit=Soft s_snap=0.1 s_tone=0.9" },
+    { "deep kick (Skin)", "s_pitch=-7 s_ring=0.75 s_mode=Low s_hit=Click s_snap=0.2 s_tone=0.5" },
+    { "snare body (Skin)", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.55 s_metal=0.25 s_tone=0.8" },
+    { "rim (Skin)", "s_pitch=40 s_ring=0.15 s_mode=Band s_hit=Click s_snap=0 s_tone=1" },
+    { "cowbell (Skin)", "s_pitch=38 s_ring=0.45 s_mode=Band s_hit=Click s_snap=0.1 s_metal=0.75 s_tone=0.8" },
+    { "sine kick (Wave)", "skin=0 wave=0.9 w_wave=0 w_pitch=-5 w_bend=0.45 w_decay=0.55" },
+    { "zap (Wave)", "skin=0 wave=0.75 w_wave=0.5 w_pitch=36 w_bend=0.9 w_decay=0.45" },
+    { "sync blip (Wave)", "skin=0 wave=0.75 w_table=Sync w_wave=0.7 w_pitch=24 w_bend=0.3 w_decay=0.25" },
+    { "vowel tom (Wave)", "skin=0 wave=0.85 w_table=Vowel w_wave=0.4 w_pitch=12 w_bend=0.35 w_decay=0.5" },
+    { "glass bell (Wave, ring)", "skin=0 wave=0.75 w_table=Glass w_wave=0.6 w_pitch=36 w_ring=0.35 w_decay=0.8" },
+    { "fold kick (Skin + Wave)", "s_pitch=-5 s_ring=0.4 s_mode=Low skin=0.6 wave=0.8 w_table=Fold w_wave=0.5 w_pitch=-3 w_bend=0.5 w_decay=0.5" },
+    { "FM tom (Skin bends Wave)", "s_pitch=7 s_ring=0.6 s_mode=Band skin=0.7 wave=0.8 w_pitch=19 w_fm=0.5 w_decay=0.5" },
+    { "metal snare (Wave strikes Skin)", "s_hit=Wave s_pitch=26 s_ring=0.35 s_mode=High s_snap=0.5 s_metal=0.4 wave=0.3 w_table=Metal w_wave=0.7 w_pitch=40 w_decay=0.2" },
 };
 #define NSOUNDS (int)(sizeof(SOUNDS) / sizeof(SOUNDS[0]))
 
 /* 16 steps a bar; each step lists the sounds it hits (bit i = sound i). */
 static const unsigned GROOVE[16] = {
-    1 << 0, 0, 1 << 5, 0, 1 << 4, 0, 1 << 6, 1 << 0,
-    1 << 0, 1 << 5, 0, 1 << 2, 1 << 4, 0, 1 << 3, 1 << 8,
+    1 << 9, 0, 1 << 2, 1 << 6, 1 << 11, 0, 1 << 3, 1 << 9,
+    1 << 4, 1 << 2, 1 << 6, 1 << 10, 1 << 11, 1 << 5, 1 << 7, 1 << 8,
 };
 
 static FILE *wav;

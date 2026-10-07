@@ -2,12 +2,14 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin sounds, 0.0.6 (2026-10-07). Every proposed knob, on every
-page and both views of each engine page, is declared, kept per pad and planned
-by the host's own planner in the tests. **Skin**, the resonator, is built and
-plays on every pad, mixed by SKIN, TUNE, DECAY and LEVEL (see *How Skin
-works*). Wave, Noise, the modulators and the effects are still the plan; their
-knobs are kept but do nothing yet. Skin's CPU on the Move is not yet measured.
+**Status:** Skin and Wave sound, 0.0.7 (2026-10-07). Every proposed knob, on
+every page and both views of each engine page, is declared, kept per pad and
+planned by the host's own planner in the tests. **Skin**, the resonator, and
+**Wave**, the oscillator, are built and play on every pad, mixed by SKIN,
+WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
+strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
+and the effects are still the plan; their knobs are kept but do nothing yet.
+CPU on the Move is not yet measured.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -35,11 +37,16 @@ What the three engines are, and the papers they lean on:
     trapezoidal state-variable filter, stable under fast modulation.
 - **The oscillator** is the tonal body: a wavetable, morphed by an envelope,
   frequency-modulated by the resonator.
+  - Mipmapped wavetables, one table per octave, so a high note does not
+    alias (used; see *How Wave works*).
   - V. Välimäki, J. Pekonen, J. Nam. *Perceptually informed synthesis of
     bandlimited classical waveforms using integrated polynomial
-    interpolation.* JASA 131(1), 2012 (polyBLEP).
-  - Mipmapped wavetables, one table per octave, so a high note does not
-    alias.
+    interpolation.* JASA 131(1), 2012 (polyBLEP; considered, not used).
+  - M. R. Schroeder. *Synthesis of Low-Peak-Factor Signals and Binary
+    Sequences with Low Autocorrelation.* IEEE Trans. Information Theory
+    16(1), 1970. The phases that keep a many-harmonic cycle from spiking.
+  - G. E. Peterson, H. L. Barney. *Control Methods Used in a Study of the
+    Vowels.* JASA 24(2), 1952. The Vowel table's formants.
 - **The noise source** is the hiss, the metal and the sample: a loop that
   repeats without ever sounding pitched, or a recording, played straight as a
   sampler plays it or rebuilt by resynthesis.
@@ -226,7 +233,7 @@ Labels are real words of five letters or fewer. The header shows the full name.
 
 Every key below is declared and kept (`src/dsp/params.c`). The ranges and
 option lists are **provisional** until each engine's build step sets them by
-ear: Wave's and Noise's PITCH are ±48 semitones, the SOUND list and the TABLE lists are stand-in
+ear: Noise's PITCH is ±48 semitones, the SOUND list and Noise's TABLE list are stand-in
 names, and DICE is a plain number until its turn-to-roll gesture (step 10).
 The keys are the bare names in this table with an engine prefix where pages
 share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
@@ -267,8 +274,9 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
   - **Click:** a sharp pulse that falls away; longer SNAP is a duller thud.
   - **Soft:** a smooth bump, a felt mallet; longer is softer.
   - **Burst:** a short burst of noise, falling away; the snare's hit.
-  - **Wave** and **Noise** strike with those engines once they exist (steps
-    4 and 5). Until then they strike with a burst, so no setting is silent.
+  - **Wave** strikes with Wave's own sound (see *How Wave works*).
+  - **Noise** strikes with Noise once it exists (step 5). Until then it
+    strikes with a burst, so no setting is silent.
 - **The ring.** The strike drives a phasor resonator (Mathews and Smith): one
   complex multiply a sample, ringing at PITCH and dying away by RING. The
   strike is scaled so the body always rings at the same level, whatever the
@@ -319,6 +327,78 @@ nothing.
 | 8 | MOD | | MOD | |
 
 Wave's destinations: Pitch, Wave, FM, Ring, Level.
+
+#### How Wave works (built, 0.0.7)
+
+- **PITCH** is semitones from A1 (55 Hz), −12 to +60, as Skin's, so the two
+  start in tune with each other; the Pad page's TUNE moves both.
+- **TABLE** and **WAVE.** A table is a row of single cycles, and WAVE sweeps
+  along it, blending the two nearest. Every cycle is scaled to the same
+  loudness, so a sweep neither swells nor dips (measured: every table and
+  position within about 3 dB).
+  - **Analog:** sine, triangle, saw, square, then the pulse narrows to 5 %.
+    Square and pulse are a saw less a shifted saw, so they are as clean as
+    the saw and stay at its loudness.
+  - **Sync:** a saw restarted every cycle, running 1 to 8 times as fast: the
+    tearing sweep of hard sync.
+  - **Fold:** a sine folded back on itself more and more, as a wavefolder
+    does.
+  - **Sweep:** a saw through a resonant low-pass whose peak climbs from the
+    first harmonic to the 32nd.
+  - **Vowel:** a voice moving through u, o, a, e, i (the formants of
+    Peterson and Barney, 1952, at 110 Hz).
+  - **Hollow:** odd harmonics only, from a soft triangle-like tone to a
+    bright, reedy one.
+  - **Metal:** a weak fundamental under a band of prime-numbered harmonics
+    that climbs: no simple ratios, so it clangs.
+  - **Glass:** harmonics only at the squares, 1, 4, 9, 16…, the spacing of a
+    vibrating bar's, growing brighter.
+  - Recipe tables share one set of phases per table (Schroeder, 1970), which
+    keeps a many-harmonic cycle from piling up into one tall spike, and
+    morphing never cancels a harmonic. Sync and Fold are drawn in time and
+    measured, so their phases are their own.
+- **No aliasing.** Each cycle is kept at ten brightnesses an octave apart,
+  512 harmonics down to one. A block reads the brightest whose top harmonic
+  stays under 45 % of the sample rate at the highest pitch the block reaches,
+  FM's swing and the ring's sidebands included, and fades over a block when
+  a sweep crosses into another. Tested: a 7 kHz saw shows nothing at its
+  folded-back frequencies to −70 dB.
+- **DECAY** is the time to fall 60 dB, 15 ms to 4 s, scaled by Pad DECAY, and
+  never under two and a half cycles, as Skin's RING. The start fades in over
+  32 samples (0.7 ms), against a click.
+- **BEND** starts the pitch up to four octaves away (finer near the centre:
+  48 × b × |b| semitones) and brings it home with a twentieth of the note's
+  length, about 25 ms on a half-second kick, a slow dive on a long zap. Right
+  starts high, left starts low.
+- **FM** is Skin's ring bending Wave's frequency: a swing of up to four
+  times Wave's own frequency (the knob squared), through zero. Skin's ring is
+  sized to about one, so the depth means the same on any Skin; it fades as
+  Skin rings out, which is the growl that settles into a tone. Skin rings,
+  and bends Wave, even with SKIN down.
+- **RING** multiplies Wave by a sine from two octaves below Wave's pitch to
+  two above; off at the centre, fading in over the first tenth of a turn.
+  The sine starts at its peak, so a slow one does not mute the attack.
+- **Wave as Skin's hit.** Skin's strike is Wave's sound, before Wave's own
+  fall or level, for SNAP's length but at least one of Wave's cycles (a
+  shorter slice of a low wave is nearly nothing). It is sized like any hit:
+  Wave's harmonics near Skin's PITCH, with their phases, through the
+  strike's shape, worked out when the hit starts. Tested over every table
+  with three positions and three SNAPs: within 5.5 dB.
+- **Skin and Wave run a sample at a time together**, and Wave follows Skin's
+  ring one sample late, so each can feed the other without a loop.
+- **Levels.** WAVE is a fader like SKIN. A Wave alone at the same fader
+  peaks a little under a Skin; the voicing pass will match them.
+
+Rejected for Wave:
+
+- **Band-limited steps (polyBLEP, Välimäki et al.)** for the analogue
+  shapes. Tables already cover them cleanly, the pulse is two saws, and one
+  mechanism serves every table.
+- **Mixing two brightnesses by the octave's fraction** on every sample. It
+  read the tables twice as often, and to stay clean it had to keep the top
+  harmonic under a quarter of the rate, losing an octave of brightness.
+- **Phase modulation** for FM. Linear FM keeps the swing a fixed ratio of
+  Wave's frequency, so the knob means the same at any pitch.
 
 ### Noise (the noise source or sample)
 
@@ -455,13 +535,19 @@ own engine, reach most of the same sounds.)
   time with every pad sounding. `tools/bench.c` plays all 32 voices with the
   longest rings and strikes; `scripts/bench.sh` builds it for the Move and
   runs it there over ssh, as Quilt's does.
-  - Skin alone, on a laptop (2026-10-07): **1.0 %** of a block, all 32 voices
-    ringing; 50–70 µs for a block in which all sixteen pads are hit.
-  - **On the Move: not yet measured.**
-- **Tables are built at load, not shipped.** The analogue and spectral
-  wavetables, and the noise tables, are computed in `create_instance` (inverse
-  FFT of a shaped spectrum with random phase). No data files. Watch the load
-  time.
+  - On a laptop (2026-10-07), all 32 voices ringing: Skin alone **1.5 %** of
+    a block; Skin and Wave at Wave's dearest (the pulse, FM, the ring, the
+    longest fall, Wave striking Skin) **3.9 %**, 190 µs for a block in which
+    all sixteen pads are hit. The Move's cores are several times slower.
+  - **On the Move: not yet measured.** The CI builds the bench for the Move
+    (the `strut-bench` artifact, static, so it runs whatever the Move's C
+    library); `scripts/bench.sh <that file>` runs it there.
+  - Denormals: a laptop without them flushed ran 30 % slower once Wave
+    struck Skin; the Move flushes them (`render_block`).
+- **Tables are built at load, not shipped.** Wave's tables are computed once
+  per process (the first `create_instance`, shared by every slot) by inverse
+  FFT: 115 cycles at ten brightnesses, 2.4 MB, 56 ms on a laptop. No data
+  files. Noise's tables will be built the same way (step 5).
 - **The output** is Quilt's, with one change. VOL (the Kit page's, wired
   early) glides across the block; a soft limiter above half scale rounds off a
   stack of pads instead of clipping; then 16 bits, rounded with one step of
@@ -544,7 +630,8 @@ own engine, reach most of the same sounds.)
    at full Move volume. Still to do: measure its CPU on the Move
    (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
    ringing).
-4. **Wave** engine, its tables, and FM from Skin.
+4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). Still to do:
+   hear it on the device, and measure the CPU there.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
@@ -571,7 +658,13 @@ own engine, reach most of the same sounds.)
     and middle, every option of each list: it sounds, stays finite, peaks
     under 0.9 and dies away. Across all of them the loudest and quietest peaks
     are within 7.7 dB.
-  - The faders: off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
+  - Wave: PITCH within 1 %, DECAY within 10 %, BEND starting high and
+    settling on PITCH; every Wave knob at its ends and middle, and every table
+    at five WAVE positions, sounds, stays finite, peaks under 0.9 and dies
+    away (within 11.9 dB of each other); a 7 kHz saw has nothing at its
+    folded-back frequencies to −70 dB; Skin struck by every table rings
+    within 5.5 dB; FM moves Wave's energy off its pitch.
+  - The faders (SKIN, WAVE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.
 - `tools/demo.c` renders a few hand-set sounds and a groove to a WAV, for

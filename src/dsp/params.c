@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 #include "strut.h"
+#include "tables.h"
 
 #define N(a) (int)(sizeof(a) / sizeof((a)[0]))
 #define ENUM(key, cell, name, opts) { key, cell, name, PK_ENUM, 0, N(opts) - 1, 0, NULL, opts, N(opts) }
@@ -30,8 +31,10 @@ static const char *const CURVES[] = { "Natural", "Ping", "Soft", "Hold", "Swell"
 static const char *const SKIN_AIMS[] = { "Pitch", "Ring", "Snap", "Metal", "Tone", "Level" };
 static const char *const WAVE_AIMS[] = { "Pitch", "Wave", "FM", "Ring", "Level" };
 static const char *const NOISE_AIMS[] = { "Pitch", "Color", "Start", "Loop", "Level" };
-/* Stand-ins until build steps 4 and 5 compute the real tables. */
-static const char *const WAVE_TABLES[] = { "Analog", "Bright", "Hollow", "Voice", "Metal", "Glass", "Reed", "Grit" };
+/* Wave's tables, in tables.h's order (DESIGN.md, How Wave works). */
+static const char *const WAVE_TABLES[] = { "Analog", "Sync", "Fold", "Sweep", "Vowel", "Hollow", "Metal", "Glass" };
+_Static_assert(N(WAVE_TABLES) == WT_TABLES, "one TABLE option for each table");
+/* A stand-in until build step 5 computes the real noise tables. */
 static const char *const NOISE_TABLES[] = { "White", "Pink", "Brown", "Hiss", "Metal", "Crackle", "Air", "Grit" };
 /* How Noise plays one of your samples (DESIGN.md, Noise is also a sampler). */
 static const char *const SAMPLE_MODES[] = { "Sample", "Resynth", "Noise" };
@@ -63,7 +66,7 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_S_AIM2] = ENUM("s_aim2", "Aim", "Skin Mod Aim 2", SKIN_AIMS),
     [P_S_DEPTH2] = BI("s_depth2", "Depth", "Skin Mod Depth 2"),
 
-    [P_W_PITCH] = SEMI("w_pitch", "Pitch", "Wave Pitch", -48, 48),
+    [P_W_PITCH] = SEMI("w_pitch", "Pitch", "Wave Pitch", -12, 60),
     [P_W_BEND] = BI("w_bend", "Bend", "Wave Bend"),
     [P_W_DECAY] = UNI("w_decay", "Decay", "Wave Decay", 0.4f),
     [P_W_TABLE] = ENUM("w_table", "Table", "Wave Table", WAVE_TABLES),

@@ -32,7 +32,16 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq gcc-aarch64-linux-gnu
           ./scripts/build.sh
+          # the bench, static so it runs whatever the Move's C library
+          mkdir -p build
+          aarch64-linux-gnu-gcc -std=c11 -O2 -static -Wall -Wextra -Werror -Isrc/dsp \
+            tools/bench.c src/dsp/*.c -o build/bench-aarch64 -lm
       - uses: actions/upload-artifact@v4
         with:
           name: strut-module
           path: dist/strut-module.tar.gz
+      # scripts/bench.sh runs it on the Move: what Strut costs there
+      - uses: actions/upload-artifact@v4
+        with:
+          name: strut-bench
+          path: build/bench-aarch64
