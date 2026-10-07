@@ -41,10 +41,14 @@ What the three engines are, and the papers they lean on:
   - Mipmapped wavetables, one table per octave, so a high note does not
     alias.
 - **The noise source** is the hiss, the metal and the sample: a loop that
-  repeats without ever sounding pitched, or a recording.
+  repeats without ever sounding pitched, or a recording played straight, as a
+  sampler plays it.
   - X. Serra, J. O. Smith. *Spectral Modeling Synthesis.* CMJ 14(4), 1990.
     Keep a sound's spectrum, throw away its phase, and it becomes noise of the
-    same colour. This is how a recording becomes a noise table.
+    same colour. This is how the built-in noise tables are made.
+  - T. I. Laakso, V. Välimäki, M. Karjalainen, U. K. Laine. *Splitting the
+    Unit Delay.* IEEE Signal Processing Magazine 13(1), 1996. Reading a sample
+    between its stored points, so it can be played at any pitch.
   - The 808 and 909 hi-hats: six square oscillators at inharmonic
     frequencies through band-pass filters (Werner, above).
 - **Drum physics**, for the presets and the randomiser's sense of what a
@@ -68,7 +72,7 @@ together:
 |---|---|---|---|
 | **Skin** | Skin | a burst that sets a resonant filter ringing | kicks, toms, snare bodies, cowbells, zaps |
 | **Wave** | Wave | an oscillator that sweeps through a table of waveforms | punchy bodies, tonal drums, bass hits, blips |
-| **Noise** | Noise | a loop of coloured noise, or a sample | snares, hats, cymbals, claps, texture |
+| **Noise** | Noise | a loop of coloured noise, or your own sample played straight | snares, hats, cymbals, claps, texture, and pitched hits cut from melodic samples |
 
 The three can feed each other, and that is where the range comes from:
 
@@ -265,6 +269,28 @@ Wave's destinations: Pitch, Wave, FM, Ring, Level.
 
 Noise's destinations: Pitch, Color, Start, Loop, Level.
 
+**Noise is also a sampler.** Past the noise tables, TABLE lists your own
+samples, and a sample plays **straight**: as recorded, not turned into noise.
+That is what makes rhythmic parts out of melodic material: put one chord or
+bass sample on four pads, tune them apart and play them as a riff. With a
+sample chosen:
+
+- **PITCH** is in semitones from the pitch it was recorded at (0 = as
+  recorded). Speed and pitch move together, as on a classic sampler. Pad
+  TUNE moves it too, so a pad can be tuned to a note.
+- **BEND** still sweeps the pitch at the start: a tape-stop or a dive.
+- **DECAY** fades the sample out; turned fully right it plays to its end.
+- **START** picks where in the sample to begin, so one long sample can feed
+  several pads, each from its own slice.
+- **LOOP** fully right plays the sample once. Lower, it repeats a slice of that
+  length from START, for stutters and drones.
+- **COLOR** filters it, as for noise.
+
+Rejected for 1.0: time-stretch, so pitch could move without changing length.
+It costs CPU on every pad, smears the attack a drum needs, and a one-shot
+rarely wants it. Also left for later: turning your own sample into noise of
+its colour (the trick the built-in tables use), as a second way to play it.
+
 ### Finish (the focused pad)
 
 | Knob | Label | Behaviour |
@@ -353,6 +379,10 @@ own engine, reach most of the same sounds.)
 - **Samples.** User WAVs come from a folder, for example
   `/data/UserData/schwung/samples/strut/`. The file browser is Schwung's
   `filepath` param type. Loading happens off the audio thread, as Ragtag does.
+  Playback is the straight sampler above: an interpolated read (cubic to
+  start; Laakso et al.) at the rate PITCH, TUNE and BEND give, with no
+  stretching. A pad's two voices let a long melodic sample ring under the
+  next hit.
 - **Separate outputs.** Schwung offers `move_plugin_render_split` (per-voice
   buffers; see `plugin_api_v1.h`). Later, not 1.0.
 - **module.json carries the rack template.** A synth's pages come only from
@@ -380,7 +410,7 @@ own engine, reach most of the same sounds.)
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
-9. Samples and `filepath`.
+9. Samples and `filepath`: Noise as a straight sampler (see *Noise*).
 10. The SOUND library, factory kits, DICE, `help.json` and README.
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
