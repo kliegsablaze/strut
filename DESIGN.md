@@ -2,18 +2,18 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish and each engine's modulator, 0.4.1 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator and the Kit page, 0.5.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
 on every pad, mixed by SKIN, WAVE, NOISE, TUNE, DECAY and LEVEL; Skin's ring
 can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
 *How Wave works*, *How Noise works*); each pad then has Pad COLOR and the
-Finish page (*How Finish works*), and every engine its modulator and CURVE
-(*Modulation*). Noise's samples, the kit's effects, SOUND and DICE are still
-the plan; their knobs are kept but do
-nothing yet. On the
-Move, all three engines at their dearest take 11.1 % of the CPU (0.2.0).
+Finish page (*How Finish works*), every engine its modulator and CURVE
+(*Modulation*), and the whole kit GLUE, WARM and a room (*How the Kit page
+works*). Noise's samples, SOUND and DICE are still the plan; their knobs are
+kept but do nothing yet. On the Move, every pad at its dearest, with every
+effect and modulator: 17.7 % of the CPU (0.4.1).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -698,10 +698,10 @@ a swelling noise is a reverse cymbal.
 
 | Knob | Label | Behaviour |
 |---|---|---|
-| 1 | SPACE | Room send, set per kit. Per-pad sends are a later choice. |
-| 2 | SIZE | Room size. |
-| 3 | GLUE | Kit compression, transient-aware, one knob. |
-| 4 | WARM | Saturation of the whole kit. |
+| 1 | SPACE | How much of the kit goes to the room: none, to about 6 dB under the dry kit. Per-pad sends are a later choice. |
+| 2 | SIZE | The room's size: rings under a second to about four, darker and later as it grows. |
+| 3 | GLUE | Kit compression, one knob: soft hits nearer loud ones, attacks kept. |
+| 4 | WARM | Saturation of the whole kit: thicker, rounder, a softer top. |
 | 5 | VOL | Kit volume, in dB. |
 | 6 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
 
@@ -709,6 +709,61 @@ a swelling noise is a reverse cymbal.
 
 Kits are Schwung presets: the whole kit is saved in `state`, and the factory
 kits are presets. SOUND (Pad, knob 1) is the per-pad library.
+
+### How the Kit page works (built, 0.5.0)
+
+The sixteen pads are mixed, then GLUE, then WARM, then the room is added;
+VOL, the limiter and the dither follow (*Implementation notes*). Each is
+skipped while its knob is at zero, and the room once its tail has died, so
+with all three at zero the kit is exactly the pads (the tests check it).
+Every knob glides across a block.
+
+- **SPACE** sends the whole kit, high-passed at 150 Hz so the kicks do not
+  boom in it, to the room; full up, the room is about 6 dB under a beat's
+  dry sound. The default, 0.15, is a touch of air, about 22 dB under.
+- **The room** is Dattorro's plate (JAES 1997), Quilt's: four diffusing
+  all-passes into two cross-fed loops, each a slowly wandering all-pass, a
+  delay, damping and another all-pass and delay, tapped at seven points a
+  side for a wide stereo.
+- **SIZE** sets how long it rings, falling 60 dB in under a second to about
+  four, evenly by ear (measured from a click: 30 dB in 0.43, 0.89 and
+  2.08 s at SIZE 0, ½ and 1); a little darker as it grows (damping 9 kHz to
+  4.5); and its first reflection later, 2 to 32 ms.
+- **GLUE** is a compressor for the whole kit. Further round, the threshold
+  falls from −8 to −24 dB and the ratio rises from 1 to 4, over a soft
+  knee. It is slow to grab, 10 ms, so each hit's attack passes. Its level
+  is the larger of two followers: a fast one that lets go in 100 ms, after
+  a single hit, and a slow one that rises over 400 ms and lets go over
+  1.5 s, which holds the squeeze steady through a busy groove instead of
+  pumping with every hit. Made up by half what it takes at −15 dB. On a
+  beat of loud and soft hits, full up: the soft hits come 3.9 dB nearer
+  the loud, the level moves −0.8 dB and the peaks +1.7.
+- **WARM** pushes the kit up to 12 dB into DRIVE's soft curve, off centre,
+  so it adds even harmonics (which thicken) as well as odd ones (which
+  bite), and rolls the top from 20 kHz down to 8 kHz. Smoothed as DRIVE is
+  (Parker et al., 2016); the offset's own level is taken back out, with a
+  high-pass at 10 Hz for any drift. Brought back so a quiet sound is about
+  2 dB up and a loud one a little down: on a 110 Hz sine at 0.3, full up,
+  the second and third harmonics at −20 and −16 dB, the level −1.5 dB.
+- **The dither** stays on while the room rings, not only while a pad
+  sounds, so a tail fades with its dither as a pad's does. The room is let
+  go once its loops fall under about a twentieth of a 16-bit step, and
+  listens on for half a second after its last input, the time a sound takes
+  to come round its loops the first time. (0.5.0's first try let go after a
+  tenth of a second, and the room fell silent before it rang.)
+
+Rejected for the Kit page:
+
+- **GLUE after the room.** Squeezing the room with the kit ducks its tail on
+  every hit and lifts it between them: a pumping effect, not glue. The room
+  hears the glued, warmed kit instead.
+- **Quilt's SIZE as it was** (decay 0.2 to 0.93): ten seconds at the top,
+  too long for drums.
+- **SPACE by its square.** A send squared put the default 39 dB under the
+  kit, inaudible.
+- **Make-up by what GLUE takes at −6 dB.** A beat's peaks sit near −6 dB
+  but its body near −24; made up for the peaks, the beat came out 2.6 dB
+  louder, its peaks 5 dB.
 
 ---
 
@@ -765,7 +820,8 @@ kits are presets. SOUND (Pad, knob 1) is the per-pad library.
   TONE filter while TONE stands still; and works out Noise's level match
   for a moved COLOR only once COLOR has moved a hundredth of a turn (each
   stretch had cost 40 tangents). Counted, the modulators' extra work is
-  less than half 0.4.0's. On the Move, still to measure.
+  less than half 0.4.0's. **On the Move, 17.7 %** (0.4.1, 2026-10-07): the
+  modulators cost 1.0 %, from 3.9.
 - **Start and Loop** are Noise's sample destinations, and move nothing on a
   noise table until samples come (step 9).
 
@@ -1005,9 +1061,10 @@ own engine, reach most of the same sounds.)
    DICE waits for step 10). On the Move, every effect on every pad: 15.3 %
    (0.3.1; 18.7 % before the effects ran in one loop). Still to do: hear it.
 7. ~~**Modulation** (the MOD views)~~ (0.4.0). On the Move, every
-   modulator on every pad: 20.0 % with every effect (0.4.0); 0.4.1 halves
-   the modulators' setup. Still to do: hear it, and measure 0.4.1.
-8. **Kit** page: room, glue, warmth.
+   modulator on every pad: 20.0 % with every effect (0.4.0), 17.7 % once
+   their setup was halved (0.4.1). Still to do: hear it.
+8. ~~**Kit** page: room, glue, warmth~~ (0.5.0). Still to do: measure it on
+   the Move, and hear it.
 9. Samples (see *The sample library*):
    - ship `src/samples/` in the module and the tarball; measure both;
    - TABLE past the noise tables: the library, then your own samples;
@@ -1068,6 +1125,13 @@ own engine, reach most of the same sounds.)
     third harmonic and keeps a loud hit within 6 dB; CRUSH holds samples;
     LOW and HIGH lift and cut their ends of White noise by over 12 dB; Pad
     COLOR darkens and thins.
+  - Kit: with SPACE, GLUE and WARM at zero the pads pass untouched; every
+    kit knob at its ends and middle is finite, peaks under 1 and falls
+    silent; SPACE grows to about 6 dB under a beat and rings on, wide,
+    after it; SIZE rings longer as it grows; GLUE brings soft hits over
+    2 dB nearer loud ones within 2 dB of the level and 3 of the peaks;
+    WARM adds second and third harmonics within 2 dB, centred, and nothing
+    at zero.
   - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.

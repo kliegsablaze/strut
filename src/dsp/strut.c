@@ -302,6 +302,10 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
     s->now += (double)frames / STRUT_SR;
 }
 
+void strut_kit(strut_t *s, float *l, float *r, int frames) {
+    if (kit_run(&s->kit, s->g, l, r, frames)) s->sounding++;
+}
+
 /* ---- the output (Quilt's, src/dsp/quilt.c) ---- */
 
 /* Triangular noise of one 16-bit step. */
@@ -484,6 +488,7 @@ static void render_block(void *instance, int16_t *out, int frames) {
     for (int done = 0; done < frames;) {
         const int n = frames - done < STRUT_MAX_BLOCK ? frames - done : STRUT_MAX_BLOCK;
         strut_render(s, l, r, n);
+        strut_kit(s, l, r, n);
         strut_output(s, l, r, out + 2 * done, n);
         done += n;
     }

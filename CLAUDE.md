@@ -182,7 +182,7 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.4.1)
+## Where things stand (2026-10-07, 0.5.0)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
@@ -192,22 +192,23 @@ When the user moves work back to their local machine:
   - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH;
   - each engine's modulator (KIND, RATE, CURVE, two AIM and DEPTH), with
     MOD on knob 1 of every engine page in both views (the user's layout);
+  - the Kit page (0.5.0): SPACE and SIZE (Quilt's plate as a room), GLUE
+    (a compressor for the whole kit), WARM (saturation), VOL and PAD;
   - the header's pad map on every pad page (0.4.0).
-  - Tests: 1398 checks, plus the host's planner and validator.
+  - Tests: 1410 checks, plus the host's planner and validator.
 - **Tried on the device:**
   - Skin, its grit fixed (0.0.6), and page titles;
   - Noise "sounds great" (0.2.2);
-  - CPU, all three engines on every pad at their dearest: 12.6 %; and
-    every effect on every pad: 15.3 % (0.3.1);
-  - load time: 0.51 s (0.2.2).
+  - load time: 0.51 s (0.2.2);
+  - CPU, every pad at its dearest: all three engines 13.1 %, every effect
+    16.7 %, every modulator 17.7 % (0.4.1; the modulators cost 3.9 % in
+    0.4.0, 1.0 % now).
   - The user saw the header's pad map follow only the Pad page (0.3.1);
-    0.4.0 should fix it.
-  - every modulator on every pad, with every effect: 20.0 % (0.4.0);
-    0.4.1 halves the modulators' setup, not yet measured.
-  - Not yet: Finish and the modulators by ear.
-- **Next:** build step 8, the Kit page (SPACE, SIZE, GLUE, WARM). Samples
-  are step 9: the library in `src/samples/` (208 sounds, from another
-  session) is in DESIGN.md, *The sample library*.
+    0.4.0 should fix it, not yet confirmed.
+  - Not yet: Finish, the modulators and the Kit page by ear; the Kit page's
+    CPU (the bench's "and the kit's effects" row).
+- **Next:** build step 9, samples: the library in `src/samples/` (208
+  sounds, from another session) is in DESIGN.md, *The sample library*.
 - **Open questions for the user:**
   - how TABLE should reach 216+ options at step 9 (one long list, the host's
     file browser, or a folder and a number);

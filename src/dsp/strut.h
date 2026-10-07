@@ -4,9 +4,9 @@
  *
  * Every key the design proposes is declared and kept. What sounds so far is
  * the three engines (build steps 3 to 5), mixed by SKIN, WAVE, NOISE, TUNE,
- * DECAY and LEVEL, and each pad's finish (step 6: COLOR and the Finish
- * page); the modulators and the kit's effects follow in DESIGN.md's Build
- * order.
+ * DECAY and LEVEL; each pad's finish (step 6: COLOR and the Finish page);
+ * the modulators (step 7); and the Kit page (step 8). Samples, SOUND and
+ * DICE follow in DESIGN.md's Build order.
  */
 #ifndef STRUT_H
 #define STRUT_H
@@ -14,12 +14,13 @@
 #include <stdint.h>
 
 #include "finish.h"
+#include "kit.h"
 #include "mod.h"
 #include "noise.h"
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.4.1"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.5.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -122,12 +123,15 @@ typedef struct {
     float dither_g, vol_g;
     float shape[2][STRUT_SHAPE];  /* each channel's last rounding errors */
     float bpm;                  /* the host's tempo, for RATE's synced half */
-    int sounding;               /* voices that rendered this block */
+    int sounding;               /* voices that rendered this block, and the room */
+    kit_t kit;
 } strut_t;
 
 void strut_init(strut_t *s);
 void strut_note_on(strut_t *s, int note, int vel);
 void strut_render(strut_t *s, float *l, float *r, int frames);
+/* The Kit page's effects on the mixed pads (kit.h), before strut_output. */
+void strut_kit(strut_t *s, float *l, float *r, int frames);
 void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int frames);
 float strut_fader(float x);
 void strut_press(strut_t *s);   /* the host's "a finger did that" */

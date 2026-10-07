@@ -129,6 +129,9 @@ int main(void) {
            wt_profile[WT_P_SPECTRA] * 1e3, wt_profile[WT_P_FFT] * 1e3, wt_profile[WT_P_STORE] * 1e3);
     printf("%-26s %8s %8s %7s %9s\n", "", "mean us", "worst us", "block", "onset us");
 
+    /* the kit's effects last, so the rows before stay comparable */
+    a->set_param(p, "space", "0");
+
     /* Skin at its dearest: METAL's partials, the longest ring and hit */
     set_all(a, p, "s_ring", "1");
     set_all(a, p, "s_snap", "1");           /* the longest hit, measured at its start */
@@ -184,6 +187,13 @@ int main(void) {
     set_all(a, p, "w_curve", "Soft");
     set_all(a, p, "n_curve", "Soft");
     run(a, p, "and every modulator");
+
+    /* and the Kit page: the room at its longest, GLUE and WARM full up */
+    a->set_param(p, "space", "0.5");
+    a->set_param(p, "size", "1");
+    a->set_param(p, "glue", "1");
+    a->set_param(p, "warm", "1");
+    run(a, p, "and the kit's effects");
     a->destroy_instance(p);
     return 0;
 }

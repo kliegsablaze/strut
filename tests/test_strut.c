@@ -955,6 +955,7 @@ static void levels(void) {
  * within a step and a half (the dither, no grit), and ends in true silence. */
 static void tail(void) {
     void *p = A->create_instance(".", "");
+    A->set_param(p, "space", "0");     /* the room's tail is not in ref */
     A->set_param(p, "p01_s_mode", "Band");
     A->set_param(p, "p01_s_ring", "0.7");
     strut_t *ref = fresh();
@@ -1002,6 +1003,185 @@ static void tail(void) {
     A->destroy_instance(p);
 }
 
+/* A beat through the Kit page: pad 1 every quarter second, loud and soft in
+ * turn, for `seconds`, then silence to `total`; GLUE, WARM and the room
+ * as set. Returns 1 if the kit still rang at the end. */
+static int beat(strut_t *s, float seconds, float total) {
+    const int n = (int)(total * STRUT_SR), hits = (int)(seconds * 4);
+    s->pad[0].p[P_WAVE] = 0.6f, s->pad[0].p[P_NOISE] = 0.6f, s->pad[0].p[P_N_DECAY] = 0.3f;
+    int at = 0, h = 0;
+    for (; at < n; at += 128) {
+        if (h < hits && at >= h * STRUT_SR / 4) strut_note_on(s, STRUT_NOTE0, h % 2 ? 60 : 120), h++;
+        const int m = n - at < 128 ? n - at : 128;
+        s->sounding = 0;
+        strut_render(s, L + at, R + at, m);
+        strut_kit(s, L + at, R + at, m);
+    }
+    return s->sounding > 0;
+}
+
+static double rms_of(const float *x, int from, int n) {
+    double a = 0;
+    for (int k = from; k < from + n; k++) a += (double)x[k] * x[k];
+    return sqrt(a / n);
+}
+
+/* The Kit page (DESIGN.md, How the Kit page works). */
+static void kit(void) {
+    const int n2 = 2 * STRUT_SR;
+    /* dry: every kit knob at zero leaves the pads exactly as they were */
+    strut_t *s = fresh();
+    s->g[G_SPACE] = 0;
+    beat(s, 2, 3);
+    static float dl[3 * STRUT_SR];
+    memcpy(dl, L, sizeof(dl));
+    strut_t *t = fresh();
+    t->pad[0].p[P_WAVE] = 0.6f, t->pad[0].p[P_NOISE] = 0.6f, t->pad[0].p[P_N_DECAY] = 0.3f;
+    int same = 1;
+    for (int at = 0, h = 0; at < 3 * STRUT_SR; at += 128) {
+        if (h < 8 && at >= h * STRUT_SR / 4) strut_note_on(t, STRUT_NOTE0, h % 2 ? 60 : 120), h++;
+        float l[128], r[128];
+        strut_render(t, l, r, 128);
+        for (int i = 0; i < 128 && at + i < 3 * STRUT_SR; i++) same &= l[i] == dl[at + i];
+    }
+    CHECK(same, "with SPACE, GLUE and WARM at zero the kit passes untouched");
+    const double dry = rms_of(dl, 0, n2), dpk = peak_of(dl, 0, n2);
+    free(s), free(t);
+
+    /* every kit knob at its ends and middle: finite, under the limiter's
+     * knee by a margin, and silent in the end */
+    const int knobs[] = { G_SPACE, G_SIZE, G_GLUE, G_WARM };
+    int ok = 1;
+    for (int k = 0; k < 4; k++)
+        for (int i = 0; i < 3; i++) {
+            s = fresh();
+            s->g[G_SPACE] = 0.5f, s->g[knobs[k]] = (float)i / 2;
+            beat(s, 1, 1);
+            int rings = 1;
+            for (int b = 0; b < 4000 && rings; b++) {
+                float l[128] = { 0 }, r[128] = { 0 };
+                s->sounding = 0;
+                strut_kit(s, l, r, 128);
+                rings = s->sounding > 0;
+            }
+            int finite = 1;
+            for (int j = 0; j < STRUT_SR; j++) finite &= isfinite(L[j]) && isfinite(R[j]);
+            const double pk = fmax(peak_of(L, 0, STRUT_SR), peak_of(R, 0, STRUT_SR));
+            if (!finite || pk > 1.0 || rings) {
+                printf("  %s %.1f: finite %d peak %.2f rings %d\n", STRUT_GLOBALS[knobs[k]].key, i / 2.0, finite, pk, rings);
+                ok = 0;
+            }
+            free(s);
+        }
+    CHECK(ok, "every kit knob at its ends and middle is finite, peaks under 1 and falls silent");
+
+    /* SPACE: the room grows against the dry beat, to about 6 dB under it
+     * full up, and rings on, wide, after the last hit */
+    double prev = -100, wet = 0;
+    int grows = 1;
+    const int last = 2 * STRUT_SR - STRUT_SR / 4;     /* the beat's last hit */
+    const double dtail = rms_of(dl, last + STRUT_SR / 2, STRUT_SR / 4);
+    for (int i = 1; i <= 4; i++) {
+        s = fresh();
+        s->g[G_SPACE] = (float)i / 4;
+        beat(s, 2, 3);
+        double d = 0;
+        for (int j = 0; j < n2; j++) d += (double)(L[j] - dl[j]) * (L[j] - dl[j]);
+        wet = 10 * log10(d / n2) - 20 * log10(dry);
+        grows &= wet > prev + 2;
+        prev = wet;
+        if (i == 4) {
+            const double tail = rms_of(L, last + STRUT_SR / 2, STRUT_SR / 4);
+            double diff = 0;
+            for (int j = last + STRUT_SR / 2; j < last + 3 * STRUT_SR / 4; j++) diff += fabs(L[j] - R[j]);
+            CHECK(tail > 10 * dtail && diff > 0.1 * tail * STRUT_SR / 4,
+                  "SPACE rings on, wide, after the last hit (%.1f dB over the dry)", 20 * log10(tail / dtail));
+        }
+        free(s);
+    }
+    printf("kit: SPACE full: the room %.1f dB against the dry beat\n", wet);
+    CHECK(grows && wet > -9 && wet < -3, "and grows to about 6 dB under the beat (%.1f dB)", wet);
+
+    /* SIZE: the room rings longer as it grows, from under a second to
+     * several: the time its answer to a click takes to fall 30 dB, from
+     * 50 ms on */
+    kit_t *k = calloc(1, sizeof(*k));
+    float g[G_COUNT] = { 0 };
+    static float x[4 * STRUT_SR], y[4 * STRUT_SR];
+    double t30[3];
+    for (int i = 0; i < 3; i++) {
+        memset(k, 0, sizeof(*k));
+        memset(x, 0, sizeof(x)), memset(y, 0, sizeof(y));
+        g[G_SPACE] = 1, g[G_SIZE] = (float)i / 2;
+        x[0] = y[0] = 0.5f;
+        const int len = 4 * STRUT_SR, w = STRUT_SR / 50;
+        for (int j = 0; j < len; j += 128) kit_run(k, g, x + j, y + j, len - j < 128 ? len - j : 128);
+        const double ref = rms_of(x, STRUT_SR / 20, w);
+        int at = STRUT_SR / 20;
+        while (at < len - w && rms_of(x, at, w) > ref * 0.0316) at += w / 2;
+        t30[i] = (double)(at - STRUT_SR / 20) / STRUT_SR;
+    }
+    printf("kit: SIZE 0, 0.5, 1: the room falls 30 dB in %.2f, %.2f, %.2f s\n", t30[0], t30[1], t30[2]);
+    CHECK(t30[0] < 0.6 && t30[1] > t30[0] * 1.5 && t30[2] > t30[1] * 1.5 && t30[2] > 1.5,
+          "SIZE rings longer as it grows");
+
+    /* GLUE: the soft hits come nearer the loud ones, while the beat's
+     * loudness and peaks stay about where they were */
+    s = fresh();
+    s->g[G_SPACE] = 0, s->g[G_GLUE] = 1;
+    beat(s, 2, 2);
+    const double grms = rms_of(L, 0, n2), gpk = peak_of(L, 0, n2);
+    double gap[2] = { 0 }, body[2] = { 0 };
+    for (int v = 0; v < 2; v++) {
+        const float *z = v ? L : dl;
+        double loud = 0, soft = 0, head = 0, rest = 0;
+        for (int h = 0; h < 8; h++) {
+            const int at = h * STRUT_SR / 4;
+            const double e = rms_of(z, at, STRUT_SR / 4);
+            if (h % 2) soft += e; else loud += e;
+            head += rms_of(z, at, STRUT_SR / 40), rest += rms_of(z, at + STRUT_SR / 20, STRUT_SR / 10);
+        }
+        gap[v] = 20 * log10(loud / soft), body[v] = 20 * log10(rest / head);
+    }
+    printf("kit: dry beat peak %.3f rms %.3f; GLUE full: loud-soft gap %.1f -> %.1f dB, tail %.1f -> %.1f dB, level %+.1f, peak %+.1f dB\n",
+           dpk, dry, gap[0], gap[1], body[0], body[1], 20 * log10(grms / dry), 20 * log10(gpk / dpk));
+    CHECK(gap[0] - gap[1] > 2, "GLUE brings soft hits nearer loud ones (%.1f dB)", gap[0] - gap[1]);
+    CHECK(fabs(20 * log10(grms / dry)) < 2, "and keeps the beat's level (%+.1f dB)", 20 * log10(grms / dry));
+    CHECK(20 * log10(gpk / dpk) < 3, "and its peaks (%+.1f dB)", 20 * log10(gpk / dpk));
+    free(s);
+
+    /* WARM: on a 110 Hz sine at a typical level, even and odd harmonics
+     * appear, the level holds, and nothing drifts off centre */
+    g[G_SPACE] = 0, g[G_SIZE] = 0;
+    for (int w = 0; w <= 1; w++) {
+        memset(k, 0, sizeof(*k));
+        g[G_WARM] = (float)w;
+        for (int j = 0; j < STRUT_SR; j++) x[j] = y[j] = 0.3f * sinf(2 * 3.14159265f * 110 * j / STRUT_SR);
+        for (int j = 0; j < STRUT_SR; j += 128) kit_run(k, g, x + j, y + j, STRUT_SR - j < 128 ? STRUT_SR - j : 128);
+        double h[4] = { 0 }, mean = 0;
+        const int from = STRUT_SR / 2, len = STRUT_SR / 2;
+        for (int m = 1; m <= 3; m++) {
+            double c = 0, q = 0;
+            for (int j = from; j < from + len; j++) {
+                c += x[j] * cos(2 * 3.14159265358979 * 110 * m * j / STRUT_SR);
+                q += x[j] * sin(2 * 3.14159265358979 * 110 * m * j / STRUT_SR);
+            }
+            h[m] = 2 * sqrt(c * c + q * q) / len;
+        }
+        for (int j = from; j < from + len; j++) mean += x[j];
+        mean /= len;
+        const double d2 = 20 * log10(h[2] / h[1] + 1e-12), d3 = 20 * log10(h[3] / h[1] + 1e-12);
+        printf("kit: WARM %d: fundamental %.3f, second %.0f dB, third %.0f dB, offset %.5f\n", w, h[1], d2, d3, mean);
+        if (w == 0) CHECK(d2 < -90 && d3 < -90, "WARM at zero adds nothing");
+        else {
+            CHECK(d2 > -40 && d3 > -40, "WARM adds even and odd harmonics (%.0f, %.0f dB)", d2, d3);
+            CHECK(fabs(20 * log10(h[1] / 0.3)) < 2, "at about the same level (%+.1f dB)", 20 * log10(h[1] / 0.3));
+            CHECK(fabs(mean) < 1e-3, "and stays centred (%.5f)", mean);
+        }
+    }
+    free(k);
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -1040,6 +1220,7 @@ int main(int argc, char **argv) {
     restrike();
     levels();
     tail();
+    kit();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;
