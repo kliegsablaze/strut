@@ -17,8 +17,8 @@ cc $CFLAGS tests/test_strut.c src/dsp/*.c -lm -lpthread -o "$out/test_strut"
 rc=0
 "$out/test_strut" "$out" || rc=$?
 
-# The bench and the demo must keep building.
-for t in bench demo; do
+# The bench, the demo and the levels tool must keep building.
+for t in bench demo levels; do
   cc $CFLAGS tools/$t.c src/dsp/*.c -lm -lpthread -o "$out/$t" || rc=1
 done
 

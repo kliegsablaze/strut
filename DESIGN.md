@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page and the sample library in all three of Noise's modes, 0.7.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -13,8 +13,9 @@ Finish page (*How Finish works*), every engine its modulator and CURVE
 (*Modulation*), and the whole kit GLUE, WARM and a room (*How the Kit page
 works*). Noise plays the library's 208 samples, or your own, as recorded,
 resynthesised or as their colour alone (*The sample library*, *How
-Resynth and Noise work*). SOUND and DICE are still the plan; their knobs
-are kept but do nothing yet. On the Move, every pad at its dearest, with
+Resynth and Noise work*). DICE rolls a pad, or the whole kit, by each
+pad's place in it, with eight steps back (*How DICE works*, 0.8.0); SOUND
+is still the plan, its knob kept but doing nothing yet. On the Move, every pad at its dearest, with
 every effect and modulator and the Kit page: about 22 % of the CPU (0.6.0);
 with Resynth on every pad, 20.5 %, its runs reaching 22.3 % (0.7.0).
 
@@ -158,8 +159,8 @@ once, by its bare key (`tune`), and the hierarchy's rack template
   module.json carries a copy of the rack's template fields, and the tests check
   the two agree.
 
-What it measures: 58 knobs a pad, 937 addressable keys, 67 declared. The whole
-contract is **14.6 KB** (hierarchy 5.3 KB, chain_params 9.4 KB) against a
+What it measures: 58 knobs a pad, 938 addressable keys, 68 declared. The whole
+contract is **17.6 KB** (hierarchy 5.4 KB, chain_params 12.2 KB, 0.8.0) against a
 128 KB buffer. Only the eight keys on screen are ever read, so the grid's read
 rate does not depend on how many pads there are.
 
@@ -272,8 +273,7 @@ Labels are real words of five letters or fewer. The header shows the full name.
 
 Every key below is declared and kept (`src/dsp/params.c`). The ranges and
 option lists are **provisional** until the voicing pass sets them by ear:
-the SOUND list is stand-in names, and DICE is a plain number until its
-turn-to-roll gesture (step 10).
+the SOUND list is stand-in names.
 The keys are the bare names in this table with an engine prefix where pages
 share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 
@@ -800,7 +800,7 @@ its PAN.
   upside down (with it fixed, a cut of 18 dB reached only 12 at 60 Hz). A
   lift of 18 dB on a loud kick is past full scale; the output's limiter
   rounds it.
-- **DICE** waits for step 10.
+- **DICE:** see *How DICE works*.
 - **CPU.** 0.3.0 ran each effect as its own loop over the block: on the
   Move, every effect on every pad took the worst case from 11.9 % to 18.7 %
   (2026-10-07). COLOR, LOW and HIGH are filters whose next sample waits on
@@ -832,11 +832,12 @@ a swelling noise is a reverse cymbal.
 | 3 | GLUE | Kit compression, one knob: soft hits nearer loud ones, attacks kept. |
 | 4 | WARM | Saturation of the whole kit: thicker, rounder, a softer top. |
 | 5 | VOL | Kit volume, in dB. |
-| 6 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
+| 6 | DICE | Turn right to roll a new kit, every pad by its place; turn left to step back through the last eight (header: Kit Dice). |
+| 7 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
 
 (Rejected: SWING. Move's own sequencer swings.)
 
-Kits are Schwung presets: the whole kit is saved in `state`, and the factory
+Kits are to be Schwung presets: the whole kit saved in `state` (not yet built; step 10), and the factory
 kits are presets. SOUND (Pad, knob 1) is the per-pad library.
 
 ### How the Kit page works (built, 0.5.0)
@@ -1006,11 +1007,79 @@ own engine, reach most of the same sounds.)
     served if asked for further. Moving away saves what is there first, so
     edits made after a roll survive a step back and forward.
   - Not saved with a kit or preset: the history is not kept, so DICE
-    starts again at 0 after a load.
+    starts again after a load.
   - Roles by pad, to agree with the user: for example 1 kick, 2 snare,
     3 closed hat, 4 open hat (choked with 3), 5 second kick, 6 clap, 7 rim,
     8 cymbal, 9 to 11 toms, 12 and 13 percussion, 14 bell or tonal, 15 bass,
     16 effect.
+
+  The int gesture above was the plan; reading the host's knob code for
+  1.7.3 changed it (below). Kit > DICE is knob 6, not 7, so PAD stays last.
+
+### How DICE works (built, 0.8.0)
+
+- **The knob is a two-word switch, Back and Roll.** Turn it right and let
+  go: one roll. Turn it left and let go: one step back. However far it
+  turns, one turn is one step. It declares `turn: "absolute"` (right always
+  writes the second word, left the first, `knob_engine.mjs`) and `commit:
+  "release"` (the host writes once, when the knob is let go,
+  `page_controller.mjs`), with no option list over the page. The cell shows
+  the way it last went. A jog click flips it, so a click after a roll steps
+  back, and another goes forward again: an A/B of the last two.
+- **Roll** goes forward to the next roll kept, if you had stepped back, or
+  rolls a new one past the newest. **Back** steps to the roll before, down
+  to the sound before any roll, at most eight back. Each move first keeps
+  what is on the pad, so an edit after a roll survives a step back and
+  forward. Rolls past the eighth back are forgotten.
+- **Finish > DICE** rolls the focused pad and keeps its place in the mix:
+  LEVEL, PAN and CHOKE. **Kit > DICE** rolls all sixteen and sets the mix
+  too: the hats (3 and 4) choke each other in group A, the toms spread
+  left to right, the percussion either side. A kit roll, or a step of it,
+  starts each pad's own rolls again from there.
+- **The roles** (`src/dsp/dice.c`), as proposed above. Each role says
+  which engines it uses, how often, and over what ranges, with times in
+  seconds and pitches in semitones: a kick is Skin low and deep with an
+  envelope dropping its pitch, sometimes a tone or a click under it; a
+  closed hat is Noise (Metal, Hiss, White or Wires) falling in 40 to
+  100 ms; a clap is noise with FLAM; a bass is Wave alone; and so on. About
+  a quarter of the rolls of each drum take a sample of its own kind from
+  the library (a kick pad from Kick/, an effect from Glitch/, Foley/, Toy/
+  or Voice/), cut short where the file rings long.
+- **Level-matched.** Each role's engine faders are set by measurement.
+  The library's files differ by about 20 dB as recorded, so each one's
+  loudness and peak are measured once, as DICE plays it, into a table
+  (`src/dsp/levels.c`, made by `tools/levels`; the tests measure again and
+  fail if it is out of date). A roll aims a sample at its role's
+  loudness from that, keeping its peak under −3 dB. Measured over 40 rolls
+  of each pad: the middle half of each role's rolls within 1.3 to 4.6 dB
+  of each other, every roll within 15 (the effects and percussion, whose
+  rolls are most unalike, the widest).
+- **Cheap.** A roll sets knobs and nothing more, on the audio thread where
+  the host calls it; a sample it names loads as any other does, so a hit
+  in the first moment after a roll may play without it.
+- **Found on the way:** Skin with HIT Soft, MODE High and a high PITCH
+  peaks over full scale (1.5 at PITCH 45). DICE does not roll it; the
+  voicing pass should look at it.
+- **Known edges.** Holding a step and turning DICE can lock it to that
+  step, and recording automation of it records the word: either way a
+  "Roll" played back rolls again every time it passes. A trigger is never
+  locked, but a trigger fires the same either way, with no Back. And a
+  kit saved before 0.8.0, or a host restoring every key one by one, writes
+  DICE's word back: `state` (next) leaves DICE out.
+
+Rejected for DICE:
+
+- **An int roll counter, 0 to 9999** (the plan above). The host steps an
+  int by a hundredth of its range a detent, halved (50 here), and keeps
+  its own copy between turns, so its number and Strut's drift apart, and a
+  turn left could land past the newest roll and roll.
+- **A write per detent.** One flick of the encoder is a dozen detents: a
+  dozen rolls, and the sound before them gone past the eighth.
+- **One knob for both**, right for the kit and left for the pad (the
+  user's first idea): no way back, and a nudge replaces sixteen pads.
+- **Measuring each roll by playing it.** A roll runs on the audio thread;
+  rendering a hit of every pad to measure it would cost tens of
+  milliseconds there.
 
 ---
 
@@ -1231,7 +1300,12 @@ own engine, reach most of the same sounds.)
    - ~~tests: every file parses, every Cycle file is 2048 samples, the
      tarball holds the library~~ (0.6.0).
 10. The SOUND library, factory kits and DICE, drawing on the sample library
-    (DICE by role), `help.json` and README.
+    (DICE by role), `help.json` and README:
+    - ~~DICE, Finish's and the Kit page's, by role, with eight steps
+      back, level-matched~~ (0.8.0; still to do: hear it);
+    - `state`, so a kit saves and loads whole, without DICE;
+    - the SOUND library and factory kits;
+    - `help.json` and the README.
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
 
@@ -1305,6 +1379,17 @@ own engine, reach most of the same sounds.)
     short LOOP holds a moment steady for seconds; Noise takes a mallet's
     pitch out; a mode not yet made plays the sample, and a cycle plays as
     itself.
+  - DICE: Roll makes a new sound and leaves the other pads alone; Back
+    steps to the roll before and down to the sound before any roll, and no
+    further; Roll after Back goes forward, not to a new roll; an edit
+    after a roll survives a step back and forward; eight back and no
+    further, and forward through the same eight; a pad's roll keeps LEVEL,
+    PAN and CHOKE; Kit > DICE rolls all sixteen, chokes the hats together,
+    steps back to every pad as it was and forward again, and starts each
+    pad's rolls afresh. Forty rolls of every pad: each sounds, stays
+    finite, peaks under 0.95 and ends in its role's time (a closed hat in
+    0.4 s, a kick in 2); the middle half of each role within 5 dB and all
+    within 15. The levels table matches the library as it plays.
   - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.

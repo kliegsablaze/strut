@@ -47,6 +47,48 @@ void strut_press(strut_t *s) {
     pair(s);
 }
 
+/* ---- DICE (dice.h) ---- */
+
+/* One DICE's step: saves what is there (n floats at cur) into its roll's
+ * slot, then moves. 1 if the step is a new roll, for the caller to make. */
+static int dice_step(dice_hist_t *h, float *slots, float *cur, size_t n, int way) {
+    memcpy(slots + (size_t)(h->at % DICE_SLOTS) * n, cur, n * sizeof(float));
+    if (way == DICE_ROLL && h->at == h->newest) {
+        h->at = ++h->newest;
+        return 1;
+    }
+    if (way == DICE_ROLL) h->at++;
+    else if (h->at > 0 && h->at > h->newest - DICE_KEEP) h->at--;
+    memcpy(cur, slots + (size_t)(h->at % DICE_SLOTS) * n, n * sizeof(float));
+    return 0;
+}
+
+static uint32_t *dice_rng(strut_t *s) {
+    /* the hits so far and the time stir it, so no two sessions roll alike */
+    s->dice_rng ^= s->seed + (uint32_t)(s->now * STRUT_SR);
+    if (!s->dice_rng) s->dice_rng = 0x2545F491u;
+    return &s->dice_rng;
+}
+
+void strut_dice(strut_t *s, int pad, int way) {
+    if (pad >= 0) {
+        pad_t *p = &s->pad[pad];
+        if (dice_step(&p->dice, &p->rolls[0][0], p->p, P_COUNT, way)) dice_roll(p->p, pad, 0, dice_rng(s));
+        p->p[P_DICE] = (float)way;
+        return;
+    }
+    float kit[STRUT_PADS][P_COUNT];
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(kit[i], s->pad[i].p, sizeof(kit[i]));
+    if (dice_step(&s->dice, &s->rolls[0][0][0], &kit[0][0], STRUT_PADS * P_COUNT, way))
+        for (int i = 0; i < STRUT_PADS; i++) dice_roll(kit[i], i, 1, dice_rng(s));
+    for (int i = 0; i < STRUT_PADS; i++) {
+        memcpy(s->pad[i].p, kit[i], sizeof(kit[i]));
+        /* each pad's own rolls start again from the kit's */
+        s->pad[i].dice = (dice_hist_t){ 0, 0 };
+    }
+    s->g[G_DICE] = (float)way;
+}
+
 /* FLAM's spacing: 2 to 50 ms, nothing at zero. */
 static int flam_gap(const float *p) {
     return (int)(0.002f * powf(25.0f, p[P_FLAM]) * STRUT_SR);
@@ -470,8 +512,10 @@ static void set_param(void *instance, const char *key, const char *val) {
         strut_press(s);
     } else if ((k = pad_key(key, &pad)) >= 0) {
         write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
+        if (k == P_DICE) strut_dice(s, pad, (int)s->pad[pad].p[k]);
     } else if ((k = global_key(key)) >= 0) {
         write_value(&STRUT_GLOBALS[k], &s->g[k], val);
+        if (k == G_DICE) strut_dice(s, -1, (int)s->g[k]);
     }
 }
 

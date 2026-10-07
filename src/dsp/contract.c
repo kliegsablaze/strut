@@ -46,6 +46,10 @@ static void param_json(sb_t *b, const param_def_t *d) {
         sb_printf(b, "],\"options_as_string\":true,\"default\":\"%s\"", d->options[(int)d->def]);
         /* MOD flips on a click; two words need no list over the page. */
         if (d->options == STRUT_VIEW_OPTIONS) sb_printf(b, ",\"peek\":false");
+        /* DICE: right writes Roll and left Back, however far it turns, and
+         * only when the knob is let go, so one turn is one roll */
+        if (d->options == STRUT_DICE_OPTIONS)
+            sb_printf(b, ",\"peek\":false,\"turn\":\"absolute\",\"commit\":\"release\"");
     } else if (d->kind == PK_INT) {
         sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d,\"default\":%d", (int)d->min, (int)d->max, (int)d->def);
         if (d->unit) sb_printf(b, ",\"unit\":\"%s\"", d->unit);

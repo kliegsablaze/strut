@@ -6,6 +6,7 @@
  * at once, which also measures starting a hit.
  */
 #define _POSIX_C_SOURCE 200809L
+#define _DARWIN_C_SOURCE        /* macOS hides getrusage's page faults without it */
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>

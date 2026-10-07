@@ -11,10 +11,10 @@
 #include "tables.h"
 
 #define N(a) (int)(sizeof(a) / sizeof((a)[0]))
-#define ENUM(key, cell, name, opts) { key, cell, name, PK_ENUM, 0, N(opts) - 1, 0, NULL, opts, N(opts) }
-#define UNI(key, cell, name, def) { key, cell, name, PK_FLOAT, 0.0f, 1.0f, def, NULL, NULL, 0 }
-#define BI(key, cell, name) { key, cell, name, PK_FLOAT, -1.0f, 1.0f, 0.0f, NULL, NULL, 0 }
-#define SEMI(key, cell, name, lo, hi) { key, cell, name, PK_INT, lo, hi, 0, "st", NULL, 0 }
+#define ENUM(key, cell, name, opts) { key, cell, name, PK_ENUM, 0, N(opts) - 1, 0, NULL, opts, N(opts), 0 }
+#define UNI(key, cell, name, def) { key, cell, name, PK_FLOAT, 0.0f, 1.0f, def, NULL, NULL, 0, 0 }
+#define BI(key, cell, name) { key, cell, name, PK_FLOAT, -1.0f, 1.0f, 0.0f, NULL, NULL, 0, 0 }
+#define SEMI(key, cell, name, lo, hi) { key, cell, name, PK_INT, lo, hi, 0, "st", NULL, 0, 0 }
 
 /* The SOUND library is build step 10. Until then, forty stand-in names, so
  * the contract carries a list the size of the real one. */
@@ -43,6 +43,7 @@ _Static_assert(N(NOISE_TABLES) == NT_TABLES, "one TABLE option for each noise ta
 static const char *const SAMPLE_MODES[] = { "Sample", "Resynth", "Noise" };
 static const char *const CHOKES[] = { "Off", "A", "B", "C", "D" };
 const char *const STRUT_VIEW_OPTIONS[2] = { "Sound", "Mod" };
+const char *const STRUT_DICE_OPTIONS[2] = { "Back", "Roll" };   /* dice.h's order */
 
 int param_noptions(const param_def_t *d) { return d->noptions + (d->library ? smp_count() : 0); }
 
@@ -111,10 +112,10 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_FLAM] = UNI("flam", "Flam", "Flam", 0.0f),
     [P_DRIVE] = UNI("drive", "Drive", "Drive", 0.0f),
     [P_CRUSH] = UNI("crush", "Crush", "Crush", 0.0f),
-    [P_LOW] = { "low", "Low", "Low Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0 },
-    [P_HIGH] = { "high", "High", "High Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0 },
-    /* A stand-in: DICE's turn-to-roll gesture is build step 10. */
-    [P_DICE] = { "dice", "Dice", "Dice", PK_INT, 0, 8, 0, NULL, NULL, 0 },
+    [P_LOW] = { "low", "Low", "Low Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0, 0 },
+    [P_HIGH] = { "high", "High", "High Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0, 0 },
+    /* a turn right rolls, left steps back (dice.h); never saved */
+    [P_DICE] = { "dice", "Dice", "Dice", PK_ENUM, 0, 1, 1, NULL, STRUT_DICE_OPTIONS, 2, 0 },
 };
 
 const param_def_t STRUT_GLOBALS[G_COUNT] = {
@@ -125,7 +126,8 @@ const param_def_t STRUT_GLOBALS[G_COUNT] = {
     [G_SIZE] = UNI("size", "Size", "Room Size", 0.4f),
     [G_GLUE] = UNI("glue", "Glue", "Glue", 0.0f),
     [G_WARM] = UNI("warm", "Warm", "Warmth", 0.0f),
-    [G_VOL] = { "vol", "Vol", "Kit Volume", PK_FLOAT, -60.0f, 6.0f, 0.0f, "dB", NULL, 0 },
+    [G_VOL] = { "vol", "Vol", "Kit Volume", PK_FLOAT, -60.0f, 6.0f, 0.0f, "dB", NULL, 0, 0 },
+    [G_DICE] = { "kit_dice", "Dice", "Kit Dice", PK_ENUM, 0, 1, 1, NULL, STRUT_DICE_OPTIONS, 2, 0 },
 };
 
 const page_def_t STRUT_PAGES[STRUT_NPAGES] = {
@@ -134,5 +136,5 @@ const page_def_t STRUT_PAGES[STRUT_NPAGES] = {
     { "wave", "Wave", 1, G_WAVE_VIEW, P_W_PITCH, 14 },
     { "noise", "Noise", 1, G_NOISE_VIEW, P_N_PITCH, 14 },
     { "finish", "Finish", 1, -1, P_PAN, 8 },
-    { "kit", "Kit", 0, -1, G_SPACE, 5 },
+    { "kit", "Kit", 0, -1, G_SPACE, 6 },
 };

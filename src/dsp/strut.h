@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 
+#include "dice.h"
 #include "finish.h"
 #include "kit.h"
 #include "mod.h"
@@ -21,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.7.0"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.8.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -72,7 +73,7 @@ typedef enum {
  * state: one per engine page, shared by every pad, never saved. */
 typedef enum {
     G_SKIN_VIEW, G_WAVE_VIEW, G_NOISE_VIEW,
-    G_SPACE, G_SIZE, G_GLUE, G_WARM, G_VOL,
+    G_SPACE, G_SIZE, G_GLUE, G_WARM, G_VOL, G_DICE,
     G_COUNT
 } global_param_t;
 
@@ -91,6 +92,7 @@ typedef struct {
 #define STRUT_NPAGES 6
 extern const page_def_t STRUT_PAGES[STRUT_NPAGES];
 extern const char *const STRUT_VIEW_OPTIONS[2];   /* "Sound", "Mod" */
+extern const char *const STRUT_DICE_OPTIONS[2];   /* "Back", "Roll" */
 
 /* A pad's drum: the three engines together, a sample at a time. One a pad:
  * a new hit strikes the same Skin again, restarts Wave and adds to Noise
@@ -115,6 +117,8 @@ typedef struct {
     int flams;                  /* FLAM's hits still to come */
     int flam_in;                /* samples to the next */
     float flam_amp;             /* the hit's strength, as played */
+    dice_hist_t dice;           /* Finish > DICE's rolls of this pad */
+    float rolls[DICE_SLOTS][P_COUNT];
 } pad_t;
 
 typedef struct {
@@ -133,6 +137,9 @@ typedef struct {
     int sounding;               /* voices that rendered this block, and the room */
     kit_t kit;
     smp_lib_t lib;              /* the samples the pads name, loaded off the audio thread */
+    dice_hist_t dice;           /* Kit > DICE's rolls of every pad */
+    float rolls[DICE_SLOTS][STRUT_PADS][P_COUNT];
+    uint32_t dice_rng;
 } strut_t;
 
 void strut_init(strut_t *s);
@@ -143,6 +150,9 @@ void strut_kit(strut_t *s, float *l, float *r, int frames);
 void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int frames);
 float strut_fader(float x);
 void strut_press(strut_t *s);   /* the host's "a finger did that" */
+/* A turn of Finish > DICE on pad (0..15), or of Kit > DICE with pad -1:
+ * DICE_ROLL or DICE_BACK (dice.h). */
+void strut_dice(strut_t *s, int pad, int way);
 
 int strut_contract_hierarchy(char *buf, int len);
 int strut_contract_params(char *buf, int len);

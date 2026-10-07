@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include "host/plugin_api_v1.h"
+#include "levels.h"
 #include "strut.h"
 
 plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host);
@@ -97,6 +98,7 @@ static void keys(void) {
     for (int i = 1; i <= STRUT_PADS; i++)
         for (int k = 0; k < P_COUNT; k++) {
             const param_def_t *d = &STRUT_PAD_PARAMS[k];
+            if (k == P_DICE) continue;      /* a turn, not a knob kept (dice()) */
             snprintf(key, sizeof(key), "p%02d_%s", i, d->key);
             if (d->kind == PK_ENUM) snprintf(val, sizeof(val), "%s", d->options[(i + k) % d->noptions]);
             else snprintf(val, sizeof(val), "%d", (int)d->max);
@@ -105,12 +107,13 @@ static void keys(void) {
     for (int i = 1; i <= STRUT_PADS; i++)
         for (int k = 0; k < P_COUNT; k++) {
             const param_def_t *d = &STRUT_PAD_PARAMS[k];
+            if (k == P_DICE) continue;
             snprintf(key, sizeof(key), "p%02d_%s", i, d->key);
             const char *got = get(p, key);
             if (d->kind == PK_ENUM) bad += !got || strcmp(got, d->options[(i + k) % d->noptions]);
             else bad += !got || atof(got) != (double)(int)d->max;
         }
-    CHECK(bad == 0, "every pad keeps its own %d knobs (%d wrong)", P_COUNT, bad);
+    CHECK(bad == 0, "every pad keeps its own %d knobs (%d wrong)", P_COUNT - 1, bad);
     CHECK(get(p, "tune") == NULL && get(p, "p17_tune") == NULL && get(p, "p00_tune") == NULL,
           "a bare or out-of-range pad key is not served");
     A->set_param(p, "p02_s_mode", "2");
@@ -1578,6 +1581,157 @@ static void focus(void) {
     A->destroy_instance(p);
 }
 
+/* ---- DICE (DESIGN.md, Sounds, presets and the randomiser) ---- */
+
+static int same(const float *a, const float *b, int n) { return !memcmp(a, b, sizeof(float) * (size_t)n); }
+
+/* Hits pad i with its knobs as set, its sample loaded first, and renders
+ * seconds of it into L. */
+static int hit_pad(strut_t *s, int i, float seconds) {
+    strut_render(s, L, R, 128);     /* the pad says what it wants */
+    smp_service(&s->lib, 0);
+    strut_note_on(s, STRUT_NOTE0 + i, 100);
+    const int total = (int)(seconds * STRUT_SR);
+    for (int n = 0; n < total; n += 128) strut_render(s, L + n, R + n, total - n < 128 ? total - n : 128);
+    return total;
+}
+
+/* The table DICE levels the library by (levels.h) is the library's own. */
+static void sample_levels(void) {
+    int stale = 0, listed = 0;
+    for (int i = 0; i < smp_count(); i++) {
+        if (!strncmp(smp_name(i), "Cycle ", 6)) continue;
+        listed++;
+        float pk, listed_pk;
+        const float db = levels_measure(NT_TABLES + i, L, R, &pk), was = levels_of(smp_name(i), &listed_pk);
+        if (fabsf(db - was) > 0.15f || fabsf(pk - listed_pk) > 0.15f) {
+            if (!stale++) printf("  %s plays at %.1f dB, peak %.1f; listed %.1f, %.1f\n", smp_name(i),
+                                 (double)db, (double)pk, (double)was, (double)listed_pk);
+        }
+    }
+    CHECK(listed == LEVELS_N && !stale, "every library sample's level is listed as it plays (%d of %d off, %d listed;"
+          " remake: tools/levels > src/dsp/levels.c)", stale, listed, LEVELS_N);
+}
+
+static void dice(void) {
+    void *p = A->create_instance(".", "");
+    strut_t *s = p;
+    float s0[P_COUNT], s1[P_COUNT], s2[P_COUNT], s3[P_COUNT];
+    memcpy(s0, s->pad[1].p, sizeof(s0));
+    A->set_param(p, "p02_dice", "Roll");
+    memcpy(s1, s->pad[1].p, sizeof(s1));
+    A->set_param(p, "p02_dice", "Roll");
+    memcpy(s2, s->pad[1].p, sizeof(s2));
+    CHECK(!same(s0, s1, P_DICE) && !same(s1, s2, P_DICE), "Roll makes a new sound each time");
+    CHECK(!strcmp(get(p, "p02_dice"), "Roll"), "DICE shows the way it last went");
+    CHECK(same(s->pad[0].p, s->pad[2].p, P_COUNT), "and leaves the other pads alone");
+    A->set_param(p, "p02_dice", "Back");
+    CHECK(same(s->pad[1].p, s1, P_DICE) && !strcmp(get(p, "p02_dice"), "Back"), "Back steps to the roll before");
+    A->set_param(p, "p02_dice", "1");
+    CHECK(same(s->pad[1].p, s2, P_DICE), "Roll after Back goes forward again, not to a new roll");
+    A->set_param(p, "p02_dice", "Back");
+    A->set_param(p, "p02_dice", "Back");
+    CHECK(same(s->pad[1].p, s0, P_DICE), "and back to the sound before any roll");
+    A->set_param(p, "p02_dice", "Back");
+    CHECK(same(s->pad[1].p, s0, P_DICE), "which is as far as it goes");
+    A->set_param(p, "p02_dice", "Roll");
+    A->set_param(p, "p02_dice", "Roll");
+    A->set_param(p, "p02_dice", "Roll");
+    memcpy(s3, s->pad[1].p, sizeof(s3));
+    CHECK(!same(s3, s2, P_DICE), "past the newest, a new roll");
+    A->set_param(p, "p02_tune", "5");
+    A->set_param(p, "p02_dice", "Back");
+    A->set_param(p, "p02_dice", "Roll");
+    CHECK(s->pad[1].p[P_TUNE] == 5.0f, "an edit after a roll survives a step back and forward");
+    /* eight back at most */
+    float kept[DICE_SLOTS][P_COUNT];
+    for (int k = 0; k < 12; k++) A->set_param(p, "p02_dice", "Roll");
+    memcpy(kept[0], s->pad[1].p, sizeof(kept[0]));
+    for (int k = 1; k < DICE_SLOTS; k++) {
+        A->set_param(p, "p02_dice", "Back");
+        memcpy(kept[k], s->pad[1].p, sizeof(kept[k]));
+    }
+    A->set_param(p, "p02_dice", "Back");
+    CHECK(same(s->pad[1].p, kept[DICE_KEEP], P_DICE), "eight steps back, and no further");
+    int walk = 1;
+    for (int k = DICE_KEEP - 1; k >= 0; k--) {
+        A->set_param(p, "p02_dice", "Roll");
+        walk &= same(s->pad[1].p, kept[k], P_DICE);
+    }
+    CHECK(walk, "and forward through the same eight");
+    /* a pad's roll keeps its place in the mix */
+    A->set_param(p, "p02_level", "0.5");
+    A->set_param(p, "p02_pan", "-0.4");
+    A->set_param(p, "p02_choke", "C");
+    A->set_param(p, "p02_dice", "Roll");
+    CHECK(s->pad[1].p[P_LEVEL] == 0.5f && s->pad[1].p[P_PAN] == -0.4f && s->pad[1].p[P_CHOKE] == 3.0f,
+          "a pad's roll keeps its LEVEL, PAN and CHOKE");
+
+    /* the kit */
+    float before[STRUT_PADS][P_COUNT], after[STRUT_PADS][P_COUNT];
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(before[i], s->pad[i].p, sizeof(before[i]));
+    A->set_param(p, "kit_dice", "Roll");
+    int changed = 0;
+    for (int i = 0; i < STRUT_PADS; i++) changed += !same(before[i], s->pad[i].p, P_DICE);
+    CHECK(changed == STRUT_PADS, "Kit > DICE rolls all sixteen (%d)", changed);
+    CHECK(s->pad[2].p[P_CHOKE] == 1.0f && s->pad[3].p[P_CHOKE] == 1.0f && s->pad[0].p[P_CHOKE] == 0.0f,
+          "the hats choke each other, and nothing else does");
+    CHECK(s->pad[1].p[P_LEVEL] == STRUT_PAD_PARAMS[P_LEVEL].def, "the kit's roll sets each pad's level");
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(after[i], s->pad[i].p, sizeof(after[i]));
+    A->set_param(p, "p05_dice", "Back");
+    CHECK(same(s->pad[4].p, after[4], P_DICE), "a pad's own rolls start again from the kit's");
+    A->set_param(p, "kit_dice", "Back");
+    int back = 0;
+    for (int i = 0; i < STRUT_PADS; i++) back += same(before[i], s->pad[i].p, P_DICE);
+    CHECK(back == STRUT_PADS, "Kit > DICE Back brings every pad back (%d)", back);
+    A->set_param(p, "kit_dice", "Roll");
+    back = 0;
+    for (int i = 0; i < STRUT_PADS; i++) back += same(after[i], s->pad[i].p, P_DICE);
+    CHECK(back == STRUT_PADS, "and Roll forward again (%d)", back);
+    A->destroy_instance(p);
+
+    /* Every role's rolls: they sound, stay finite, peak under 0.95 and end
+     * in their role's time; each role's are near each other in loudness. */
+    static const float ENDS[ROLE_COUNT] = { 2.0f, 1.5f, 1.2f, 0.4f, 1.8f, 3.9f, 0.6f, 2.5f, 2.0f, 3.5f, 3.0f, 3.9f };
+    const int rolls = 40;
+    for (int i = 0; i < STRUT_PADS; i++) {
+        const dice_role_t role = dice_role(i);
+        double loud[64], lo_pk = 1, hi_pk = 0;
+        int bad = 0, quiet = 0, long_ = 0, worst = 0;
+        uint32_t rng = 0x1234567u + (uint32_t)i;
+        for (int k = 0; k < rolls; k++) {
+            strut_t *t = fresh();
+            dice_roll(t->pad[i].p, i, 1, &rng);
+            const int n = hit_pad(t, i, 4.0f);
+            double pk = 0;
+            int finite = 1;
+            for (int m = 0; m < n; m++) {
+                finite &= isfinite(L[m]) && isfinite(R[m]);
+                pk = fmax(pk, fmax(fabs(L[m]), fabs(R[m])));
+            }
+            for (int m = 0; m < n; m++) L[m] = 0.5f * (L[m] + R[m]);
+            const int end = last_heard(L, 0, n);
+            loud[k] = 20 * log10(fmax(loudest(n), 1e-9));
+            bad += !finite || pk >= 0.95;
+            quiet += pk < 0.05;
+            if (end > (int)(ENDS[role] * STRUT_SR)) long_++, worst = end > worst ? end : worst;
+            lo_pk = fmin(lo_pk, pk), hi_pk = fmax(hi_pk, pk);
+            smp_stop(&t->lib);
+            free(t);
+        }
+        qsort(loud, (size_t)rolls, sizeof(double), by_double);
+        CHECK(!bad && !quiet, "pad %d (%s): every roll sounds, finite, under 0.95 (%d bad, %d quiet)",
+              i + 1, dice_role_name(role), bad, quiet);
+        CHECK(!long_, "pad %d (%s): every roll ends within %.1f s (%d over, the longest %.2f s)",
+              i + 1, dice_role_name(role), (double)ENDS[role], long_, (double)worst / STRUT_SR);
+        CHECK(loud[3 * rolls / 4] - loud[rolls / 4] <= 5.0 && loud[rolls - 1] - loud[0] <= 15.0,
+              "pad %d (%s): rolls level-matched, the middle half within 5 dB and all within 15 (%.1f, %.1f)",
+              i + 1, dice_role_name(role), loud[3 * rolls / 4] - loud[rolls / 4], loud[rolls - 1] - loud[0]);
+        printf("dice: pad %2d %-6s peaks %.2f .. %.2f, loudness %.1f .. %.1f dB (middle half %.1f .. %.1f)\n",
+               i + 1, dice_role_name(role), lo_pk, hi_pk, loud[0], loud[rolls - 1], loud[rolls / 4], loud[3 * rolls / 4]);
+    }
+}
+
 int main(int argc, char **argv) {
     smp_catalogue("src");    /* the library, as the module's folder holds it on the Move */
     const char *dir = argc > 1 ? argv[1] : ".";
@@ -1600,6 +1754,8 @@ int main(int argc, char **argv) {
     samples();
     modes();
     focus();
+    sample_levels();
+    dice();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;
 }
