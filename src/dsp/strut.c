@@ -1,5 +1,6 @@
 /*
- * The v2 plugin entry, the pads and the placeholder voice (strut.h).
+ * The v2 plugin entry, the pads, their keys and the placeholder voice
+ * (strut.h).
  */
 #include <math.h>
 #include <stdio.h>
@@ -9,18 +10,13 @@
 #include "host/plugin_api_v1.h"
 #include "strut.h"
 
-const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
-    [P_TUNE] = { "tune", "Tune", "Tune", -1.0f, 1.0f, 0.0f },
-    [P_DECAY] = { "decay", "Decay", "Decay", 0.0f, 1.0f, 0.4f },
-    [P_LEVEL] = { "level", "Level", "Level", 0.0f, 1.0f, 0.8f },
-};
-
 /* ---- the pads ---- */
 
 void strut_init(strut_t *s) {
     memset(s, 0, sizeof(*s));
     for (int i = 0; i < STRUT_PADS; i++)
         for (int k = 0; k < P_COUNT; k++) s->pad[i].p[k] = STRUT_PAD_PARAMS[k].def;
+    for (int k = 0; k < G_COUNT; k++) s->g[k] = STRUT_GLOBALS[k].def;
     s->press_at = s->note_at = -1.0;
 }
 
@@ -67,8 +63,8 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
         if (!p->active) continue;
-        const float hz = 45.0f * powf(2.0f, (i + 24.0f * p->p[P_TUNE]) / 12.0f);
-        const float t60 = 0.03f * powf(100.0f, p->p[P_DECAY]);   /* 30 ms .. 3 s */
+        const float hz = 45.0f * powf(2.0f, (i + p->p[P_TUNE]) / 12.0f);
+        const float t60 = 0.3f * powf(10.0f, p->p[P_DECAY]);   /* 30 ms .. 3 s */
         const float fall = expf(-6.9f / (t60 * STRUT_SR));
         const float dfall = expf(-1.0f / (0.012f * STRUT_SR));
         const float g = p->vel * p->p[P_LEVEL] * 0.5f;
@@ -88,7 +84,7 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
 
 /* ---- keys ---- */
 
-/* "p01_tune" -> pad 0, P_TUNE; -1 if it is not a pad key. */
+/* "p05_s_pitch" -> pad 4, P_S_PITCH; -1 if it is not a pad key. */
 static int pad_key(const char *key, int *pad) {
     if (key[0] != 'p' || key[1] < '0' || key[1] > '9' || key[2] < '0' || key[2] > '9' || key[3] != '_') return -1;
     const int n = (key[1] - '0') * 10 + (key[2] - '0');
@@ -98,7 +94,36 @@ static int pad_key(const char *key, int *pad) {
     return -1;
 }
 
+static int global_key(const char *key) {
+    for (int k = 0; k < G_COUNT; k++)
+        if (!strcmp(key, STRUT_GLOBALS[k].key)) return k;
+    return -1;
+}
+
 static float clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* An enum arrives as its option name or its index; both are accepted.
+ * Anything else leaves the value alone. */
+static void write_value(const param_def_t *d, float *v, const char *val) {
+    if (d->kind == PK_ENUM) {
+        for (int i = 0; i < d->noptions; i++)
+            if (!strcmp(val, d->options[i])) { *v = (float)i; return; }
+        char *end;
+        const long i = strtol(val, &end, 10);
+        if (end != val && *end == '\0' && i >= 0 && i < d->noptions) *v = (float)i;
+        return;
+    }
+    char *end;
+    const float x = strtof(val, &end);
+    if (end == val) return;
+    *v = clampf(d->kind == PK_INT ? roundf(x) : x, d->min, d->max);
+}
+
+static int read_value(const param_def_t *d, float v, char *buf, int len) {
+    if (d->kind == PK_ENUM) return snprintf(buf, len, "%s", d->options[(int)v]);
+    if (d->kind == PK_INT) return snprintf(buf, len, "%d", (int)v);
+    return snprintf(buf, len, "%.4f", (double)v);
+}
 
 /* ---- the v2 API ---- */
 
@@ -127,7 +152,9 @@ static void set_param(void *instance, const char *key, const char *val) {
     } else if (!strcmp(key, "pad_press")) {
         strut_press(s);
     } else if ((k = pad_key(key, &pad)) >= 0) {
-        s->pad[pad].p[k] = clampf((float)atof(val), STRUT_PAD_PARAMS[k].min, STRUT_PAD_PARAMS[k].max);
+        write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
+    } else if ((k = global_key(key)) >= 0) {
+        write_value(&STRUT_GLOBALS[k], &s->g[k], val);
     }
 }
 
@@ -137,7 +164,8 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     if (!strcmp(key, "ui_hierarchy")) return strut_contract_hierarchy(buf, buf_len);
     if (!strcmp(key, "chain_params")) return strut_contract_params(buf, buf_len);
     if (!strcmp(key, "pad")) return snprintf(buf, buf_len, "%d", s->focus + 1);
-    if ((k = pad_key(key, &pad)) >= 0) return snprintf(buf, buf_len, "%.4f", (double)s->pad[pad].p[k]);
+    if ((k = pad_key(key, &pad)) >= 0) return read_value(&STRUT_PAD_PARAMS[k], s->pad[pad].p[k], buf, buf_len);
+    if ((k = global_key(key)) >= 0) return read_value(&STRUT_GLOBALS[k], s->g[k], buf, buf_len);
     return -1;
 }
 

@@ -2,9 +2,12 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** plan and scaffold, 0.0.1 (2026-10-07). The scaffold builds, loads,
-follows the pads and plays a placeholder sine per pad. None of the engines below
-exists yet. Everything from **Pads and focus** down is the plan, not what runs.
+**Status:** contract probe, 0.0.2 (2026-10-07). Every proposed knob, on every
+page and both views of each engine page, is declared, kept per pad and planned
+by the host's own planner in the tests. The sound is still the scaffold's
+placeholder sine per pad, reading only TUNE, DECAY and LEVEL. None of the
+engines exists yet: from **The idea in plain words** down, the pages and keys
+are real, the sound behind them is the plan.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -96,40 +99,58 @@ The pages always show **the pad you last hit**:
   It is turnable, so the pad can be changed without hitting it.
 - **To do:** answer `pad` as `"<count>:<pad>"` once the host reads that form
   for `child_index_param`. Otherwise hitting the same pad again after browsing
-  away does not come back. Check docs/MODULES.md, *A focus answer may carry a
-  CHANGE TOKEN*.
+  away does not come back. Checked on Schwung 1.7.3: the change token is read
+  for `focus_param` (the sibling shape) only; `childIndexFromWire` takes a
+  plain number and treats `"3:5"` as no answer. So `pad` stays a plain number
+  until the host reads the token there too.
 
-**Open question, and build step 1: one key per pad, or keys for the focused
-pad?**
+**Decided at build step 2: template keys, each declared once.**
 
-- **Template keys** (`p01_tune` … `p16_level`) are what the scaffold uses.
-  - Every pad's knob is a real host parameter, so Move's automation and
-    per-step locks reach the right pad.
-  - The cost is size. The scaffold's 48 keys take 4.8 KB of `chain_params`,
-    about 100 bytes a key. The full design is about 58 keys a pad, about 930
-    keys and 93 KB, against a 128 KB buffer. It fits, but only just.
-- **Focused-pad keys** (`tune`, which means "the focused pad's tune") are about
-  60 keys.
-  - They are small and simple.
-  - But automation recorded on one pad plays back on whichever pad is
-    focused. That is a real defect for a drum machine.
-- **Recommendation: template keys.** Measure the full contract first, and keep
-  it under 96 KB:
-  - Shorten names.
-  - Leave out `step` where the host's default serves.
-  - Share option lists where the host allows.
-  - Check the grid's read rate with 900 keys on the device.
+Every pad's knob is a real host parameter (`p05_tune`), so Move's automation
+and per-step locks reach the right pad. But `chain_params` names each knob only
+once, by its bare key (`tune`), and the hierarchy's rack template
+(`p{index}_{key}`) multiplies it:
+
+- **The UI** resolves `p05_tune` from `tune` through the template
+  (`child_key.mjs`).
+- **The chain** does too, for lanes, step locks, scenes and modulation
+  (Schwung's CHAIN.md, *A rack's templated keys are typed by the CHAIN*). It
+  reads the template from **module.json**, not from the served hierarchy, so
+  module.json carries a copy of the rack's template fields, and the tests check
+  the two agree.
+
+What it measures: 58 knobs a pad, 937 addressable keys, 67 declared. The whole
+contract is **14.6 KB** (hierarchy 5.3 KB, chain_params 9.4 KB) against a
+128 KB buffer. Only the eight keys on screen are ever read, so the grid's read
+rate does not depend on how many pads there are.
+
+Rejected:
+
+- **Listing all sixteen copies in `chain_params`** (`p01_tune` … `p16_level`),
+  which the scaffold did. About 93 KB, which fits the buffer, but the chain
+  keeps a **256-entry** table of a synth's parameters and drops the rest
+  (`MAX_CHAIN_PARAMS`). With 937 entries every pad past the fourth would be
+  invisible to automation, locks and modulation, with only a log line to say so.
+- **Focused-pad keys** (`tune` meaning "the focused pad's tune"). Small, but
+  automation recorded on one pad plays back on whichever pad is focused. That
+  is a real defect for a drum machine.
+
+A host note found on the way: Schwung's MODULES.md says `chain_params` over
+64 KB will not load. That line is out of date; the buffer is 128 KB
+(`SHADOW_PARAM_VALUE_LEN`), and the load check uses that. At 14.6 KB it does not
+matter here.
 
 ---
 
 ## Pages, and the page within a page
 
 Schwung shows eight knobs a page, and Shift+jog-click opens a list of every
-page. Strut keeps that list short:
+page. Strut keeps that list short. Before them comes the host's **Selected Pad**
+list, one for all the per-pad pages, because they share one focus (`pad`):
 
 | Page | For | Shows |
 |---|---|---|
-| **Pad** | the focused pad | the mix and the four big knobs |
+| **Pad** (the host titles it **Main**) | the focused pad | the mix and the four big knobs |
 | **Skin** | the focused pad | the resonator |
 | **Wave** | the focused pad | the oscillator |
 | **Noise** | the focused pad | the noise source or sample |
@@ -158,16 +179,33 @@ How it works in Schwung, as Quilt's Modulation page does already:
 This is used three times only, once per engine, so the trick is always in the same
 place and always means the same thing.
 
+The switch is one key for the whole kit, not one per pad: the engine pages are
+racks keyed `p{index}_{key}`, and `child_key_overrides` maps `skin_view` to
+itself, so switching to Mod and hitting another pad keeps you in Mod. The tests
+plan all eight combinations of the three switches and check that each engine
+page has eight cells with MOD in cell 8.
+
+The host titles the first page **Main** whatever the module calls it
+(`page_plan.mjs`, so every module lands on a page with the same name). Strut
+keeps that rather than adding an empty first level to get "Pad".
+
 (Rejected: a real pop-up page. Schwung has no knob page that opens over another.
 Its "doors" are canvas pages that hand the jog to the module, which would need a
 JavaScript UI for every modulation page.)
 
 ---
 
-## Control surface (proposal)
+## Control surface
 
 Labels are real words of five letters or fewer. The header shows the full name.
 "Bi" means bipolar, with the centre meaning no change.
+
+Every key below is declared and kept (`src/dsp/params.c`). The ranges and
+option lists are **provisional** until each engine's build step sets them by
+ear: PITCH is ±48 semitones, the SOUND list and the TABLE lists are stand-in
+names, and DICE is a plain number until its turn-to-roll gesture (step 10).
+The keys are the bare names in this table with an engine prefix where pages
+share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 
 ### Pad (the focused pad)
 
@@ -188,7 +226,7 @@ Labels are real words of five letters or fewer. The header shows the full name.
 |---|---|---|---|---|
 | 1 | PITCH | resonant frequency | KIND | Envelope, LFO, Random or Velocity |
 | 2 | RING | resonance: how long the body rings | RATE | speed; synced right of centre, free left |
-| 3 | HIT | the exciter: Click, Soft, Noise, Wave or Noise source | CURVE | Skin's envelope shape: Natural, Ping, Soft, Hold |
+| 3 | HIT | the exciter: Click, Soft, Burst (Skin's own noise burst), Wave or Noise (the other two engines) | CURVE | Skin's envelope shape: Natural, Ping, Soft, Hold |
 | 4 | SNAP | how long the exciter lasts | AIM | destination 1 (below) |
 | 5 | METAL | two extra inharmonic partials, rising and louder | DEPTH | Bi |
 | 6 | TONE | brightness, a 2-pole low-pass | AIM | destination 2 |
@@ -239,6 +277,9 @@ Noise's destinations: Pitch, Color, Start, Loop, Level.
 | 6 | LOW | Bi. Low shelf, ±18 dB. |
 | 7 | HIGH | Bi. High shelf, ±18 dB. |
 | 8 | DICE | Turn right to roll a new sound for this pad; turn left to step back through the last eight. |
+
+Noise's mod view uses Wave's curves (with Swell); the design did not say, and
+a swelling noise is a reverse cymbal.
 
 ### Kit (all pads)
 
@@ -314,6 +355,10 @@ own engine, reach most of the same sounds.)
   `filepath` param type. Loading happens off the audio thread, as Ragtag does.
 - **Separate outputs.** Schwung offers `move_plugin_render_split` (per-voice
   buffers; see `plugin_api_v1.h`). Later, not 1.0.
+- **module.json carries the rack template.** A synth's pages come only from
+  `get_param("ui_hierarchy")`, but the chain reads rack templates from
+  module.json's `capabilities.ui_hierarchy` to type `p05_tune`. Keep the two
+  in step; `tests/plan.test.mjs` checks them.
 - **Pad presses** (`child_press_param`) only arrive while the grid shows Strut.
   That is fine, because focus only matters on the grid.
 
@@ -323,13 +368,11 @@ own engine, reach most of the same sounds.)
 
 1. ~~Scaffold: v2 entry, 16 pads, placeholder voice, focus-follow, tests, build,
    CI artifact.~~ (0.0.1)
-2. **Probe the contract:**
-   - Generate the full proposed key set (all pages, all views) with dummy
-     DSP.
-   - Measure the `chain_params` size.
-   - Plan it with the host's planner: every page, both views of each engine
-     page, and the gates.
-   - Fix the template-vs-focused decision.
+2. ~~**Probe the contract:** the full key set with dummy DSP, measured
+   (14.6 KB), planned in every view with the host's planner, and the
+   template-vs-focused decision made (template, declared once).~~ (0.0.2)
+   Still to try on the device: automation and a step lock on pad 5 land on
+   pad 5, and MOD swaps its page at once.
 3. **Skin** engine, and measure CPU on the device (the user installs the CI
    artifact).
 4. **Wave** engine, its tables, and FM from Skin.
@@ -347,7 +390,11 @@ own engine, reach most of the same sounds.)
 - `tests/run.sh`:
   - black-box through the v2 API (no silence where sound is due, no clipping,
     no NaN, parameter sweeps);
-  - the host's own planner and validator on the contract.
+  - the host's own planner and validator on the contract, in all eight
+    combinations of the MOD switches; every label through the host's fitter;
+    the contract's size; module.json's template against the served one.
+    The validator's one warning, that `pad` is on no level, is expected: the
+    host's Selected Pad list is how it is reached.
 - The CI builds a device tarball on every push.
 - **Listening.** The user plays it on the Move.
 

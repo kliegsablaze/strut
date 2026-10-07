@@ -2,7 +2,7 @@
   "id": "strut",
   "name": "Strut",
   "abbrev": "STR",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "dsp": "dsp.so",
   "api_version": 2,
   "component_type": "sound_generator",
@@ -11,6 +11,18 @@
     "audio_out": true,
     "midi_in": true,
     "chainable": true,
-    "component_type": "sound_generator"
+    "component_type": "sound_generator",
+    "ui_hierarchy": {
+      "levels": {
+        "root": {
+          "name": "Pad",
+          "child_count": 16,
+          "child_label": "Pad",
+          "child_key_template": "p{index}_{key}",
+          "child_index_base": 1,
+          "child_index_digits": 2
+        }
+      }
+    }
   }
 }

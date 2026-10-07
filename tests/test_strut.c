@@ -86,6 +86,43 @@ static void pads(void) {
     A->destroy_instance(p);
 }
 
+/* Every pad has its own copy of every knob, kept apart; enums travel as
+ * option names (or indices), and the MOD switches are one key for the kit. */
+static void keys(void) {
+    void *p = A->create_instance(".", "");
+    char key[32], val[32];
+    int bad = 0;
+    for (int i = 1; i <= STRUT_PADS; i++)
+        for (int k = 0; k < P_COUNT; k++) {
+            const param_def_t *d = &STRUT_PAD_PARAMS[k];
+            snprintf(key, sizeof(key), "p%02d_%s", i, d->key);
+            if (d->kind == PK_ENUM) snprintf(val, sizeof(val), "%s", d->options[(i + k) % d->noptions]);
+            else snprintf(val, sizeof(val), "%d", (int)d->max);
+            A->set_param(p, key, val);
+        }
+    for (int i = 1; i <= STRUT_PADS; i++)
+        for (int k = 0; k < P_COUNT; k++) {
+            const param_def_t *d = &STRUT_PAD_PARAMS[k];
+            snprintf(key, sizeof(key), "p%02d_%s", i, d->key);
+            const char *got = get(p, key);
+            if (d->kind == PK_ENUM) bad += !got || strcmp(got, d->options[(i + k) % d->noptions]);
+            else bad += !got || atof(got) != (double)(int)d->max;
+        }
+    CHECK(bad == 0, "every pad keeps its own %d knobs (%d wrong)", P_COUNT, bad);
+    CHECK(get(p, "tune") == NULL && get(p, "p17_tune") == NULL && get(p, "p00_tune") == NULL,
+          "a bare or out-of-range pad key is not served");
+    A->set_param(p, "p02_s_mode", "2");
+    CHECK(!strcmp(get(p, "p02_s_mode"), "High"), "an enum takes an index too");
+    A->set_param(p, "p02_s_mode", "Sideways");
+    CHECK(!strcmp(get(p, "p02_s_mode"), "High"), "and ignores a name it does not know");
+    CHECK(!strcmp(get(p, "skin_view"), "Sound"), "the engine pages open on Sound");
+    A->set_param(p, "skin_view", "Mod");
+    CHECK(!strcmp(get(p, "skin_view"), "Mod") && !strcmp(get(p, "wave_view"), "Sound"), "MOD flips one page");
+    A->set_param(p, "vol", "-6");
+    CHECK(!strcmp(get(p, "vol"), "-6.0000"), "the kit's VOL is kept");
+    A->destroy_instance(p);
+}
+
 static void focus(void) {
     void *p = A->create_instance(".", "");
     CHECK(!strcmp(get(p, "pad"), "1"), "pad 1 is focused at the start");
@@ -115,6 +152,7 @@ int main(int argc, char **argv) {
     contracts(p, dir);
     A->destroy_instance(p);
     pads();
+    keys();
     focus();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);
     return fails ? 1 : 0;
