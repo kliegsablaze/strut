@@ -133,7 +133,7 @@ the `strut-module` artifact, on every push. This session cannot reach the Move.
 To try a build on the device, the user downloads the artifact and runs:
 
 ```bash
-gh run download -n strut-module -D /tmp/strut && scripts/install.sh /tmp/strut/strut-module.tar.gz
+rm -rf /tmp/strut && gh run download -n strut-module -D /tmp/strut && scripts/install.sh /tmp/strut/strut-module.tar.gz
 ```
 
 Tell the user when a build is worth trying, and what to listen for.
