@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 IMAGE="${STRUT_BUILD_IMAGE:-forgetful-builder}"
-CC_CMD="aarch64-linux-gnu-gcc -std=c11 -g -O2 -shared -fPIC -Wall -Wextra -Werror \
+CC_CMD="aarch64-linux-gnu-gcc -std=c11 -g -O3 -ffp-contract=fast -shared -fPIC -Wall -Wextra -Werror \
   -Isrc/dsp src/dsp/*.c -o dist/strut/dsp.so -lm"
 
 rm -rf dist

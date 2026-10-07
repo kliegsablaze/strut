@@ -149,11 +149,22 @@ int wave_strike_len(const float *p, int len) {
     return len >= cycle ? len : cycle < most ? cycle : most;
 }
 
-/* The strike's spectrum at dw: sum d^n e^(-j dw n) over len samples. */
-static void strike_at(float dw, float d, float dl, int len, float *er, float *ei) {
-    const float nr = 1.0f - dl * cosf(dw * (float)len), ni = dl * sinf(dw * (float)len);
-    const float dr = 1.0f - d * cosf(dw), di = d * sinf(dw);
-    const float m = fmaxf(dr * dr + di * di, 1e-12f);
+/* A unit complex number, turned by another: the angles below step evenly
+ * from one harmonic to the next, so each is the last one turned, not a
+ * sine and cosine of its own. */
+typedef struct { double c, s; } turn_t;
+
+static turn_t turn_of(double a) { return (turn_t){ cos(a), sin(a) }; }
+static turn_t turned(turn_t x, turn_t by) {
+    return (turn_t){ x.c * by.c - x.s * by.s, x.s * by.c + x.c * by.s };
+}
+
+/* The strike's spectrum, sum d^n e^(-j dw n) over len samples, given
+ * e^(-j dw) and e^(-j dw len). */
+static void strike_at(turn_t one, turn_t all, double d, double dl, double *er, double *ei) {
+    const double nr = 1 - dl * all.c, ni = -dl * all.s;
+    const double dr = 1 - d * one.c, di = -d * one.s;
+    const double m = fmax(dr * dr + di * di, 1e-24);
     *er = (nr * dr + ni * di) / m;
     *ei = (ni * dr - nr * di) / m;
 }
@@ -163,24 +174,32 @@ static void strike_at(float dw, float d, float dl, int len, float *er, float *ei
  * hz, with its phase, so a wave that starts at a zero strikes as weakly as
  * it really does. */
 float wave_strike(const float *p, float hz, float d, int len) {
-    const float f0 = hz_at(p, bend_start(p)), th = 6.2831853f * f0 / STRUT_SR;
-    const float w = 6.2831853f * hz / STRUT_SR, dl = powf(d, (float)len);
+    const double f0 = hz_at(p, bend_start(p)), th = 2 * 3.14159265358979 * f0 / STRUT_SR;
+    const double w = 2 * 3.14159265358979 * hz / STRUT_SR, dl = pow(d, len);
     const mix_t m = frames_at(p);
     const int t = (int)p[P_W_TABLE];
     const wt_frame_t *fa = wt_frame(t, m.a), *fb = wt_frame(t, m.b);
-    const int c = (int)(hz / f0);
-    float xr = 0.0f, xi = 0.0f;
-    for (int h = c - 24 < 1 ? 1 : c - 24; h <= c + 25 && h <= WT_H && h * f0 < 0.5f * STRUT_SR; h++) {
+    const int c = (int)(hz / f0), h0 = c - 24 < 1 ? 1 : c - 24;
+    /* at h0, then turned by one harmonic each step */
+    const turn_t up = turn_of(th), upl = turn_of(th * len), shift = turn_of(2 * 3.14159265358979 * m.off);
+    turn_t lo = turn_of(-(w - h0 * th)), lol = turn_of(-(w - h0 * th) * len);   /* e^(-j(w - h th)) */
+    turn_t hi = turn_of(-(w + h0 * th)), hil = turn_of(-(w + h0 * th) * len);   /* e^(-j(w + h th)) */
+    turn_t sh = turn_of(2 * 3.14159265358979 * h0 * m.off);
+    const turn_t down = { up.c, -up.s }, downl = { upl.c, -upl.s };
+    double xr = 0, xi = 0;
+    for (int h = h0; h <= c + 25 && h <= WT_H && h * f0 < 0.5 * STRUT_SR; h++) {
         /* the harmonic as e^(j h th n) times (cr + j ci), and its mirror */
-        const float sh = 6.2831853f * (float)h * m.off, cs = cosf(sh), sn = sinf(sh);
-        const float br = 0.5f * fb->ca[h], bi = -0.5f * fb->sb[h];
-        const float cr = m.ca * 0.5f * fa->ca[h] + m.cb * (br * cs - bi * sn);
-        const float ci = -m.ca * 0.5f * fa->sb[h] + m.cb * (br * sn + bi * cs);
-        float er, ei;
-        strike_at(w - (float)h * th, d, dl, len, &er, &ei);
+        const double br = 0.5 * fb->ca[h], bi = -0.5 * fb->sb[h];
+        const double cr = m.ca * 0.5 * fa->ca[h] + m.cb * (br * sh.c - bi * sh.s);
+        const double ci = -m.ca * 0.5 * fa->sb[h] + m.cb * (br * sh.s + bi * sh.c);
+        double er, ei;
+        strike_at(lo, lol, d, dl, &er, &ei);
         xr += cr * er - ci * ei, xi += cr * ei + ci * er;
-        strike_at(w + (float)h * th, d, dl, len, &er, &ei);
+        strike_at(hi, hil, d, dl, &er, &ei);
         xr += cr * er + ci * ei, xi += cr * ei - ci * er;
+        lo = turned(lo, up), lol = turned(lol, upl);
+        hi = turned(hi, down), hil = turned(hil, downl);
+        sh = turned(sh, shift);
     }
-    return sqrtf(xr * xr + xi * xi);
+    return (float)sqrt(xr * xr + xi * xi);
 }

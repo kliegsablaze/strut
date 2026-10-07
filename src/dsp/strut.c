@@ -92,16 +92,25 @@ static int voice_render(voice_t *v, const float *p, float level, float *out, int
     skin_block_t sb;
     wave_block_t wb;
     int heard = 0;
-    if (skin_on) skin_block(p, &sb);
+    if (skin_on) skin_block(&v->skin, p, &sb);
     if (wave_on) heard = wave_block(&v->wave, p, frames, &wb) && gw1 > 0.0f;
     else wave_skip(&v->wave, p, frames);
     if (!skin_on && !heard) return 0;
 
-    for (int n = 0; n < frames; n++) {
-        float raw = 0.0f, w = 0.0f, k = 0.0f;
-        if (wave_on) w = wave_step(&v->wave, &wb, n, skin_on ? skin_body(&v->skin) : 0.0f, &raw);
-        if (skin_on) k = skin_step(&v->skin, &sb, raw);
-        out[n] += (gs0 + ds * (float)(n + 1)) * k + (gw0 + dw * (float)(n + 1)) * w;
+    /* one loop for each pairing, so the sample loop decides nothing */
+    float raw;
+    if (skin_on && wave_on) {
+        for (int n = 0; n < frames; n++) {
+            const float w = wave_step(&v->wave, &wb, n, skin_body(&v->skin), &raw);
+            const float k = skin_step(&v->skin, &sb, raw);
+            out[n] += (gs0 + ds * (float)(n + 1)) * k + (gw0 + dw * (float)(n + 1)) * w;
+        }
+    } else if (skin_on) {
+        for (int n = 0; n < frames; n++)
+            out[n] += (gs0 + ds * (float)(n + 1)) * skin_step(&v->skin, &sb, 0.0f);
+    } else {
+        for (int n = 0; n < frames; n++)
+            out[n] += (gw0 + dw * (float)(n + 1)) * wave_step(&v->wave, &wb, n, 0.0f, &raw);
     }
     return skin_alive(&v->skin) || heard;
 }

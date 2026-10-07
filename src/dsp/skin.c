@@ -98,7 +98,7 @@ static svf_t svf(float hz, float k) {
     return f;
 }
 
-void skin_block(const float *p, skin_block_t *b) {
+void skin_block(skin_voice_t *v, const float *p, skin_block_t *b) {
     const float hz = skin_hz(p), t60 = skin_t60(p), metal = p[P_S_METAL];
     for (int k = 0; k < SKIN_PARTIALS; k++) {
         const float ratio = k ? DRUM_RATIO[k - 1] + metal * (BAR_RATIO[k - 1] - DRUM_RATIO[k - 1]) : 1.0f;
@@ -111,6 +111,12 @@ void skin_block(const float *p, skin_block_t *b) {
         b->pi[k] = r * sinf(w);
         b->amp[k] = k ? (f < NYQ_SAFE ? 0.7f * metal : 0.0f) : 1.0f;
     }
+    /* METAL at zero: the body alone, a third of the work. The partials are
+     * cleared, so turning METAL up again starts them from the next hit's
+     * ring, not a stale one. Nothing heard changes. */
+    b->np = metal > 0.0f ? SKIN_PARTIALS : 1;
+    if (b->np == 1)
+        for (int k = 1; k < SKIN_PARTIALS; k++) v->zr[k] = v->zi[k] = 0.0f;
     b->mode = (int)p[P_S_MODE];
     b->mf = b->mode == MODE_LOW ? svf(2.0f * hz, 1.4142f)
           : b->mode == MODE_HIGH ? svf(0.5f * hz, 1.4142f) : svf(hz, 1.0f);

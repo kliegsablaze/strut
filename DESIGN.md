@@ -2,14 +2,15 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** Skin and Wave sound, 0.0.7 (2026-10-07). Every proposed knob, on
+**Status:** Skin and Wave sound, 0.0.8 (2026-10-07). Every proposed knob, on
 every page and both views of each engine page, is declared, kept per pad and
 planned by the host's own planner in the tests. **Skin**, the resonator, and
 **Wave**, the oscillator, are built and play on every pad, mixed by SKIN,
 WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
 strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
 and the effects are still the plan; their knobs are kept but do nothing yet.
-On the Move, Skin and Wave at their dearest take 6.1 % of the CPU.
+On the Move, Skin and Wave at their dearest took 13.8 % of the CPU in 0.0.7;
+0.0.8 makes them cheaper, still to measure there.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -539,10 +540,26 @@ own engine, reach most of the same sounds.)
     a block; Skin and Wave at Wave's dearest (the pulse, FM, the ring, the
     longest fall, Wave striking Skin) **3.9 %**, 190 µs for a block in which
     all sixteen pads are hit. The Move's cores are several times slower.
-  - **On the Move (2026-10-07, 0.0.7): 6.1 %** of a block, Skin and Wave at
-    Wave's dearest, all 32 voices, measured by the user with the bench
-    below. About 1.6 times the laptop's figure; a quarter of the budget, with
-    Noise, the modulators and the effects still to come. The CI builds the bench for the Move
+  - **On the Move (2026-10-07, 0.0.7):** Skin **8.6 %**, Skin and Wave
+    **13.8 %**, all 32 voices, measured by the user with the bench below (a
+    first run read 6.1 %: the bench shares the Move with whatever it is
+    doing). Over half the budget before Noise, the modulators and the
+    effects, so 0.0.8 makes them cheaper without changing a sample's worth
+    of sound:
+    - **Fused multiply-adds.** `-std=c11` forbids the compiler to fuse a
+      multiply and an add, which the Move's cores do in one step, and almost
+      all of Strut is multiply-adds. The device build now says
+      `-ffp-contract=fast`, and `-O3`. On a laptop that can fuse, about 30 %
+      off Skin and Wave together.
+    - **METAL at zero runs one resonator, not three.**
+    - **One sample loop for each pairing** of Skin and Wave, so the loop
+      decides nothing per sample.
+    - **Wave's strike is sized by turning one angle** from harmonic to
+      harmonic, not a sine and cosine each: 8 calls, not 400.
+    - The bench now plays METAL up (Skin's dearest), runs five times and
+      reports the middle and the spread, and names the processor and its
+      clock.
+  - The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
   - Denormals: a laptop without them flushed ran 30 % slower once Wave
@@ -632,8 +649,8 @@ own engine, reach most of the same sounds.)
    noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
    at full Move volume. Its CPU is inside step 4's measurement.
 4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
-   Move: 6.1 % with Skin, every voice at its dearest. Still to do: hear it on
-   the device.
+   Move: 13.8 % with Skin, every voice at its dearest; 0.0.8 cuts it, still
+   to measure. Still to do: hear it on the device.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).

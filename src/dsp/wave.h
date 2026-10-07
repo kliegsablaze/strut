@@ -56,8 +56,8 @@ static inline float wt_read(const float *t, int n, float ph) {
 /* The next sample: raw is the oscillator (Skin's hit), the return is it
  * faded in and through the fall. fm is Skin's ring, about -1..1. n counts the block. */
 static inline float wave_step(wave_voice_t *w, const wave_block_t *b, int n, float fm, float *raw) {
-    const int k = n / WAVE_SUB;
-    const float inc = b->inc[k] + (b->inc[k + 1] - b->inc[k]) * (float)(n % WAVE_SUB) * (1.0f / WAVE_SUB);
+    const unsigned k = (unsigned)n / WAVE_SUB;
+    const float inc = b->inc[k] + (b->inc[k + 1] - b->inc[k]) * (float)((unsigned)n % WAVE_SUB) * (1.0f / WAVE_SUB);
     float pb = w->phase + b->off;
     pb -= floorf(pb);
     float x = b->ca * wt_read(b->ta[0], b->size[0], w->phase) + b->cb * wt_read(b->tb[0], b->size[0], pb);

@@ -34,7 +34,7 @@ jobs:
           ./scripts/build.sh
           # the bench, static so it runs whatever the Move's C library
           mkdir -p build
-          aarch64-linux-gnu-gcc -std=c11 -O2 -static -Wall -Wextra -Werror -Isrc/dsp \
+          aarch64-linux-gnu-gcc -std=c11 -O3 -ffp-contract=fast -static -Wall -Wextra -Werror -Isrc/dsp \
             tools/bench.c src/dsp/*.c -o build/bench-aarch64 -lm
       - uses: actions/upload-artifact@v4
         with:

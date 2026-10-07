@@ -31,6 +31,7 @@ typedef struct { float a1, a2, a3, k; } svf_t;
 /* One block's settings. */
 typedef struct {
     float pr[SKIN_PARTIALS], pi[SKIN_PARTIALS], amp[SKIN_PARTIALS];
+    int np;                 /* partials to run: METAL's two only when heard */
     svf_t mf, tf;
     int mode;
 } skin_block_t;
@@ -38,7 +39,7 @@ typedef struct {
 /* Starts a hit with the pad's knobs p (STRUT_PAD_PARAMS order). A Wave hit
  * leaves norm for the caller, who knows Wave (wave_strike). */
 void skin_start(skin_voice_t *v, const float *p, uint32_t seed);
-void skin_block(const float *p, skin_block_t *b);
+void skin_block(skin_voice_t *v, const float *p, skin_block_t *b);
 /* 0 once the hit is over and the ring has died away. */
 int skin_alive(const skin_voice_t *v);
 
@@ -94,7 +95,7 @@ static inline void svf_step(const svf_t *f, float *s1, float *s2, float x, float
 static inline float skin_step(skin_voice_t *v, const skin_block_t *b, float ext) {
     const float x = skin_hit(v, ext);
     float y = 0.0f;
-    for (int k = 0; k < SKIN_PARTIALS; k++) {
+    for (int k = 0; k < b->np; k++) {
         const float zr = v->zr[k] * b->pr[k] - v->zi[k] * b->pi[k] + x;
         v->zi[k] = v->zr[k] * b->pi[k] + v->zi[k] * b->pr[k];
         v->zr[k] = zr;

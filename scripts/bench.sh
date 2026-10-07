@@ -16,7 +16,7 @@ BIN="${1:-}"
 
 if [ -z "$BIN" ]; then
     BIN=build/bench-aarch64
-    CC_CMD="aarch64-linux-gnu-gcc -std=c11 -O2 -static -Wall -Wextra -Werror -Isrc/dsp \
+    CC_CMD="aarch64-linux-gnu-gcc -std=c11 -O3 -ffp-contract=fast -static -Wall -Wextra -Werror -Isrc/dsp \
       tools/bench.c src/dsp/*.c -o $BIN -lm"
     mkdir -p build
     if command -v aarch64-linux-gnu-gcc >/dev/null 2>&1; then

@@ -10,7 +10,7 @@ SCHWUNG="${SCHWUNG:-../schwung}"
 [ -d "$SCHWUNG/src/shared/param_pages" ] || SCHWUNG=.schwung
 out="build/tests"
 mkdir -p "$out"
-CFLAGS="-std=c11 -O2 -Wall -Wextra -Werror -Isrc/dsp"
+CFLAGS="-std=c11 -O3 -ffp-contract=fast -Wall -Wextra -Werror -Isrc/dsp"
 
 cc $CFLAGS tests/test_strut.c src/dsp/*.c -lm -o "$out/test_strut"
 
