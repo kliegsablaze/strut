@@ -136,11 +136,15 @@ bash tests/run.sh          # native build, black-box tests, host planner + valid
 
 The CI (`.github/workflows/ci.yml`) runs the tests and uploads a device build,
 the `strut-module` artifact, on every push. This session cannot reach the Move.
-To try a build on the device, the user downloads the artifact and runs:
+To try a build on the device, the user runs this from the repo; it waits for
+the newest CI run to finish (stopping if it fails), then installs it:
 
 ```bash
-rm -rf /tmp/strut && gh run download -n strut-module -D /tmp/strut && scripts/install.sh /tmp/strut/strut-module.tar.gz
+git pull && gh run watch $(gh run list -L 1 --json databaseId -q '.[0].databaseId') --exit-status && rm -rf /tmp/strut && gh run download -n strut-module -D /tmp/strut && scripts/install.sh /tmp/strut/strut-module.tar.gz
 ```
+
+To measure the CPU on the Move, the same with the bench:
+`... && rm -rf /tmp/strut-bench && gh run download -n strut-bench -D /tmp/strut-bench && scripts/bench.sh /tmp/strut-bench/bench-aarch64`.
 
 `install.sh` then restarts the Move (`reboot` as root, the host installer's
 way) and waits for it to come back; if root login is not set up it says to

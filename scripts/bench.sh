@@ -26,5 +26,5 @@ if [ -z "$BIN" ]; then
     fi
 fi
 
-scp -q "$BIN" "$HOST:/data/UserData/strut-bench"
-ssh "$HOST" "chmod 755 /data/UserData/strut-bench && /data/UserData/strut-bench; rm -f /data/UserData/strut-bench"
+scp -q -o LogLevel=ERROR "$BIN" "$HOST:/data/UserData/strut-bench"
+ssh -o LogLevel=ERROR "$HOST" "chmod 755 /data/UserData/strut-bench && /data/UserData/strut-bench; rm -f /data/UserData/strut-bench"

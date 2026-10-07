@@ -9,8 +9,8 @@ planned by the host's own planner in the tests. **Skin**, the resonator, and
 WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
 strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
 and the effects are still the plan; their knobs are kept but do nothing yet.
-On the Move, Skin and Wave at their dearest took 14.1 % of the CPU in 0.0.9
-with two voices a pad; 0.1.0 has one, about half, still to measure there.
+On the Move, Skin and Wave at their dearest take 6.8 % of the CPU (0.1.0, one
+voice a pad; two took 14.1 %).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -602,7 +602,10 @@ own engine, reach most of the same sounds.)
     84 cycles a voice a sample. Kept: it costs nothing and is the shape any
     further saving builds on.
   - **0.1.0: one voice a pad** (see *How Skin works*), half the worst case:
-    1.9 % on a laptop for Skin and Wave at their dearest, from 3.7 %.
+    1.9 % on a laptop for Skin and Wave at their dearest, from 3.7 %. **On
+    the Move: Skin 3.2 %, Skin and Wave 6.8 %**, all sixteen pads at their
+    dearest (2026-10-07). About a quarter of the budget, leaving the rest
+    for Noise, the modulators and the effects.
   - The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
@@ -693,9 +696,8 @@ own engine, reach most of the same sounds.)
    noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
    at full Move volume. Its CPU is inside step 4's measurement.
 4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
-   Move: 14.1 % with Skin, every voice at its dearest, two voices a pad
-   (0.0.9, no better than 0.0.8 for keeping voices in registers); 0.1.0 has
-   one voice a pad, still to measure. Still to do: hear it on the device.
+   Move: 6.8 % with Skin, every pad at its dearest (0.1.0, one voice a
+   pad; two voices took 14.1 %). Still to do: hear it on the device.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).

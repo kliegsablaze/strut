@@ -22,7 +22,7 @@ HOST="${MOVE_HOST:-ableton@move.local}"
 REMOTE_DIR="/data/UserData/schwung/modules/sound_generators/strut"
 
 if [ "${1:-}" = "--remove" ]; then
-    ssh "$HOST" "rm -rf '$REMOTE_DIR'"
+    ssh -o LogLevel=ERROR "$HOST" "rm -rf '$REMOTE_DIR'"
     echo "Removed $REMOTE_DIR"
     exit 0
 fi
@@ -37,11 +37,11 @@ if ! head -c 20 dist/strut/dsp.so | od -An -tx1 |
     exit 1
 fi
 
-ssh "$HOST" "mkdir -p '$REMOTE_DIR'"
-scp -q dist/strut/dsp.so "$HOST:$REMOTE_DIR/.dsp.so.incoming"
-scp -q dist/strut/module.json "$HOST:$REMOTE_DIR/.module.json.incoming"
-scp -q dist/strut/help.json "$HOST:$REMOTE_DIR/.help.json.incoming"
-ssh "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming && \
+ssh -o LogLevel=ERROR "$HOST" "mkdir -p '$REMOTE_DIR'"
+scp -q -o LogLevel=ERROR dist/strut/dsp.so "$HOST:$REMOTE_DIR/.dsp.so.incoming"
+scp -q -o LogLevel=ERROR dist/strut/module.json "$HOST:$REMOTE_DIR/.module.json.incoming"
+scp -q -o LogLevel=ERROR dist/strut/help.json "$HOST:$REMOTE_DIR/.help.json.incoming"
+ssh -o LogLevel=ERROR "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming && \
     mv -f .dsp.so.incoming dsp.so && \
     mv -f .module.json.incoming module.json && \
     mv -f .help.json.incoming help.json && ls -l"
@@ -57,30 +57,30 @@ fi
 # to ask for a password; if the key is not there, say so and leave it.
 ROOT_HOST="${MOVE_ROOT_HOST:-root@${HOST#*@}}"
 LOG=/data/UserData/schwung/debug.log
-loads=$(ssh "$HOST" "grep -ac 'strut $version loaded' $LOG 2>/dev/null || true")
+loads=$(ssh -o LogLevel=ERROR "$HOST" "grep -ac 'strut $version loaded' $LOG 2>/dev/null || true")
 echo "Restarting the Move..."
-if ! ssh -o BatchMode=yes -o ConnectTimeout=5 "$ROOT_HOST" true 2>/dev/null; then
+if ! ssh -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=5 "$ROOT_HOST" true 2>/dev/null; then
     echo "Could not log in as $ROOT_HOST to restart it."
     echo "Restart the Move by hand: a slot already playing Strut keeps the old version until then."
     exit 0
 fi
 # The connection may drop as it goes down, so its answer means nothing.
-ssh -o BatchMode=yes -o ConnectTimeout=5 "$ROOT_HOST" reboot 2>/dev/null || true
+ssh -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=5 "$ROOT_HOST" reboot 2>/dev/null || true
 
 # Wait for it to go down, then to come back (about 30 to 45 seconds).
 sleep 10
 for _ in $(seq 1 40); do
-    ssh -o BatchMode=yes -o ConnectTimeout=3 "$HOST" true 2>/dev/null && break
+    ssh -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=3 "$HOST" true 2>/dev/null && break
     sleep 3
 done
-if ! ssh -o BatchMode=yes -o ConnectTimeout=3 "$HOST" true 2>/dev/null; then
+if ! ssh -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=3 "$HOST" true 2>/dev/null; then
     echo "The Move has not come back yet. Give it a minute, then play a pad."
     exit 0
 fi
 
 # Strut logs its version when a slot loads it; a saved set does that at boot.
 for _ in $(seq 1 10); do
-    now=$(ssh "$HOST" "grep -ac 'strut $version loaded' $LOG 2>/dev/null || true")
+    now=$(ssh -o LogLevel=ERROR "$HOST" "grep -ac 'strut $version loaded' $LOG 2>/dev/null || true")
     if [ "${now:-0}" -gt "${loads:-0}" ]; then
         echo "The Move is back, playing Strut $version."
         exit 0
