@@ -17,6 +17,9 @@
  *    strip at a time. Every pass then reads and writes in order, in runs,
  *    and nothing is scattered across megabytes: no bit-reversed reordering
  *    of the whole array, which on the Move was a cache miss a point.
+ *    Measured there, building Noise's tables: 540 to 640 ms this way, 660
+ *    to 700 stage by stage (2026-10-07). A laptop, whose caches hide its
+ *    memory, finds it the other way round.
  */
 #include <math.h>
 #include <stdlib.h>
@@ -26,9 +29,8 @@
 #define SHORT (1 << 12)     /* longer than this, four steps */
 #define STRIP 16            /* columns or rows moved together: 64 bytes a run */
 #define SIDE 512            /* the longest side of a grid, FFT_MAX's square root */
-#define BLOCK (1 << 14)     /* the other way: stages up to this done a block at a time */
+#define BLOCK (1 << 14)     /* stages up to this done a block at a time, in the cache */
 
-int fft_four_steps = 1;
 static float *grid_r, *grid_i;      /* the grid, kept from one long transform to the next */
 
 /* stage len's turns at len / 2 .. len - 1 */
@@ -135,12 +137,12 @@ static void long_fft(float *re, float *im, int n, int sign, float *tr, float *ti
 
 void fft(float *re, float *im, int n, int sign) {
     if (!ready) turns();    /* only ever called from the one build (tables.c) */
-    if (n > SHORT && fft_four_steps && !grid_r) {
+    if (n > SHORT && !grid_r) {
         grid_r = malloc(sizeof(float) * FFT_MAX);
         grid_i = malloc(sizeof(float) * FFT_MAX);
     }
-    if (n > SHORT && fft_four_steps && grid_r && grid_i) long_fft(re, im, n, sign, grid_r, grid_i);
-    else short_fft(re, im, n, sign);        /* the other way, never wrong */
+    if (n > SHORT && grid_r && grid_i) long_fft(re, im, n, sign, grid_r, grid_i);
+    else short_fft(re, im, n, sign);        /* slower, never wrong */
 }
 
 void fft_done(void) {

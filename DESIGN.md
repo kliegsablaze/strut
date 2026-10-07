@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, 0.2.1 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, 0.2.2 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -704,8 +704,9 @@ own engine, reach most of the same sounds.)
   files. Noise's eight three-second loops are built the same way, two to
   each transform (one in its real part, one in its imaginary): 8 MB, as
   16-bit numbers.
-  - **0.2.0 took 2.8 s to load on the Move** (2026-10-07), against 0.3 s
-    for Wave's alone, though only 0.26 s on a laptop. A simulation of the
+  - **0.2.0 took 0.8 s to load on the Move** (2026-10-07; once 2.8 s, with
+    the Move busy), against 0.3 s for Wave's alone, though only 0.26 s on a
+    laptop. A simulation of the
     Move's caches (32 KB and 1 MB, cachegrind) found the transform waiting
     on memory: 25 million misses. Its turns were read with a stride, a
     whole cache line for each, and every stage swept 4 MB.
@@ -716,7 +717,20 @@ own engine, reach most of the same sounds.)
     the 16 bits kept), with each row of butterflies a function of its own so
     GCC runs it four at a time. Misses down to 3.3 million, instructions
     from 1.18 to 0.64 billion; 65 ms on a laptop for every table, Wave's
-    included. On the Move, still to measure.
+    included. On the Move: 0.76 to 0.83 s (Wave's 55 ms of it, from 300).
+    The bench's breakdown there: Noise's spectra 261 ms, its transforms
+    142, against 22 and 15 on a laptop. The Move is slow where a laptop is
+    not: at memory reached out of order, and at dividing in double
+    precision.
+  - **0.2.2:** long transforms in four steps (Bailey, 1990: short ones down
+    a grid's columns and along its rows, a strip at a time), so no pass
+    scatters across megabytes. On the Move, built both ways twice each:
+    540 to 640 ms against 660 to 700 stage by stage; a laptop finds it the
+    other way round. The spectra lost their divisions in double: the A
+    weighting worked out once for all eight tables, random phases from a
+    sine table, Wires' rattle peaks added near themselves only, and Crackle
+    and Grit measured by one transform. On a laptop, Noise's spectra 23 ms
+    to 10. On the Move, still to measure.
   - Rejected: building Noise's tables on a thread of their own after
     loading. A thread's library call can need a newer C library than the
     Move's, which this session cannot check, and noise would be silent for
@@ -806,8 +820,9 @@ own engine, reach most of the same sounds.)
    pad; two voices took 14.1 %). Still to do: hear it on the device.
 5. ~~**Noise** engine and noise tables~~ (0.2.0). Samples come at step 9.
    CPU on the Move: 11.1 % with all three engines on every pad at their
-   dearest. Load took 2.8 s; 0.2.1 rebuilds the tables for the Move's cache.
-   Still to do: hear it on the device, and measure 0.2.1's load there.
+   dearest. Load took 0.8 s (once 2.8, the Move busy); 0.2.2 builds the
+   tables for the Move's memory. Still to do: hear it on the device, and
+   measure 0.2.2's load there.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.

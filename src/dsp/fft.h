@@ -17,8 +17,4 @@ void fft(float *re, float *im, int n, int sign);
  * is done. */
 void fft_done(void);
 
-/* Long transforms in four steps (fft.c), or stage by stage: the bench
- * builds both ways on the Move, whose memory decides which is quicker. */
-extern int fft_four_steps;
-
 #endif

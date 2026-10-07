@@ -42,6 +42,12 @@ const nt_table_t *nt_table(int t) { return &tables[t < 0 ? 0 : t >= NT_TABLES ? 
 
 static uint32_t rs = 0x2545F491u;
 
+/* The build's shared parts: the A weighting at each frequency, worked out
+ * once for all eight tables, and a sine for random phases. */
+#define PHASES 4096
+static float *aw;
+static float sine[PHASES + PHASES / 4];
+
 static double uni(void) {
     rs ^= rs << 13, rs ^= rs >> 17, rs ^= rs << 5;
     return (rs >> 8) * (1.0 / 16777216.0);
@@ -60,19 +66,20 @@ static double hp2(double f, double fc) { const double x = (f / fc) * (f / fc); r
 #define RATTLES 60
 static double rattle_f[RATTLES], rattle_a[RATTLES];
 
-/* A drawn colour's level at f. */
-static double colour(int t, double f) {
+/* A drawn colour's level at f, but for Wires' rattle (spectrum). In single
+ * precision, and with few divisions: the Move's processor is slow at
+ * dividing in double, and this runs for each of 59,000 frequencies. */
+static float colour(int t, float f) {
     switch (t) {
-    case NT_PINK: return 1 / sqrt(f / 1000);
-    case NT_BROWN: return 1000 / sqrt(f * f + 60 * 60);     /* rumble, flat under 60 Hz */
-    case NT_HISS: return 0.25 + 0.75 * (f / 5000) * (f / 5000) / (1 + (f / 5000) * (f / 5000));
-    case NT_WIRES: {
-        double r = 0.4;
-        for (int i = 0; i < RATTLES; i++) {
-            const double x = (f - rattle_f[i]) / (rattle_f[i] / 60);
-            r += rattle_a[i] / (1 + x * x);
-        }
-        return 0.1 + hp2(f, 1500) / (1 + (f / 10000) * (f / 10000)) * r;
+    case NT_PINK: return 1 / sqrtf(f * (1.0f / 1000));
+    case NT_BROWN: return 1000 / sqrtf(f * f + 60 * 60);    /* rumble, flat under 60 Hz */
+    case NT_HISS: {
+        const float x = f * (1.0f / 5000), x2 = x * x;
+        return 0.25f + 0.75f * x2 / (1 + x2);
+    }
+    case NT_WIRES: {            /* the band the rattle sits in */
+        const float x = f * (1.0f / 10000);
+        return (float)hp2(f, 1500) / (1 + x * x);
     }
     default: return 1;
     }
@@ -86,31 +93,45 @@ static const double SQUARES[6] = { 317, 401, 463, 587, 677, 839 };
 #define KMIN ((int)ceil(20.0 * NT_N / NT_SR))     /* nothing under 20 Hz */
 #define KMAX ((int)(TOP * NT_N / NT_SR))            /* or over the top */
 
+/* Crackle or Grit, drawn in time into x. */
+static void draw(int t, float *x) {
+    double y = 0;
+    int hold = 0;
+    for (int n = 0; n < NT_N; n++) {
+        if (t == NT_CRACKLE) {     /* 3000 clicks a second, of near one size, so its peaks leave room for its level */
+            if (uni() < 3000.0 / NT_SR) {
+                const double sign = uni() < 0.5 ? -1 : 1;
+                y += sign * (0.6 + 0.4 * uni());
+            }
+            x[n] = (float)y;
+            y *= 0.7;
+        } else {                    /* eight levels, each held 1 to 20 of the output's samples */
+            if (hold-- <= 0) y = ((int)(uni() * 8) - 3.5) / 3.5, hold = (int)(uni() * 40) + 1;
+            x[n] = (float)y;
+        }
+    }
+}
+
+/* Crackle in re and Grit in im, measured by one transform, since both are
+ * real: Z = A + jB, so A[k] = (Z[k] + Z*[n - k]) / 2, B[k] = (Z[k] - Z*[n - k]) / 2j. */
+static void drawn(float *re, float *im, float *sp[4]) {
+    fft(re, im, NT_N, -1);
+    for (int k = KMIN; k <= KMAX; k++) {
+        const float zr = re[k], zi = im[k], wr = re[NT_N - k], wi = -im[NT_N - k];
+        sp[0][k] = 0.5f * (zr + wr), sp[1][k] = 0.5f * (zi + wi);
+        sp[2][k] = 0.5f * (zi - wi), sp[3][k] = -0.5f * (zr - wr);
+    }
+}
+
 /* Table t's spectrum, bins KMIN to KMAX, into sre and sim; re and im are
- * scratch. Returns the scale that sets it to the same loudness to the ear. */
-static double spectrum(int t, float *re, float *im, float *sre, float *sim) {
+ * scratch (Crackle and Grit draw into them, and drawn measures). */
+static void spectrum(int t, float *re, float *im, float *sre, float *sim) {
     rs = 0x2545F491u ^ (0x9E3779B9u * (uint32_t)(t + 1));     /* each its own noise, whatever the others draw */
     memset(sre, 0, sizeof(float) * (NT_N / 2 + 1));
     memset(sim, 0, sizeof(float) * (NT_N / 2 + 1));
     if (t == NT_CRACKLE || t == NT_GRIT) {
-        double y = 0;
-        int hold = 0;
-        for (int n = 0; n < NT_N; n++) {
-            if (t == NT_CRACKLE) {     /* 3000 clicks a second, of near one size, so its peaks leave room for its level */
-                if (uni() < 3000.0 / NT_SR) {
-                    const double sign = uni() < 0.5 ? -1 : 1;
-                    y += sign * (0.6 + 0.4 * uni());
-                }
-                re[n] = (float)y;
-                y *= 0.7;
-            } else {                    /* eight levels, each held 1 to 20 of the output's samples */
-                if (hold-- <= 0) y = ((int)(uni() * 8) - 3.5) / 3.5, hold = (int)(uni() * 40) + 1;
-                re[n] = (float)y;
-            }
-        }
-        memset(im, 0, sizeof(float) * NT_N);
-        fft(re, im, NT_N, -1);
-        for (int k = KMIN; k <= KMAX; k++) sre[k] = re[k], sim[k] = im[k];
+        /* drawn in time with its own noise; measured together (drawn) */
+        draw(t, t == NT_CRACKLE ? re : im);
     } else if (t == NT_METAL) {
         for (int s = 0; s < 6; s++) {
             const int k0 = (int)lround(SQUARES[s] * NT_N / NT_SR);
@@ -121,19 +142,41 @@ static double spectrum(int t, float *re, float *im, float *sre, float *sim) {
             sre[k] *= (float)g, sim[k] *= (float)g;
         }
     } else {
+        /* the level at each frequency, into sre */
+        const float hz = (float)NT_SR / NT_N;
+        for (int k = KMIN; k <= KMAX; k++) sre[k] = colour(t, (float)k * hz);
+        if (t == NT_WIRES) {
+            /* the rattle: each peak added near itself only, ten of its
+             * widths each way, where it has fallen to 1 % */
+            for (int k = KMIN; k <= KMAX; k++) sim[k] = 0.4f;
+            for (int i = 0; i < RATTLES; i++) {
+                const float w = (float)rattle_f[i] / 60, a = (float)rattle_a[i];
+                const int lo = (int)((rattle_f[i] - 10 * w) / hz), hi = (int)((rattle_f[i] + 10 * w) / hz) + 1;
+                for (int k = lo < KMIN ? KMIN : lo; k <= hi && k <= KMAX; k++) {
+                    const float x = ((float)k * hz - (float)rattle_f[i]) / w;
+                    sim[k] += a / (1 + x * x);
+                }
+            }
+            for (int k = KMIN; k <= KMAX; k++) sre[k] = 0.1f + sre[k] * sim[k];
+        }
+        /* then a random phase each, from the sine */
         for (int k = KMIN; k <= KMAX; k++) {
-            /* a random phase: a point picked evenly in the unit disc, made
-             * unit length, without a sine or cosine */
-            double x, y, r;
-            do x = 2 * uni() - 1, y = 2 * uni() - 1, r = x * x + y * y; while (r > 1 || r < 1e-6);
-            const double m = colour(t, (double)k * NT_SR / NT_N) / sqrt(r);
-            sre[k] = (float)(m * x), sim[k] = (float)(m * y);
+            rs ^= rs << 13, rs ^= rs >> 17, rs ^= rs << 5;
+            const int i = (int)(rs >> 20);
+            const float m = sre[k];
+            sre[k] = m * sine[i + PHASES / 4], sim[k] = m * sine[i];
         }
     }
+}
+
+/* The scale that sets a spectrum to the same loudness to the ear. */
+static double loudness(const float *sre, const float *sim) {
     double wa = 0;
-    for (int k = KMIN; k <= KMAX; k++) wa += ((double)sre[k] * sre[k] + (double)sim[k] * sim[k]) * aweight((double)k * NT_SR / NT_N);
+    for (int k = KMIN; k <= KMAX; k++) wa += ((double)sre[k] * sre[k] + (double)sim[k] * sim[k]) * aw[k];
     return LOUD / sqrt(2 * wa);
 }
+
+_Static_assert(NT_CRACKLE % 2 == 0 && NT_GRIT == NT_CRACKLE + 1, "Crackle and Grit are built as a pair");
 
 static void store(int16_t *q, const float *x, double scale, int n) {
     const float g = (float)(scale * 32767);
@@ -151,7 +194,9 @@ static void store(int16_t *q, const float *x, double scale, int n) {
 static void build_pair(int a, float *re, float *im, float *sp[4]) {
     double scale[2];
     clock_t t = clock();
-    for (int j = 0; j < 2; j++) scale[j] = spectrum(a + j, re, im, sp[2 * j], sp[2 * j + 1]);
+    for (int j = 0; j < 2; j++) spectrum(a + j, re, im, sp[2 * j], sp[2 * j + 1]);
+    if (a == NT_CRACKLE) drawn(re, im, sp);
+    for (int j = 0; j < 2; j++) scale[j] = loudness(sp[2 * j], sp[2 * j + 1]);
     wt_profile[WT_P_SPECTRA] += (double)(clock() - t) / CLOCKS_PER_SEC;
     const float *ar = sp[0], *ai = sp[1], *br = sp[2], *bi = sp[3];
     for (int l = 0; l < NT_LEVELS; l++) {
@@ -197,6 +242,7 @@ void nt_build(void) {
         int16_t *q = pool[t] + 2;
         for (int l = 0; l < NT_LEVELS; l++) tables[t].level[l] = q, q += (NT_N >> l) + 7;
     }
+    for (int i = 0; i < PHASES + PHASES / 4; i++) sine[i] = (float)sin(2 * PI * i / PHASES);
     rs = 0x5BD1E995u;
     for (int i = 0; i < RATTLES; i++) {
         rattle_f[i] = 2000 * pow(4.5, uni());
@@ -204,11 +250,14 @@ void nt_build(void) {
     }
     /* scratch for the build only: 4 MB, given back */
     float *re = malloc(sizeof(float) * NT_N), *im = malloc(sizeof(float) * NT_N), *sp[4];
-    int ok = re && im;
+    aw = malloc(sizeof(float) * (KMAX + 1));
+    int ok = re && im && aw;
+    for (int k = KMIN; ok && k <= KMAX; k++) aw[k] = (float)aweight((double)k * NT_SR / NT_N);
     for (int j = 0; j < 4; j++) ok &= (sp[j] = malloc(sizeof(float) * (NT_N / 2 + 1))) != NULL;
     if (ok)
         for (int t = 0; t < NT_TABLES; t += 2) build_pair(t, re, im, sp);
-    free(re), free(im);
+    free(re), free(im), free(aw);
+    aw = NULL;
     for (int j = 0; j < 4; j++) free(sp[j]);
     fft_done();
 }

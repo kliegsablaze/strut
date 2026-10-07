@@ -12,7 +12,6 @@
 #include <time.h>
 #include <sys/resource.h>
 
-#include "fft.h"
 #include "noise.h"
 #include "tables.h"
 
@@ -122,18 +121,12 @@ int main(void) {
            r1.ru_minflt - r0.ru_minflt, r1.ru_majflt - r0.ru_majflt);
     printf("  wave %.1f ms, noise spectra %.1f, transforms %.1f, storing %.1f\n", wt_profile[WT_P_WAVE] * 1e3,
            wt_profile[WT_P_SPECTRA] * 1e3, wt_profile[WT_P_FFT] * 1e3, wt_profile[WT_P_STORE] * 1e3);
-    /* Noise's tables again, each way of doing a long transform, twice
-     * over: which suits the Move's memory */
-    for (int i = 0; i < 4; i++) {
-        fft_four_steps = !(i & 1);
-        for (int k = 0; k < WT_P_COUNT; k++) wt_profile[k] = 0;
-        t0 = now_us();
-        nt_build();
-        printf("  noise again, %s: %.1f ms (spectra %.1f, transforms %.1f, storing %.1f)\n",
-               fft_four_steps ? "four steps    " : "stage by stage", (now_us() - t0) / 1000.0,
-               wt_profile[WT_P_SPECTRA] * 1e3, wt_profile[WT_P_FFT] * 1e3, wt_profile[WT_P_STORE] * 1e3);
-    }
-    fft_four_steps = 1;
+    /* Noise's tables again, now the memory is warm */
+    for (int k = 0; k < WT_P_COUNT; k++) wt_profile[k] = 0;
+    t0 = now_us();
+    nt_build();
+    printf("  noise again: %.1f ms (spectra %.1f, transforms %.1f, storing %.1f)\n", (now_us() - t0) / 1000.0,
+           wt_profile[WT_P_SPECTRA] * 1e3, wt_profile[WT_P_FFT] * 1e3, wt_profile[WT_P_STORE] * 1e3);
     printf("%-26s %8s %8s %7s %9s\n", "", "mean us", "worst us", "block", "onset us");
 
     /* Skin at its dearest: METAL's partials, the longest ring and hit */
