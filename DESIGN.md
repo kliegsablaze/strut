@@ -9,7 +9,7 @@ planned by the host's own planner in the tests. **Skin**, the resonator, and
 WAVE, TUNE, DECAY and LEVEL; Skin's ring can bend Wave (FM), and Wave can
 strike Skin (see *How Skin works*, *How Wave works*). Noise, the modulators
 and the effects are still the plan; their knobs are kept but do nothing yet.
-CPU on the Move is not yet measured.
+On the Move, Skin and Wave at their dearest take 6.1 % of the CPU.
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
@@ -539,7 +539,10 @@ own engine, reach most of the same sounds.)
     a block; Skin and Wave at Wave's dearest (the pulse, FM, the ring, the
     longest fall, Wave striking Skin) **3.9 %**, 190 µs for a block in which
     all sixteen pads are hit. The Move's cores are several times slower.
-  - **On the Move: not yet measured.** The CI builds the bench for the Move
+  - **On the Move (2026-10-07, 0.0.7): 6.1 %** of a block, Skin and Wave at
+    Wave's dearest, all 32 voices, measured by the user with the bench
+    below. About 1.6 times the laptop's figure; a quarter of the budget, with
+    Noise, the modulators and the effects still to come. The CI builds the bench for the Move
     (the `strut-bench` artifact, static, so it runs whatever the Move's C
     library); `scripts/bench.sh <that file>` runs it there.
   - Denormals: a laptop without them flushed ran 30 % slower once Wave
@@ -627,11 +630,10 @@ own engine, reach most of the same sounds.)
 3. ~~**Skin** engine~~ (0.0.3; 0.0.4 fixed the output's grit and made the
    levels faders; 0.0.5 titles each page and logs its version; 0.0.6 shapes the dither's
    noise). Heard on the device (2026-10-07): SKIN works and the grit is gone
-   at full Move volume. Still to do: measure its CPU on the Move
-   (`scripts/bench.sh`, or the CPU page in Schwung Manager with every pad
-   ringing).
-4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). Still to do:
-   hear it on the device, and measure the CPU there.
+   at full Move volume. Its CPU is inside step 4's measurement.
+4. ~~**Wave** engine, its tables, and FM from Skin~~ (0.0.7). CPU on the
+   Move: 6.1 % with Skin, every voice at its dearest. Still to do: hear it on
+   the device.
 5. **Noise** engine and noise tables. Samples come at step 9.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
