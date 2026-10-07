@@ -14,6 +14,7 @@
 #include <math.h>
 #include <stdatomic.h>
 #include <string.h>
+#include <time.h>
 
 #include "fft.h"
 #include "noise.h"
@@ -28,6 +29,7 @@
 static float pool[NFRAMES][FRAME_FLOATS];
 static wt_frame_t frames[NFRAMES];
 float wt_sine[WT_SINE_N + 1];
+double wt_profile[WT_P_COUNT];
 
 const wt_frame_t *wt_frame(int t, int f) {
     return t == WT_ANALOG ? &frames[f] : &frames[3 + (t - 1) * WT_FRAMES + f];
@@ -143,6 +145,7 @@ static void recipe(int t, double u, double *a) {
 }
 
 static void build(void) {
+    const clock_t t0 = clock();
     static double ca[WT_H + 1], sb[WT_H + 1], amp[WT_FRAMES][WT_H + 1], phase[WT_H + 1];
 
     /* Analog: sine, triangle, saw; WAVE's square and pulse are two saws */
@@ -193,6 +196,7 @@ static void build(void) {
     }
 
     for (int i = 0; i <= WT_SINE_N; i++) wt_sine[i] = (float)sin(2 * PI * i / WT_SINE_N);
+    wt_profile[WT_P_WAVE] = (double)(clock() - t0) / CLOCKS_PER_SEC;
     nt_build();
 }
 

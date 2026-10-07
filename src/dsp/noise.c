@@ -18,10 +18,12 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "fft.h"
 #include "noise.h"
 #include "strut.h"
+#include "tables.h"
 
 #define PI 3.14159265358979
 #define LOUD 0.16           /* every table's A-weighted RMS */
@@ -145,7 +147,9 @@ static void store(int16_t *q, const float *x, double scale, int n) {
  * work, and the build is most of Strut's load. */
 static void build_pair(int a, float *re, float *im, float *sp[4]) {
     double scale[2];
+    clock_t t = clock();
     for (int j = 0; j < 2; j++) scale[j] = spectrum(a + j, re, im, sp[2 * j], sp[2 * j + 1]);
+    wt_profile[WT_P_SPECTRA] += (double)(clock() - t) / CLOCKS_PER_SEC;
     const float *ar = sp[0], *ai = sp[1], *br = sp[2], *bi = sp[3];
     for (int l = 0; l < NT_LEVELS; l++) {
         const int n = NT_N >> l, top = KMAX >> l;
@@ -157,7 +161,10 @@ static void build_pair(int a, float *re, float *im, float *sp[4]) {
             re[p] = ar[k] - bi[k], im[p] = ai[k] + br[k];
             re[q] = ar[k] + bi[k], im[q] = br[k] - ai[k];
         }
+        t = clock();
         fft_reversed(re, im, n, 1);
+        wt_profile[WT_P_FFT] += (double)(clock() - t) / CLOCKS_PER_SEC;
+        t = clock();
         if (l == 0) {       /* under full scale */
             double pa = 0, pb = 0;
             for (int i = 0; i < n; i++) pa = fmax(pa, fabs(re[i])), pb = fmax(pb, fabs(im[i]));
@@ -166,6 +173,7 @@ static void build_pair(int a, float *re, float *im, float *sp[4]) {
         }
         store((int16_t *)tables[a].level[l], re, scale[0], n);
         store((int16_t *)tables[a + 1].level[l], im, scale[1], n);
+        wt_profile[WT_P_STORE] += (double)(clock() - t) / CLOCKS_PER_SEC;
     }
     /* each band's share of the power, for the level and Skin's strike */
     for (int j = 0; j < 2; j++) {

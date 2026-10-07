@@ -28,6 +28,12 @@ typedef struct {
  * to call from every instance. */
 void wt_build(void);
 
+/* Processor time each part of the build took, in seconds, for the bench:
+ * Wave's tables; Noise's spectra, transforms, and storing. The Move loads
+ * far slower than a laptop would say (DESIGN.md, Tables are built at load). */
+enum { WT_P_WAVE, WT_P_SPECTRA, WT_P_FFT, WT_P_STORE, WT_P_COUNT };
+extern double wt_profile[WT_P_COUNT];
+
 /* Frame f of table t. Analog has its three frames (WT_A_*); the others
  * have WT_FRAMES. */
 const wt_frame_t *wt_frame(int t, int f);

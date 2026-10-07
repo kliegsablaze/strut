@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/resource.h>
+
+#include "tables.h"
 
 #include "host/plugin_api_v1.h"
 #include "strut.h"
@@ -100,9 +103,23 @@ static void machine(void) {
 int main(void) {
     machine();
     plugin_api_v2_t *a = move_plugin_init_v2(NULL);
+    struct rusage r0, r1;
+    getrusage(RUSAGE_SELF, &r0);
+    const clock_t c0 = clock();
     double t0 = now_us();
     void *p = a->create_instance(".", "");     /* the first builds the tables */
     printf("load, building the tables: %.1f ms\n", (now_us() - t0) / 1000.0);
+    getrusage(RUSAGE_SELF, &r1);
+    /* where it went: if the processor time falls well short of the whole,
+     * the rest was waiting (memory, the system); page faults count memory
+     * first touched or taken back */
+    printf("  processor %.1f ms (user %.1f, system %.1f), page faults %ld minor %ld major\n",
+           (double)(clock() - c0) * 1000.0 / CLOCKS_PER_SEC,
+           (r1.ru_utime.tv_sec - r0.ru_utime.tv_sec) * 1e3 + (r1.ru_utime.tv_usec - r0.ru_utime.tv_usec) / 1e3,
+           (r1.ru_stime.tv_sec - r0.ru_stime.tv_sec) * 1e3 + (r1.ru_stime.tv_usec - r0.ru_stime.tv_usec) / 1e3,
+           r1.ru_minflt - r0.ru_minflt, r1.ru_majflt - r0.ru_majflt);
+    printf("  wave %.1f ms, noise spectra %.1f, transforms %.1f, storing %.1f\n", wt_profile[WT_P_WAVE] * 1e3,
+           wt_profile[WT_P_SPECTRA] * 1e3, wt_profile[WT_P_FFT] * 1e3, wt_profile[WT_P_STORE] * 1e3);
     printf("%-26s %8s %8s %7s %9s\n", "", "mean us", "worst us", "block", "onset us");
 
     /* Skin at its dearest: METAL's partials, the longest ring and hit */
@@ -129,6 +146,8 @@ int main(void) {
     set_all(a, p, "n_decay", "1");
     set_all(a, p, "n_color", "0.3");
     set_all(a, p, "n_pitch", "5");
+    set_all(a, p, "s_hit", "Burst");
+    run(a, p, "all three, Skin's burst");
     set_all(a, p, "s_hit", "Noise");
     run(a, p, "all three, 16 pads");
     a->destroy_instance(p);
