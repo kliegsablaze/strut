@@ -652,8 +652,11 @@ kind and a number, `Kick 001.wav`.
   the tarball is 40 MB, and CI checks it holds every sample and SOURCES.md.
   `scripts/install.sh` sends the library only when it differs from the
   Move's (a stamp of its files' contents), into a folder beside it, then
-  swaps it in. Still to measure: the install's time over SSH, and loading
-  on the Move (the bench's "loading a 4 s sample").
+  swaps it in. **On the Move** (2026-10-07): the library's 50 MB copied in
+  2 s; a 4 s sample prepared in 181 ms, so a sample plays about a quarter
+  second after TABLE comes to rest; samples looped on every pad cost no
+  more than noise tables (19.2 %, against 18.9 % with tables in the same
+  run).
 - **Still to build:** Resynth and Noise modes; until then MODE plays every
   sample as Sample.
 - **In the presets** (step 10): the SOUND list and the factory kits use the
@@ -1105,11 +1108,12 @@ own engine, reach most of the same sounds.)
    their setup was halved (0.4.1). Still to do: hear it.
 8. ~~**Kit** page: room, glue, warmth~~ (0.5.0). On the Move, the room at
    its longest with GLUE and WARM full: 19.1 %, against 19.3 % without in
-   the same run (2026-10-07); its cost is lost in the runs' spread (17.8 to
-   20.6 %). Still to do: hear it.
+   the same run (2026-10-07); in a second run (0.6.0) 21.1 % against 18.9,
+   its runs reaching 22.0 %. So the kit costs up to about 2 %, and the
+   worst case sits near 22 % of the 25 % allowed. Still to do: hear it.
 9. Samples (see *The sample library*):
    - ~~ship `src/samples/` in the module and the tarball~~ (0.6.0; the
-     tarball is 40 MB); still to measure: the install's time;
+     tarball is 40 MB; the library installs in 2 s);
    - ~~TABLE past the noise tables: the library, then your own samples~~
      (0.6.0, one long list);
    - ~~load on demand per pad, off the audio thread~~ (0.6.0);

@@ -206,13 +206,15 @@ When the user moves work back to their local machine:
   - load time: 0.51 s (0.2.2);
   - CPU, every pad at its dearest: all three engines 13.1 %, every effect
     16.7 %, every modulator 17.7 % (0.4.1); the Kit page adds nothing
-    measurable (0.5.0, 19.1 % in a run whose rows spread 17.8 to 20.6 %).
-    One block took 7 ms there, once; watch for it.
+    measurable in one run (0.5.0) and about 2 % in another (0.6.0: 21.1 %,
+    runs up to 22.0 %), so the worst case is near 22 % of the 25 % allowed.
+    One block took 7 ms there, once (0.5.0); not seen since.
+  - samples (0.6.0): the library installs in 2 s; a 4 s sample is ready
+    181 ms after loading starts; samples on every pad cost no more than
+    tables.
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it, not yet confirmed.
-  - Not yet: Finish, the modulators, the Kit page and samples by ear;
-    loading a sample on the Move (bench: "loading a 4 s sample") and the
-    library's install time.
+  - Not yet: Finish, the modulators, the Kit page and samples by ear.
 - **Next:** the rest of step 9: Noise's Resynth and Noise modes (MODE),
   and their CPU with resynthesis on every pad. Then step 10, presets.
 - **Open questions for the user:**
