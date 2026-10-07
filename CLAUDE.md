@@ -197,8 +197,8 @@ When the user moves work back to their local machine:
   - CPU, all three engines on every pad at their dearest: 12 %;
   - load time: 0.51 s (0.2.2), after work on the tables for the Move's
     memory (DESIGN.md, *Tables are built at load*).
-  - every effect on every pad: 18.7 % (0.3.0); 0.3.1 runs them in one
-    loop, a third of the cost on a laptop, not yet measured on the Move.
+  - every effect on every pad: 15.3 % (0.3.1; 18.7 % in 0.3.0, before the
+    effects ran in one loop).
   - Not yet: Finish by ear.
 - **Next:** build step 7, the modulators (the MOD views). Samples are step
   9: the library in `src/samples/` (208 sounds, from another session) is

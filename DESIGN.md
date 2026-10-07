@@ -663,8 +663,9 @@ its PAN.
   (2026-10-07). COLOR, LOW and HIGH are filters whose next sample waits on
   the last, so one after another the processor waited on each in turn.
   0.3.1 runs them all in one loop, a sample at a time, and works on them
-  together: on a laptop, every effect from +48 to +16 µs a block. On the
-  Move, still to measure.
+  together: on a laptop, every effect from +48 to +16 µs a block. **On the
+  Move, every effect on every pad: 15.3 %, against 12.6 % without** (0.3.1,
+  2026-10-07): the effects at their dearest cost 2.7 %, from 6.8.
 
 Rejected for Finish:
 
@@ -932,9 +933,8 @@ own engine, reach most of the same sounds.)
    tables for the Move's memory and loads in 0.51 s. Still to do: hear it
    on the device.
 6. ~~**Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects~~ (0.3.0;
-   DICE waits for step 10). On the Move, every effect on every pad: 18.7 %
-   (0.3.0); 0.3.1 runs the effects in one loop. Still to do: hear it, and
-   measure 0.3.1.
+   DICE waits for step 10). On the Move, every effect on every pad: 15.3 %
+   (0.3.1; 18.7 % before the effects ran in one loop). Still to do: hear it.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
 9. Samples (see *The sample library*):
