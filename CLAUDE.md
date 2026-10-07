@@ -182,7 +182,7 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.4.0)
+## Where things stand (2026-10-07, 0.4.1)
 
 - **What works:**
   - all three engines: Skin, Wave and Noise (eight noise tables), with
@@ -202,7 +202,9 @@ When the user moves work back to their local machine:
   - load time: 0.51 s (0.2.2).
   - The user saw the header's pad map follow only the Pad page (0.3.1);
     0.4.0 should fix it.
-  - Not yet: Finish and the modulators by ear; the modulators' CPU.
+  - every modulator on every pad, with every effect: 20.0 % (0.4.0);
+    0.4.1 halves the modulators' setup, not yet measured.
+  - Not yet: Finish and the modulators by ear.
 - **Next:** build step 8, the Kit page (SPACE, SIZE, GLUE, WARM). Samples
   are step 9: the library in `src/samples/` (208 sounds, from another
   session) is in DESIGN.md, *The sample library*.

@@ -132,7 +132,13 @@ void skin_block(skin_voice_t *v, const float *p, int hold, skin_block_t *b) {
     b->mode = (int)p[P_S_MODE];
     b->mf = b->mode == MODE_LOW ? svf(2.0f * hz, 1.4142f)
           : b->mode == MODE_HIGH ? svf(0.5f * hz, 1.4142f) : svf(hz, 1.0f);
-    b->tf = svf(150.0f * powf(120.0f, p[P_S_TONE]), 1.4142f);
+    /* TONE does not follow PITCH, so a modulated pitch need not work it out
+     * again each stretch */
+    if (v->tone_at != p[P_S_TONE]) {
+        v->tone = svf(150.0f * powf(120.0f, p[P_S_TONE]), 1.4142f);
+        v->tone_at = p[P_S_TONE];
+    }
+    b->tf = &v->tone;
 }
 
 int skin_alive(const skin_voice_t *v) {

@@ -10,6 +10,11 @@
 
 #define SKIN_PARTIALS 3     /* the body, and METAL's two */
 
+/* A trapezoidal state-variable filter's coefficients. */
+typedef struct { float a1, a2, a3, k; } svf_t;
+/* At hz, damped by k (1.414 flat, less peaks), Zavalishin's form. */
+svf_t svf(float hz, float k);
+
 enum { HIT_CLICK, HIT_SOFT, HIT_BURST, HIT_WAVE, HIT_NOISE };
 enum { MODE_LOW, MODE_BAND, MODE_HIGH };
 
@@ -24,18 +29,16 @@ typedef struct {
     float zr[SKIN_PARTIALS], zi[SKIN_PARTIALS];
     /* MODE's and TONE's state-variable filters (Zavalishin) */
     float m1, m2, t1, t2;
+    svf_t tone;             /* TONE's coefficients, kept while TONE stands still */
+    float tone_at;          /* the TONE they are for; -1 none yet */
 } skin_voice_t;
-
-/* A trapezoidal state-variable filter's coefficients. */
-typedef struct { float a1, a2, a3, k; } svf_t;
-/* At hz, damped by k (1.414 flat, less peaks), Zavalishin's form. */
-svf_t svf(float hz, float k);
 
 /* One block's settings. */
 typedef struct {
     float pr[SKIN_PARTIALS], pi[SKIN_PARTIALS], amp[SKIN_PARTIALS];
     int np;                 /* partials to run: METAL's two only when heard */
-    svf_t mf, tf;
+    svf_t mf;
+    const svf_t *tf;
     int mode;
 } skin_block_t;
 
@@ -115,7 +118,7 @@ static inline float skin_step(skin_voice_t *v, const skin_block_t *b, float ext,
     float lp, bp, hp;
     svf_step(&b->mf, &v->m1, &v->m2, y, &lp, &bp, &hp);
     y = b->mode == MODE_LOW ? lp : b->mode == MODE_HIGH ? hp : b->mf.k * bp;
-    svf_step(&b->tf, &v->t1, &v->t2, y, &lp, &bp, &hp);
+    svf_step(b->tf, &v->t1, &v->t2, y, &lp, &bp, &hp);
     return lp;
 }
 

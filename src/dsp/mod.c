@@ -117,8 +117,13 @@ void mod_apply(const float *p, const mod_t *m, float bpm, float *q, mod_out_t *o
         move(q, &o->gain[e], AIMS[e][(int)k[M_AIM1]], k[M_DEPTH1], v);
         move(q, &o->gain[e], AIMS[e][(int)k[M_AIM2]], k[M_DEPTH2], v);
     }
-    /* CURVE after the knobs have moved, so it follows a moved RING or DECAY */
-    const float T[ENG_COUNT] = { skin_t60(q), wave_t60(q), noise_t60(q) };
+    /* CURVE after the knobs have moved, so it follows a moved RING or DECAY;
+     * the falls are worked out at a block's start and kept for its rest,
+     * as their powers cost more than the curves themselves */
+    if (!o->have_T) {
+        o->T[ENG_SKIN] = skin_t60(q), o->T[ENG_WAVE] = wave_t60(q), o->T[ENG_NOISE] = noise_t60(q);
+        o->have_T = 1;
+    }
     for (int e = 0; e < ENG_COUNT; e++)
-        o->gain[e] *= curve((int)p[FIRST[e] + M_CURVE], m->t, T[e], &o->hold[e], &o->over[e]);
+        o->gain[e] *= curve((int)p[FIRST[e] + M_CURVE], m->t, o->T[e], &o->hold[e], &o->over[e]);
 }

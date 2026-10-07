@@ -16,7 +16,7 @@ enum { ENG_SKIN, ENG_WAVE, ENG_NOISE, ENG_COUNT };
 enum { KIND_ENVELOPE, KIND_LFO, KIND_RANDOM, KIND_VELOCITY };
 enum { CURVE_NATURAL, CURVE_PING, CURVE_SOFT, CURVE_HOLD, CURVE_SWELL };
 
-#define MOD_SUB 32          /* samples between updates while anything moves: 0.7 ms */
+#define MOD_SUB 64          /* samples between updates while anything moves: 1.45 ms */
 
 /* What a hit leaves the modulators. */
 typedef struct {
@@ -32,6 +32,8 @@ typedef struct {
     float gain[ENG_COUNT];
     int hold[ENG_COUNT];
     int over[ENG_COUNT];
+    float T[ENG_COUNT];     /* each engine's fall, for CURVE: worked out once a block */
+    int have_T;             /* clear it at a block's start */
 } mod_out_t;
 
 void mod_hit(mod_t *m, float vel, uint32_t seed);

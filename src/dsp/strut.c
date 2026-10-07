@@ -67,6 +67,7 @@ static void strike(strut_t *s, int i, float amp) {
         /* a pad fading from a choke starts afresh, from silence */
         *v = (voice_t){ 0 };
         v->gs = v->gw = v->gn = -1.0f;
+        v->skin.tone_at = -1.0f;
     } else if (v->wave.env > 1e-4f && strut_fader(p->p[P_WAVE]) > 0.0f) {
         /* the Wave note this hit cuts fades out, not clicks off */
         v->old = v->wave;
@@ -79,6 +80,7 @@ static void strike(strut_t *s, int i, float amp) {
     mod_hit(&v->mod, amp, s->seed ^ 0x6A09E667u);
     float q[P_COUNT];
     mod_out_t mo;
+    mo.have_T = 0;
     mod_apply(p->p, &v->mod, s->bpm, q, &mo);
     skin_strike(&v->skin, q, s->seed, amp);
     wave_start(&v->wave, q, amp);
@@ -239,13 +241,14 @@ static int voice_chunk(voice_t *restrict v, const float *restrict p, float level
  * knobs moved anew for each. */
 static int voice_render(voice_t *restrict v, const float *restrict p, float level, float bpm,
                         float *restrict out, int frames) {
-    static const mod_out_t still = { { 1.0f, 1.0f, 1.0f }, { 0, 0, 0 }, { 0, 0, 0 } };
+    static const mod_out_t still = { { 1.0f, 1.0f, 1.0f }, { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 }, 0 };
     int alive = 1;
     if (!mod_any(p)) {
         alive = voice_chunk(v, p, level, &still, out, frames);
     } else {
         float q[P_COUNT];
         mod_out_t mo;
+        mo.have_T = 0;
         for (int done = 0; done < frames && alive; done += MOD_SUB) {
             const int n = frames - done < MOD_SUB ? frames - done : MOD_SUB;
             mod_apply(p, &v->mod, bpm, q, &mo);

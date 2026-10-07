@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish and each engine's modulator, 0.4.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish and each engine's modulator, 0.4.1 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -741,7 +741,7 @@ kits are presets. SOUND (Pad, knob 1) is the per-pad library.
   silent (−1, an envelope then fades the engine in) to twice (+1, a punch);
   on any other knob its whole range. Both AIMs may name the same knob, and
   add.
-- **The modulators never write a knob.** Each stretch of 32 samples, the
+- **The modulators never write a knob.** Each stretch of 64 samples, the
   pad's knobs are copied and the copy is moved, so a knob shows what was
   set and automation records it. The hit itself is sized with the copy, so
   velocity on SNAP shapes the strike.
@@ -756,18 +756,27 @@ kits are presets. SOUND (Pad, knob 1) is the per-pad library.
     stops in 10 ms, a sound played backwards. Not on Skin: a resonance swells
     only by being struck again.
 - **A pad that moves nothing runs as before**, a whole block at once; only
-  one with a depth or a CURVE other than Natural runs in stretches of 32.
-  Noise's level match for a moved COLOR is worked out anew only when COLOR
-  has moved a hundredth of a turn, where every stretch cost 40 tangents. On
-  a laptop, every engine's modulator on every pad: +0.9 % (0.4.0).
+  one with a depth or a CURVE other than Natural runs in stretches of 64
+  samples (1.45 ms).
+- **CPU.** 0.4.0 moved the knobs every 32 samples: on the Move, every
+  engine's modulator on every pad took the worst case from 16.1 % to 20.0 %
+  (2026-10-07), nearly all of it each engine setting itself up again. 0.4.1
+  moves them every 64; works out CURVE's falls once a block; keeps Skin's
+  TONE filter while TONE stands still; and works out Noise's level match
+  for a moved COLOR only once COLOR has moved a hundredth of a turn (each
+  stretch had cost 40 tangents). Counted, the modulators' extra work is
+  less than half 0.4.0's. On the Move, still to measure.
 - **Start and Loop** are Noise's sample destinations, and move nothing on a
   noise table until samples come (step 9).
 
 Rejected for the modulators:
 
 - **Moving the knobs a block at a time** (128 samples, 2.9 ms). A pitch
-  envelope stepped that coarsely zips; 32 samples are smooth and cost a
-  quarter of the block's setup again.
+  envelope stepped that coarsely zips.
+- **Every 32 samples** (0.4.0). Smooth, but each engine setting itself up
+  four times a block cost 3.9 % of the Move with every pad modulated; 64
+  halves that, and a pitch envelope stepped every 1.45 ms still glides
+  (tested: Skin's starts high and settles on PITCH).
 - **CURVE as the envelope's shape.** It is the engine's own fall, so it is
   heard with no modulator set; the Envelope is plainly exponential, which is
   what a pitch drop wants.
@@ -995,8 +1004,9 @@ own engine, reach most of the same sounds.)
 6. ~~**Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects~~ (0.3.0;
    DICE waits for step 10). On the Move, every effect on every pad: 15.3 %
    (0.3.1; 18.7 % before the effects ran in one loop). Still to do: hear it.
-7. ~~**Modulation** (the MOD views)~~ (0.4.0). Still to do: hear it, and
-   its CPU on the Move.
+7. ~~**Modulation** (the MOD views)~~ (0.4.0). On the Move, every
+   modulator on every pad: 20.0 % with every effect (0.4.0); 0.4.1 halves
+   the modulators' setup. Still to do: hear it, and measure 0.4.1.
 8. **Kit** page: room, glue, warmth.
 9. Samples (see *The sample library*):
    - ship `src/samples/` in the module and the tarball; measure both;
