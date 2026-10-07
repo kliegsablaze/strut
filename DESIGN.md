@@ -730,7 +730,9 @@ own engine, reach most of the same sounds.)
     weighting worked out once for all eight tables, random phases from a
     sine table, Wires' rattle peaks added near themselves only, and Crackle
     and Grit measured by one transform. On a laptop, Noise's spectra 23 ms
-    to 10. On the Move, still to measure.
+    to 10. **On the Move: 0.51 s to load** (2026-10-07; processor 0.42 s:
+    Wave 57 ms, Noise's spectra 55, its transforms 258, storing 24). The
+    transforms are most of what is left.
   - Rejected: building Noise's tables on a thread of their own after
     loading. A thread's library call can need a newer C library than the
     Move's, which this session cannot check, and noise would be silent for
@@ -821,8 +823,8 @@ own engine, reach most of the same sounds.)
 5. ~~**Noise** engine and noise tables~~ (0.2.0). Samples come at step 9.
    CPU on the Move: 11.1 % with all three engines on every pad at their
    dearest. Load took 0.8 s (once 2.8, the Move busy); 0.2.2 builds the
-   tables for the Move's memory. Still to do: hear it on the device, and
-   measure 0.2.2's load there.
+   tables for the Move's memory and loads in 0.51 s. Still to do: hear it
+   on the device.
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
