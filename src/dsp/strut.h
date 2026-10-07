@@ -4,25 +4,29 @@
  *
  * Every key the design proposes is declared and kept. What sounds so far is
  * the three engines (build steps 3 to 5), mixed by SKIN, WAVE, NOISE, TUNE,
- * DECAY and LEVEL; the modulators and the effects follow in DESIGN.md's
- * Build order.
+ * DECAY and LEVEL, and each pad's finish (step 6: COLOR and the Finish
+ * page); the modulators and the kit's effects follow in DESIGN.md's Build
+ * order.
  */
 #ifndef STRUT_H
 #define STRUT_H
 
 #include <stdint.h>
 
+#include "finish.h"
 #include "noise.h"
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.2.2"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.3.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
 #define STRUT_MAX_BLOCK 256
 #define STRUT_DECLICK 256       /* samples a restarted Wave note fades out over */
 #define STRUT_SHAPE 8           /* the noise shaper's memory (strut.c) */
+#define STRUT_CHOKE 220         /* samples a choked pad fades out over, 5 ms */
+#define STRUT_FLAMS 3           /* hits FLAM makes of one */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
 
 typedef enum { PK_FLOAT, PK_INT, PK_ENUM } param_kind_t;
@@ -91,11 +95,16 @@ typedef struct {
     noise_voice_t noise;
     wave_voice_t old;           /* the Wave note a hit cut, fading out */
     int old_n;                  /* samples of that fade left */
+    finish_t fx;
+    int choke_n;                /* choked: samples of its fade left; 0 not choked */
 } voice_t;
 
 typedef struct {
     float p[P_COUNT];
     voice_t voice;
+    int flams;                  /* FLAM's hits still to come */
+    int flam_in;                /* samples to the next */
+    float flam_amp;             /* the hit's strength, as played */
 } pad_t;
 
 typedef struct {

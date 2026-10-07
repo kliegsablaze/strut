@@ -181,3 +181,28 @@ When the user moves work back to their local machine:
   - what was tried on the device;
   - what is next;
   - open questions for the user.
+
+## Where things stand (2026-10-07, 0.3.0)
+
+- **What works:**
+  - all three engines: Skin, Wave and Noise (eight noise tables), with
+    Skin bending Wave and Wave or Noise striking Skin;
+  - the Pad page: SKIN, WAVE and NOISE are the engines' levels, LEVEL the
+    pad's, TUNE, DECAY and COLOR;
+  - the Finish page: PAN, CHOKE, FLAM, DRIVE, CRUSH, LOW, HIGH.
+  - Tests: 1129 checks, plus the host's planner and validator.
+- **Tried on the device:**
+  - Skin, its grit fixed (0.0.6), and page titles;
+  - Noise "sounds great" (0.2.2);
+  - CPU, all three engines on every pad at their dearest: 12 %;
+  - load time: 0.51 s (0.2.2), after work on the tables for the Move's
+    memory (DESIGN.md, *Tables are built at load*).
+  - Not yet: Finish (0.3.0) by ear, and its CPU with every effect on.
+- **Next:** build step 7, the modulators (the MOD views). Samples are step
+  9: the library in `src/samples/` (208 sounds, from another session) is
+  in DESIGN.md, *The sample library*.
+- **Open questions for the user:**
+  - how TABLE should reach 216+ options at step 9 (one long list, the host's
+    file browser, or a folder and a number);
+  - whether Wave's and Noise's loudness against Skin's suits them (the
+    voicing pass, step 11).

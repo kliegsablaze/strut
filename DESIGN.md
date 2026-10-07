@@ -2,14 +2,16 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, 0.2.2 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, 0.3.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
 on every pad, mixed by SKIN, WAVE, NOISE, TUNE, DECAY and LEVEL; Skin's ring
 can bend Wave (FM), and Wave or Noise can strike Skin (see *How Skin works*,
-*How Wave works*, *How Noise works*). Noise's samples, the modulators and the
-effects are still the plan; their knobs are kept but do nothing yet. On the
+*How Wave works*, *How Noise works*); each pad then has Pad COLOR and the
+Finish page (*How Finish works*). Noise's samples, the modulators, the kit's
+effects, SOUND and DICE are still the plan; their knobs are kept but do
+nothing yet. On the
 Move, all three engines at their dearest take 11.1 % of the CPU (0.2.0).
 
 - **Module ID:** `strut`
@@ -74,6 +76,9 @@ What the three engines are, and the papers they lean on:
 - **Drum physics**, for the presets and the randomiser's sense of what a
   drum is:
   - T. D. Rossing. *Science of Percussion Instruments.* World Scientific, 2000.
+  - J. D. Parker, V. Zavalishin, E. Le Bivic. *Reducing the Aliasing of
+    Nonlinear Waveshaping Using Continuous-Time Convolution.* DAFx 2016.
+    DRIVE's curve, smoothed by its area between samples.
   - J. Bilbao. *Numerical Sound Synthesis.* Wiley, 2009. Chapter 11
     (membranes and plates).
 - **The output**, 16 bits with the rounding noise shaped to the ear:
@@ -262,7 +267,7 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 | 1 | `pNN_sound` | SOUND | Picks a starting sound for this pad from the library (Kick, Snare, Hat…), replacing its engines. |
 | 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. |
 | 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
-| 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass). |
+| 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass), the whole pad (see *How Finish works*). |
 | 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and LEVEL. |
 | 6 | `pNN_wave` | WAVE | Wave's level. |
 | 7 | `pNN_noise` | NOISE | Noise's level. |
@@ -618,6 +623,52 @@ triples the list and hides that the three are one sample.
 | 7 | HIGH | Bi. High shelf, ±18 dB. |
 | 8 | DICE | Turn right to roll a new sound for this pad; turn left to step back through the last eight. |
 
+#### How Finish works (built, 0.3.0)
+
+Each pad's three engines are mixed, then go through Pad COLOR and the
+Finish page in this order: COLOR, DRIVE, CRUSH, LOW, HIGH, then PAN into
+stereo. Each is skipped when at rest, so a pad that uses none costs only
+its PAN.
+
+- **Pad COLOR:** a two-pole filter on the whole pad. Low-pass from 20 kHz
+  down to 200 Hz to the left, high-pass from 20 Hz up to 4 kHz to the
+  right, nothing at the centre. Narrower than Noise's COLOR, so at its ends
+  a pad is dark or thin, not gone; and it does not make up the level it
+  takes, as Noise's does, because darker and quieter belong together on a
+  whole drum.
+- **PAN:** as loud anywhere in power, and exactly as before at the centre.
+- **CHOKE:** Off, or group A to D. A hit fades every other pad in its
+  group out over 5 ms (straight to nothing; quick enough to read as
+  stopped, slow enough not to click), and cancels their FLAM hits still to
+  come. A choked pad hit again starts afresh.
+- **FLAM:** one hit becomes three, 2 to 50 ms apart (none at zero), rising
+  to the hit played: a grace note at 55 %, a second at 75 %, then the hit.
+  Each is a real hit, on its own sample, so a roll builds on Skin as a
+  played one does. Claps, flams, ruffs.
+- **DRIVE:** pushed up to 30 dB into a curve that rises straight through
+  zero and levels off smoothly, then brought back down so a loud hit stays
+  about as loud while its quiet parts come up. Its fold-back is smoothed by
+  taking the curve's area between samples (Parker, Zavalishin and Le Bivic,
+  2016), so a high whine is not folded down under a kick.
+- **CRUSH:** from 16 bits down to 4, and from every sample kept to every
+  16th held, together: grit, then ring, then a broken toy.
+- **LOW** and **HIGH:** gentle shelves, below about 200 Hz and above about
+  4 kHz, ±18 dB. The corner moves with the gain, so a cut is a lift turned
+  upside down (with it fixed, a cut of 18 dB reached only 12 at 60 Hz). A
+  lift of 18 dB on a loud kick is past full scale; the output's limiter
+  rounds it.
+- **DICE** waits for step 10.
+
+Rejected for Finish:
+
+- **tanh for DRIVE.** The area under it, needed to smooth its fold-back,
+  is log cosh: an exponential and a logarithm a sample a pad, which cost a
+  third as much as all three engines. The cubic's area is a few sums.
+- **Plain DRIVE, no smoothing.** Pushed 30 dB, a plain curve folds the top
+  of a bright sound back down as a whine.
+- **FLAM at the block's edge.** Hits rounded to the 128-sample block would
+  wander by up to 3 ms, which a flam of 5 ms cannot afford.
+
 Noise's mod view uses Wave's curves (with Swell); the design did not say, and
 a swelling noise is a reverse cymbal.
 
@@ -873,7 +924,9 @@ own engine, reach most of the same sounds.)
    dearest. Load took 0.8 s (once 2.8, the Move busy); 0.2.2 builds the
    tables for the Move's memory and loads in 0.51 s. Still to do: hear it
    on the device.
-6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
+6. ~~**Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects~~ (0.3.0;
+   DICE waits for step 10). Still to do: hear it on the device, and its CPU
+   there.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
 9. Samples (see *The sample library*):
@@ -921,6 +974,14 @@ own engine, reach most of the same sounds.)
   - One voice a pad: a hit in step with the ring builds it, one against it
     stops it, a soft hit keeps a loud ring (and loud noise), a restarted
     Wave note has no step.
+  - Finish: every Finish knob and Pad COLOR at its ends and middle, on a
+    pad of all three engines, stays finite, sounds and dies away; PAN hard
+    left or right is that side alone, at the centre's power to 0.1 dB;
+    CHOKE silences a pad in its group, and leaves one in another ringing;
+    FLAM gives three rising onsets its gap apart; DRIVE grows a sine's
+    third harmonic and keeps a loud hit within 6 dB; CRUSH holds samples;
+    LOW and HIGH lift and cut their ends of White noise by over 12 dB; Pad
+    COLOR darkens and thins.
   - The faders (SKIN, WAVE, NOISE, LEVEL): off at zero, 2 to 4 dB each tenth of a turn. A quiet tail
     through the real 16-bit output stays within 1.5 steps of the exact
     signal and ends in true silence.

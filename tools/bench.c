@@ -157,6 +157,15 @@ int main(void) {
     run(a, p, "all three, Skin's burst");
     set_all(a, p, "s_hit", "Noise");
     run(a, p, "all three, 16 pads");
+
+    /* and every pad's finish on: COLOR, DRIVE, CRUSH, both shelves, PAN */
+    set_all(a, p, "color", "0.3");
+    set_all(a, p, "drive", "0.5");
+    set_all(a, p, "crush", "0.2");
+    set_all(a, p, "low", "6");
+    set_all(a, p, "high", "6");
+    set_all(a, p, "pan", "0.3");
+    run(a, p, "and every effect");
     a->destroy_instance(p);
     return 0;
 }

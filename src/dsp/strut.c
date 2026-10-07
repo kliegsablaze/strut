@@ -43,13 +43,27 @@ void strut_press(strut_t *s) {
     pair(s);
 }
 
-void strut_note_on(strut_t *s, int note, int vel) {
-    const int i = note - STRUT_NOTE0;
-    if (i < 0 || i >= STRUT_PADS || vel <= 0) return;
+/* FLAM's spacing: 2 to 50 ms, nothing at zero. */
+static int flam_gap(const float *p) {
+    return (int)(0.002f * powf(25.0f, p[P_FLAM]) * STRUT_SR);
+}
+
+/* One hit of pad i at strength amp. */
+static void strike(strut_t *s, int i, float amp) {
     pad_t *p = &s->pad[i];
     voice_t *v = &p->voice;
-    const float amp = powf((float)vel / 127.0f, 1.5f);
-    if (!v->active) {
+    /* CHOKE: the others in this pad's group fade out */
+    const int group = (int)p->p[P_CHOKE];
+    if (group > 0)
+        for (int j = 0; j < STRUT_PADS; j++) {
+            pad_t *o = &s->pad[j];
+            if (j != i && (int)o->p[P_CHOKE] == group && o->voice.active) {
+                if (!o->voice.choke_n) o->voice.choke_n = STRUT_CHOKE;
+                o->flams = 0;
+            }
+        }
+    if (!v->active || v->choke_n) {
+        /* a pad fading from a choke starts afresh, from silence */
         *v = (voice_t){ 0 };
         v->gs = v->gw = v->gn = -1.0f;
     } else if (v->wave.env > 1e-4f && strut_fader(p->p[P_WAVE]) > 0.0f) {
@@ -73,6 +87,26 @@ void strut_note_on(strut_t *s, int note, int vel) {
     /* Noise as Skin's hit: sized from Noise's colour at PITCH */
     if (v->skin.kind == HIT_NOISE)
         skin_resize(&v->skin, 1.0f / noise_strike(&v->noise, p->p, skin_hz(p->p), v->skin.decay, v->skin.len));
+}
+
+/* FLAM's three hits rise to the one played: a grace note, a second, then
+ * the hit, as a hand claps or a stick flams. */
+static float flam_amp(int left) { return left == 2 ? 0.55f : left == 1 ? 0.75f : 1.0f; }
+
+void strut_note_on(strut_t *s, int note, int vel) {
+    const int i = note - STRUT_NOTE0;
+    if (i < 0 || i >= STRUT_PADS || vel <= 0) return;
+    pad_t *p = &s->pad[i];
+    const float amp = powf((float)vel / 127.0f, 1.5f);
+    if (p->p[P_FLAM] > 0.0f) {
+        p->flams = STRUT_FLAMS - 1;
+        p->flam_in = flam_gap(p->p);
+        p->flam_amp = amp;
+        strike(s, i, amp * flam_amp(p->flams));
+    } else {
+        p->flams = 0;
+        strike(s, i, amp);
+    }
     s->note_pad = i;
     s->note_at = s->now;
     pair(s);
@@ -183,17 +217,44 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
     return skin_alive(&v->skin) || heard_w || heard_n || v->old_n > 0;
 }
 
+/* One pad's block, or part of one, through its finish into l and r. */
+static void pad_render(strut_t *s, pad_t *p, float *l, float *r, int frames) {
+    voice_t *v = &p->voice;
+    if (!v->active) return;
+    float x[STRUT_MAX_BLOCK] = { 0 };
+    v->active = voice_render(v, p->p, strut_fader(p->p[P_LEVEL]), x, frames);
+    /* choked: a straight fade to nothing, then the voice is done */
+    if (v->choke_n) {
+        for (int n = 0; n < frames; n++) {
+            x[n] *= (float)(v->choke_n > n ? v->choke_n - n : 0) * (1.0f / STRUT_CHOKE);
+        }
+        v->choke_n -= frames;
+        if (v->choke_n <= 0) v->active = 0;
+    }
+    finish_block_t fb;
+    finish_block(p->p, &fb);
+    finish_run(&v->fx, &fb, x, l, r, frames);
+    s->sounding++;
+}
+
 void strut_render(strut_t *s, float *l, float *r, int frames) {
     memset(l, 0, sizeof(float) * frames);
+    memset(r, 0, sizeof(float) * frames);
     s->sounding = 0;
     for (int i = 0; i < STRUT_PADS; i++) {
         pad_t *p = &s->pad[i];
-        const float level = strut_fader(p->p[P_LEVEL]);
-        if (!p->voice.active) continue;
-        s->sounding++;
-        p->voice.active = voice_render(&p->voice, p->p, level, l, frames);
+        /* FLAM's hits still to come, each at its sample */
+        int done = 0;
+        while (p->flams > 0 && p->flam_in < frames - done) {
+            pad_render(s, p, l + done, r + done, p->flam_in);
+            done += p->flam_in;
+            p->flams--;
+            strike(s, i, p->flam_amp * flam_amp(p->flams));
+            p->flam_in = flam_gap(p->p);
+        }
+        if (p->flams > 0) p->flam_in -= frames - done;
+        pad_render(s, p, l + done, r + done, frames - done);
     }
-    memcpy(r, l, sizeof(float) * frames);   /* PAN comes with Finish (step 6) */
     s->now += (double)frames / STRUT_SR;
 }
 

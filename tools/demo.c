@@ -14,7 +14,7 @@
 plugin_api_v2_t *move_plugin_init_v2(const host_api_v1_t *host);
 
 static const struct { const char *name, *knobs; } SOUNDS[] = {
-    { "deep kick (Skin)", "s_pitch=-7 s_ring=0.75 s_mode=Low s_hit=Click s_snap=0.2 s_tone=0.5" },
+    { "deep kick (Skin, LOW)", "s_pitch=-7 s_ring=0.75 s_mode=Low s_hit=Click s_snap=0.2 s_tone=0.5 low=4" },
     { "rim (Skin)", "s_pitch=40 s_ring=0.15 s_mode=Band s_hit=Click s_snap=0 s_tone=1" },
     { "sine kick (Wave)", "skin=0 wave=0.9 w_wave=0 w_pitch=-5 w_bend=0.45 w_decay=0.55" },
     { "zap (Wave)", "skin=0 wave=0.75 w_wave=0.5 w_pitch=36 w_bend=0.9 w_decay=0.45" },
@@ -22,14 +22,14 @@ static const struct { const char *name, *knobs; } SOUNDS[] = {
     { "FM tom (Skin bends Wave)", "s_pitch=7 s_ring=0.6 s_mode=Band skin=0.7 wave=0.8 w_pitch=19 w_fm=0.5 w_decay=0.5" },
     { "metal snare (Wave strikes Skin)", "s_hit=Wave s_pitch=26 s_ring=0.35 s_mode=High s_snap=0.5 s_metal=0.4 wave=0.3 w_table=Metal w_wave=0.7 w_pitch=40 w_decay=0.2" },
     { "glass bell (Wave, ring)", "skin=0 wave=0.75 w_table=Glass w_wave=0.6 w_pitch=36 w_ring=0.35 w_decay=0.8" },
-    { "closed hat (Noise, Metal)", "skin=0 noise=0.8 n_table=Metal n_color=0.45 n_decay=0.22" },
-    { "open hat (Noise, Metal)", "skin=0 noise=0.75 n_table=Metal n_color=0.45 n_decay=0.6" },
-    { "snare (Skin + Noise, Wires)", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.4 skin=0.7 noise=0.8 n_table=Wires n_color=0.2 n_decay=0.4" },
-    { "shaker (Noise, Hiss)", "skin=0 noise=0.7 n_table=Hiss n_color=0.5 n_decay=0.15" },
+    { "closed hat (Noise, Metal)", "skin=0 noise=0.8 n_table=Metal n_color=0.45 n_decay=0.22 choke=A pan=0.25" },
+    { "open hat (Noise, Metal)", "skin=0 noise=0.75 n_table=Metal n_color=0.45 n_decay=0.6 choke=A pan=0.25" },
+    { "snare (Skin + Noise, Wires)", "s_pitch=24 s_ring=0.3 s_mode=High s_hit=Burst s_snap=0.4 skin=0.7 noise=0.8 n_table=Wires n_color=0.2 n_decay=0.4 drive=0.35" },
+    { "shaker (Noise, Hiss)", "skin=0 noise=0.7 n_table=Hiss n_color=0.5 n_decay=0.15 pan=-0.4" },
     { "tom (Noise strikes Skin)", "s_hit=Noise s_pitch=14 s_ring=0.5 s_mode=Band s_snap=0.5 n_table=Pink" },
-    { "dusty hit (Noise, Crackle)", "skin=0 noise=0.9 n_table=Crackle n_color=-0.2 n_decay=0.45" },
+    { "dusty clap (Noise, Crackle, FLAM)", "skin=0 noise=0.9 n_table=Crackle n_color=-0.2 n_decay=0.3 flam=0.45" },
     { "thunder (Noise, Brown, down)", "skin=0 noise=0.9 n_table=Brown n_pitch=-12 n_decay=0.85" },
-    { "grit blip (Noise, Grit, up)", "skin=0 noise=0.75 n_table=Grit n_pitch=12 n_color=-0.3 n_decay=0.3" },
+    { "grit blip (Noise, Grit, up, CRUSH)", "skin=0 noise=0.75 n_table=Grit n_pitch=12 n_color=-0.3 n_decay=0.3 crush=0.5" },
 };
 #define NSOUNDS (int)(sizeof(SOUNDS) / sizeof(SOUNDS[0]))
 _Static_assert(NSOUNDS <= STRUT_PADS, "one sound a pad");

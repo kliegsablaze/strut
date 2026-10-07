@@ -574,6 +574,149 @@ static void play(strut_t *s, int at, int n) {
     for (int k = 0; k < n; k += 128) strut_render(s, L + at + k, R + at + k, n - k < 128 ? n - k : 128);
 }
 
+/* The peak of x from `from`, over n samples. */
+static double peak_of(const float *x, int from, int n) {
+    double p = 0;
+    for (int k = from; k < from + n; k++) p = fmax(p, fabs(x[k]));
+    return p;
+}
+
+/* Pad COLOR and the Finish page (DESIGN.md, How Finish works). */
+static void finish(void) {
+    /* every Finish knob, and Pad COLOR, at its ends and middle, on a pad of
+     * all three engines: it sounds, it is finite, and it dies away */
+    const int knobs[] = { P_COLOR, P_PAN, P_CHOKE, P_FLAM, P_DRIVE, P_CRUSH, P_LOW, P_HIGH };
+    for (size_t k = 0; k < sizeof(knobs) / sizeof(knobs[0]); k++) {
+        const param_def_t *d = &STRUT_PAD_PARAMS[knobs[k]];
+        const int steps = d->kind == PK_ENUM ? d->noptions : 3;
+        for (int i = 0; i < steps; i++) {
+            strut_t *s = fresh();
+            s->pad[0].p[P_WAVE] = 0.6f, s->pad[0].p[P_NOISE] = 0.6f, s->pad[0].p[P_N_DECAY] = 0.3f;
+            const float v = d->kind == PK_ENUM ? (float)i : d->min + (d->max - d->min) * (float)i / 2;
+            s->pad[0].p[knobs[k]] = v;
+            const int n = hit(s, 2.0f);
+            const double pk = fmax(peak_of(L, 0, n), peak_of(R, 0, n));
+            int finite = 1;
+            for (int j = 0; j < n; j++) finite &= isfinite(L[j]) && isfinite(R[j]);
+            CHECK(finite, "%s %g: finite", d->key, v);
+            /* LOW and HIGH may lift a loud hit 18 dB; the output's limiter rounds it */
+            const double most = knobs[k] == P_LOW || knobs[k] == P_HIGH ? 8.0 : 1.5;
+            CHECK(pk > 0.03 && pk < most, "%s %g: sounds, and not wildly (peak %.3f)", d->key, v, pk);
+            CHECK(!s->pad[0].voice.active, "%s %g: dies away", d->key, v);
+            free(s);
+        }
+    }
+
+    /* PAN: hard left is the left alone, as loud as the centre in power */
+    {
+        double pw[3];
+        for (int i = 0; i < 3; i++) {
+            strut_t *s = fresh();
+            s->pad[0].p[P_PAN] = (float)(i - 1);
+            hit(s, 0.3f);
+            double a = 0, b = 0;
+            for (int k = 0; k < STRUT_SR / 4; k++) a += (double)L[k] * L[k], b += (double)R[k] * R[k];
+            pw[i] = a + b;
+            if (i == 0) CHECK(b < 1e-9 * a, "PAN left: nothing on the right");
+            if (i == 2) CHECK(a < 1e-9 * b, "PAN right: nothing on the left");
+            free(s);
+        }
+        CHECK(fabs(10 * log10(pw[0] / pw[1])) < 0.1 && fabs(10 * log10(pw[2] / pw[1])) < 0.1,
+              "PAN keeps the power (%+.2f, %+.2f dB)", 10 * log10(pw[0] / pw[1]), 10 * log10(pw[2] / pw[1]));
+    }
+
+    /* CHOKE: pad 2 in pad 1's group silences pad 1 within the fade */
+    for (int same = 0; same < 2; same++) {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_RING] = 0.9f;
+        s->pad[1].p[P_SKIN] = 0.0f;     /* pad 2 heard as nothing, so only pad 1 is measured */
+        s->pad[0].p[P_CHOKE] = 1;
+        s->pad[1].p[P_CHOKE] = same ? 1 : 2;
+        strut_note_on(s, STRUT_NOTE0, 100);
+        play(s, 0, 4410);
+        strut_note_on(s, STRUT_NOTE0 + 1, 100);
+        play(s, 4410, 4410);
+        const double after = window_rms(4410 + STRUT_CHOKE + 128, 2000), before = window_rms(2000, 2000);
+        if (same) CHECK(after == 0 && !s->pad[0].voice.active, "CHOKE: a hit in the group stops the pad");
+        else CHECK(after > 0.3 * before, "CHOKE: another group leaves it ringing");
+        free(s);
+    }
+
+    /* FLAM: three onsets, each gap apart, rising to the hit */
+    {
+        strut_t *s = fresh();
+        s->pad[0].p[P_S_RING] = 0.1f;
+        s->pad[0].p[P_FLAM] = 0.5f;
+        const int gap = (int)(0.002f * powf(25.0f, 0.5f) * STRUT_SR);
+        hit(s, 0.2f);
+        const double a = peak_of(L, 0, gap / 2), b = peak_of(L, gap, gap / 2), c = peak_of(L, 2 * gap, gap / 2);
+        CHECK(a > 0.05 && b > a && c > b, "FLAM: three hits %d samples apart, rising (%.3f %.3f %.3f)", gap, a, b, c);
+        free(s);
+    }
+
+    /* DRIVE: a sine grows overtones, and a loud hit stays about as loud */
+    {
+        double third[2], peak[2];
+        for (int i = 0; i < 2; i++) {
+            strut_t *s = wave_pad();
+            s->pad[0].p[P_W_DECAY] = 1.0f;
+            s->pad[0].p[P_W_PITCH] = 24;
+            s->pad[0].p[P_DRIVE] = i ? 0.7f : 0.0f;
+            hit(s, 0.5f);
+            third[i] = level_at(3 * wave_hz(s->pad[0].p), 4410, 8192) / level_at(wave_hz(s->pad[0].p), 4410, 8192);
+            peak[i] = peak_of(L, 0, STRUT_SR / 2);
+            free(s);
+        }
+        CHECK(third[1] > 30 * third[0] + 0.01, "DRIVE adds overtones (third harmonic %.4f, from %.4f)", third[1], third[0]);
+        CHECK(fabs(20 * log10(peak[1] / peak[0])) < 6, "DRIVE keeps a loud hit's level (%+.1f dB)", 20 * log10(peak[1] / peak[0]));
+    }
+
+    /* CRUSH: fully on, a held sample on few levels */
+    {
+        strut_t *s = wave_pad();
+        s->pad[0].p[P_CRUSH] = 1.0f;
+        hit(s, 0.2f);
+        int same = 0;
+        for (int k = 1000; k < 3000; k++) same += L[k] == L[k - 1];
+        CHECK(same > 1500, "CRUSH holds samples (%d of 2000 repeat)", same);
+        free(s);
+    }
+
+    /* LOW and HIGH lift and cut their ends of White noise by most of 18 dB */
+    {
+        double lo[3], hi[3];
+        for (int i = 0; i < 3; i++) {
+            strut_t *s = noise_pad(NT_WHITE);
+            s->pad[0].p[P_LOW] = (float)(18 * (i - 1));
+            hit(s, 0.3f);
+            lo[i] = band_level(40, 80, 0, 8192);
+            free(s);
+            s = noise_pad(NT_WHITE);
+            s->pad[0].p[P_HIGH] = (float)(18 * (i - 1));
+            hit(s, 0.3f);
+            hi[i] = band_level(14000, 16000, 0, 8192);
+            free(s);
+        }
+        CHECK(20 * log10(lo[2] / lo[1]) > 14 && 20 * log10(lo[0] / lo[1]) < -14, "LOW lifts and cuts the lows (%+.1f, %+.1f dB)",
+              20 * log10(lo[2] / lo[1]), 20 * log10(lo[0] / lo[1]));
+        CHECK(20 * log10(hi[2] / hi[1]) > 12 && 20 * log10(hi[0] / hi[1]) < -12, "HIGH lifts and cuts the highs (%+.1f, %+.1f dB)",
+              20 * log10(hi[2] / hi[1]), 20 * log10(hi[0] / hi[1]));
+    }
+
+    /* Pad COLOR: darker to the left, thinner to the right */
+    {
+        double z[3];
+        for (int i = 0; i < 3; i++) {
+            strut_t *s = noise_pad(NT_WHITE);
+            s->pad[0].p[P_COLOR] = (float)(i - 1);
+            hit(s, 0.3f);
+            z[i] = crossings(0, STRUT_SR / 5);
+            free(s);
+        }
+        CHECK(z[0] < 0.2 * z[1] && z[2] > 1.1 * z[1], "Pad COLOR darkens and thins (%.2f, %.2f the crossings)", z[0] / z[1], z[2] / z[1]);
+    }
+}
+
 /* One voice a pad: a new hit strikes the same Skin again, as a drum is
  * struck again, and restarts Wave without a click. */
 static void restrike(void) {
@@ -758,6 +901,7 @@ int main(int argc, char **argv) {
     skin();
     wave();
     noise();
+    finish();
     restrike();
     levels();
     tail();
