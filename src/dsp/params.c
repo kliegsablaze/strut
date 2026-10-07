@@ -33,6 +33,8 @@ static const char *const NOISE_AIMS[] = { "Pitch", "Color", "Start", "Loop", "Le
 /* Stand-ins until build steps 4 and 5 compute the real tables. */
 static const char *const WAVE_TABLES[] = { "Analog", "Bright", "Hollow", "Voice", "Metal", "Glass", "Reed", "Grit" };
 static const char *const NOISE_TABLES[] = { "White", "Pink", "Brown", "Hiss", "Metal", "Crackle", "Air", "Grit" };
+/* How Noise plays one of your samples (DESIGN.md, Noise is also a sampler). */
+static const char *const SAMPLE_MODES[] = { "Sample", "Resynth", "Noise" };
 static const char *const CHOKES[] = { "Off", "A", "B", "C", "D" };
 const char *const STRUT_VIEW_OPTIONS[2] = { "Sound", "Mod" };
 
@@ -77,7 +79,7 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_W_DEPTH2] = BI("w_depth2", "Depth", "Wave Mod Depth 2"),
 
     [P_N_PITCH] = SEMI("n_pitch", "Pitch", "Noise Pitch", -48, 48),
-    [P_N_BEND] = BI("n_bend", "Bend", "Noise Bend"),
+    [P_N_MODE] = ENUM("n_mode", "Mode", "Sample Mode", SAMPLE_MODES),
     [P_N_DECAY] = UNI("n_decay", "Decay", "Noise Decay", 0.3f),
     [P_N_TABLE] = ENUM("n_table", "Table", "Noise Table", NOISE_TABLES),
     [P_N_COLOR] = BI("n_color", "Color", "Noise Color"),

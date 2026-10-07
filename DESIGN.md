@@ -41,11 +41,16 @@ What the three engines are, and the papers they lean on:
   - Mipmapped wavetables, one table per octave, so a high note does not
     alias.
 - **The noise source** is the hiss, the metal and the sample: a loop that
-  repeats without ever sounding pitched, or a recording played straight, as a
-  sampler plays it.
+  repeats without ever sounding pitched, or a recording, played straight as a
+  sampler plays it or rebuilt by resynthesis.
+  - R. J. McAulay, T. F. Quatieri. *Speech Analysis/Synthesis Based on a
+    Sinusoidal Representation.* IEEE Trans. ASSP 34(4), 1986. A sound
+    measured as a set of sine waves whose pitch and level drift over time,
+    then rebuilt from them.
   - X. Serra, J. O. Smith. *Spectral Modeling Synthesis.* CMJ 14(4), 1990.
-    Keep a sound's spectrum, throw away its phase, and it becomes noise of the
-    same colour. This is how the built-in noise tables are made.
+    The same, plus what is left over as shaped noise. Keep a sound's spectrum,
+    throw away its phase, and it becomes noise of the same colour. This is how
+    the built-in noise tables are made, and how a sample is resynthesised.
   - T. I. Laakso, V. Välimäki, M. Karjalainen, U. K. Laine. *Splitting the
     Unit Delay.* IEEE Signal Processing Magazine 13(1), 1996. Reading a sample
     between its stored points, so it can be played at any pitch.
@@ -72,7 +77,7 @@ together:
 |---|---|---|---|
 | **Skin** | Skin | a burst that sets a resonant filter ringing | kicks, toms, snare bodies, cowbells, zaps |
 | **Wave** | Wave | an oscillator that sweeps through a table of waveforms | punchy bodies, tonal drums, bass hits, blips |
-| **Noise** | Noise | a loop of coloured noise, or your own sample played straight | snares, hats, cymbals, claps, texture, and pitched hits cut from melodic samples |
+| **Noise** | Noise | a loop of coloured noise, or your own sample, played straight or resynthesised | snares, hats, cymbals, claps, texture, and pitched hits cut from melodic samples |
 
 The three can feed each other, and that is where the range comes from:
 
@@ -259,9 +264,9 @@ Wave's destinations: Pitch, Wave, FM, Ring, Level.
 | Knob | Sound view | | Mod view | |
 |---|---|---|---|---|
 | 1 | PITCH | | KIND | |
-| 2 | BEND | | RATE | |
+| 2 | MODE | samples only: Sample, Resynth or Noise (below) | RATE | |
 | 3 | DECAY | | CURVE | |
-| 4 | TABLE | noise tables, then samples | AIM | |
+| 4 | TABLE | noise tables, then your samples | AIM | |
 | 5 | COLOR | bi: low-pass left, high-pass right | DEPTH | |
 | 6 | START | sample start (samples only) | AIM | |
 | 7 | LOOP | loop length; full = no loop (samples only) | DEPTH | |
@@ -269,27 +274,43 @@ Wave's destinations: Pitch, Wave, FM, Ring, Level.
 
 Noise's destinations: Pitch, Color, Start, Loop, Level.
 
-**Noise is also a sampler.** Past the noise tables, TABLE lists your own
-samples, and a sample plays **straight**: as recorded, not turned into noise.
-That is what makes rhythmic parts out of melodic material: put one chord or
-bass sample on four pads, tune them apart and play them as a riff. With a
-sample chosen:
+**Noise is also a sampler and a resynthesiser.** Past the noise tables, TABLE
+lists your own samples, and MODE says how one is played:
+
+- **Sample** plays it straight, as recorded. Speed and pitch move together, as
+  on a classic sampler.
+- **Resynth** plays it rebuilt. When the sample loads, Strut measures it as a
+  set of drifting sine waves plus the noise left over (McAulay and Quatieri;
+  Serra and Smith), and plays that back. It sounds close to the recording, but
+  now pitch and length are separate: PITCH no longer speeds it up, and DECAY
+  shortens or lengthens it without changing its pitch. LOOP over a short slice
+  holds one moment of the sound still, as a drone.
+- **Noise** keeps only the colour: the sample's spectrum as it changes over
+  time, with every pitch taken out. A recorded cymbal becomes a cymbal-coloured
+  hiss; a chord becomes a wash in its key's colours.
+
+Melodic material becomes rhythm either way: put one chord or bass sample on
+four pads, tune them apart and play them as a riff. With a sample chosen:
 
 - **PITCH** is in semitones from the pitch it was recorded at (0 = as
-  recorded). Speed and pitch move together, as on a classic sampler. Pad
-  TUNE moves it too, so a pad can be tuned to a note.
-- **BEND** still sweeps the pitch at the start: a tape-stop or a dive.
-- **DECAY** fades the sample out; turned fully right it plays to its end.
+  recorded). Pad TUNE moves it too, so a pad can be tuned to a note.
+- **DECAY** fades the sample out (in Resynth it sets the length instead);
+  turned fully right it plays to its end at its own length.
 - **START** picks where in the sample to begin, so one long sample can feed
   several pads, each from its own slice.
 - **LOOP** fully right plays the sample once. Lower, it repeats a slice of that
   length from START, for stutters and drones.
 - **COLOR** filters it, as for noise.
 
-Rejected for 1.0: time-stretch, so pitch could move without changing length.
-It costs CPU on every pad, smears the attack a drum needs, and a one-shot
-rarely wants it. Also left for later: turning your own sample into noise of
-its colour (the trick the built-in tables use), as a second way to play it.
+On a noise table, MODE does nothing: the tables are already noise.
+
+Noise has no BEND, unlike Wave: MODE took its cell. A pitch sweep at the start
+(a tape-stop or a dive) is Noise's modulator, KIND Envelope aimed at Pitch.
+
+Rejected: time-stretching in Sample mode. It costs CPU on every pad and smears
+the attack a drum needs; Resynth is the way to change length and pitch apart.
+Rejected: a second TABLE entry per sample for each way of playing it. It
+triples the list and hides that the three are one sample.
 
 ### Finish (the focused pad)
 
@@ -379,10 +400,14 @@ own engine, reach most of the same sounds.)
 - **Samples.** User WAVs come from a folder, for example
   `/data/UserData/schwung/samples/strut/`. The file browser is Schwung's
   `filepath` param type. Loading happens off the audio thread, as Ragtag does.
-  Playback is the straight sampler above: an interpolated read (cubic to
-  start; Laakso et al.) at the rate PITCH, TUNE and BEND give, with no
-  stretching. A pad's two voices let a long melodic sample ring under the
-  next hit.
+  - **Sample:** an interpolated read (cubic to start; Laakso et al.) at the
+    rate PITCH, TUNE and the modulator give.
+  - **Resynth and Noise:** the analysis (short FFT frames, peak tracking into
+    partials, the residual's spectral envelope) runs when the sample loads, on
+    the loading thread, never on the audio thread. Playback is a bank of sine
+    oscillators plus filtered noise. Cap the partials (start at 32 a voice)
+    and measure CPU at step 9; this is the dearest thing a pad can do.
+  - A pad's two voices let a long melodic sample ring under the next hit.
 - **Separate outputs.** Schwung offers `move_plugin_render_split` (per-voice
   buffers; see `plugin_api_v1.h`). Later, not 1.0.
 - **module.json carries the rack template.** A synth's pages come only from
@@ -410,7 +435,9 @@ own engine, reach most of the same sounds.)
 6. **Pad** page mix, TUNE/DECAY/COLOR, and Finish's effects.
 7. **Modulation** (the MOD views).
 8. **Kit** page: room, glue, warmth.
-9. Samples and `filepath`: Noise as a straight sampler (see *Noise*).
+9. Samples and `filepath`: Noise's three ways to play a sample (Sample,
+   Resynth, Noise; see *Noise*), and CPU measured with resynthesis on every
+   pad.
 10. The SOUND library, factory kits, DICE, `help.json` and README.
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
