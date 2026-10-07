@@ -223,7 +223,16 @@ When the user moves work back to their local machine:
     sample's Resynth takes 496 ms to make, its Noise 190.
   - Not yet: Finish, the modulators, the Kit page and samples by ear.
 - **Next:** step 10: the SOUND presets, factory kits, DICE by role,
-  help.json and the README.
+  help.json and the README. Start with DICE, as decided with the user
+  (2026-10-07; DESIGN.md, *Sounds, presets and the randomiser*):
+  Finish > DICE for the focused pad and a new Kit > DICE for the whole
+  kit, each a roll counter with eight steps of undo. Nothing of it is
+  written yet; the session moved to the user's machine here.
+- **Working locally now** (2026-10-07): the user moved this work from the
+  cloud session to their own machine, so commands like the install and
+  bench can run directly rather than being pasted.
 - **Open questions for the user:**
   - whether Wave's and Noise's loudness against Skin's suits them (the
-    voicing pass, step 11).
+    voicing pass, step 11);
+  - the kit layout DICE rolls by (DESIGN.md has a proposal);
+  - how Resynth and Noise mode sound (0.7.0, not yet heard).

@@ -990,6 +990,27 @@ own engine, reach most of the same sounds.)
   - no ten-second tails on a hat.
 
   It remembers the last eight rolls; turning left walks back through them.
+- **Two DICE, each with its own undo** (the user's choice, 2026-10-07):
+  Finish > DICE rolls the focused pad, and Kit > DICE (the Kit page's knob
+  7) rolls all sixteen, each by its place in the kit. The user first asked
+  for one knob, right for the kit and left for the pad; that leaves no way
+  back, and one nudge right would replace sixteen pads, so DICE stays on
+  both pages with undo on each.
+  - **The gesture, as the host allows it.** The host's knob steps from its
+    own copy of the value and stops at the range's ends (`onKnobTurn`,
+    `knobStep` in `page_controller.mjs`), and a trigger (`access: "write"`)
+    fires the same in either direction. So DICE is an int, 0 to 9999: the
+    roll you are on, 0 the sound before any roll. A write past the newest
+    roll makes one new roll (one a write, however fast the turn); a write
+    lower goes back to that roll, at most eight back, the oldest kept
+    served if asked for further. Moving away saves what is there first, so
+    edits made after a roll survive a step back and forward.
+  - Not saved with a kit or preset: the history is not kept, so DICE
+    starts again at 0 after a load.
+  - Roles by pad, to agree with the user: for example 1 kick, 2 snare,
+    3 closed hat, 4 open hat (choked with 3), 5 second kick, 6 clap, 7 rim,
+    8 cymbal, 9 to 11 toms, 12 and 13 percussion, 14 bell or tonal, 15 bass,
+    16 effect.
 
 ---
 
