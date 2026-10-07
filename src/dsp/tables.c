@@ -54,7 +54,8 @@ static void make(wt_frame_t *fr, float *mem, const double *ca, const double *sb)
         fft(re, im, n, 1);
         if (l == 0) {       /* no frame peaks over full scale */
             double peak = 0;
-            for (int i = 0; i < n; i++) peak = fmax(peak, fabs(re[i]));
+            for (int i = 0; i < n; i++)     /* not fmax: gcc 12 crashes on it (noise.c) */
+                if (fabs(re[i]) > peak) peak = fabs(re[i]);
             if (peak * scale > 1.0) scale = 1.0 / peak;
         }
         for (int i = 0; i < n; i++) mem[i] = (float)(re[i] * scale);

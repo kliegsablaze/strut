@@ -123,7 +123,10 @@ float levels_measure(int t, float *l, float *r, float *pk) {
     const int n = 4 * STRUT_SR, w = STRUT_SR * 2 / 5;
     for (int k = 0; k < n; k += 128) strut_render(&s, l + k, r + k, 128);
     double best = 0.0, top = 0.0;
-    for (int k = 0; k < n; k++) top = fmax(top, fmax(fabs(l[k]), fabs(r[k])));
+    for (int k = 0; k < n; k++) {   /* not fmax: gcc 12 crashes on it (noise.c) */
+        if (fabs(l[k]) > top) top = fabs(l[k]);
+        if (fabs(r[k]) > top) top = fabs(r[k]);
+    }
     *pk = (float)(20.0 * log10(fmax(top, 1e-9)));
     for (int at = 0; at + w <= n; at += STRUT_SR / 20) {
         double a = 0.0;

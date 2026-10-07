@@ -217,7 +217,12 @@ static void build_pair(int a, float *re, float *im, float *sp[4]) {
         t = clock();
         if (l == 0) {       /* under full scale */
             double pa = 0, pb = 0;
-            for (int i = 0; i < n; i++) pa = fmax(pa, fabs(re[i])), pb = fmax(pb, fabs(im[i]));
+            /* compared, not fmax: gcc 12's vectoriser crashes on an fmax
+             * running through a loop (scripts/build.sh's image) */
+            for (int i = 0; i < n; i++) {
+                if (fabs(re[i]) > pa) pa = fabs(re[i]);
+                if (fabs(im[i]) > pb) pb = fabs(im[i]);
+            }
             if (pa * scale[0] > 0.99) scale[0] = 0.99 / pa;
             if (pb * scale[1] > 0.99) scale[1] = 0.99 / pb;
         }
