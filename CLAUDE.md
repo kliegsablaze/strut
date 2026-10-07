@@ -34,6 +34,8 @@ DESIGN.md saying what actually runs versus what is planned.
 - **Explain plainly.** The user is a musician first: say what something does
   and why in ordinary words before offering technical choices. Use they/them
   for the user.
+- **Name the page with every control** in instructions to the user, as
+  page > knob: "Wave > TABLE to Metal", "Pad > NOISE up" (2026-10-07).
 - **Brief progress updates** while working.
 - **Commit and push each batch of work** to `main`, with clear messages.
 - **Ask before anything outward-facing:** releases, tags, catalog PRs, making
