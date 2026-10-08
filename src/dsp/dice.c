@@ -379,7 +379,7 @@ static void fx(float *p, uint32_t *r) {
 /* ---- a roll ---- */
 
 void dice_roll(float *p, int pad, int kit, uint32_t *rng) {
-    const float level = p[P_LEVEL], pan = p[P_PAN], choke = p[P_CHOKE];
+    const float level = p[P_LEVEL], pan = p[P_PAN], choke = p[P_CHOKE], space = p[P_SPACE];
     for (int k = 0; k < P_COUNT; k++)
         if (k != P_DICE) p[k] = STRUT_PAD_PARAMS[k].def;
     p[P_SKIN] = 0.0f;
@@ -398,7 +398,7 @@ void dice_roll(float *p, int pad, int kit, uint32_t *rng) {
     default: fx(p, rng); break;
     }
     if (!kit) {
-        p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke;
+        p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke, p[P_SPACE] = space;
         return;
     }
     /* the kit's mix: hats choke each other, toms spread low to high, the

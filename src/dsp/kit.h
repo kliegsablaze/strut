@@ -11,7 +11,7 @@
 
 typedef struct {
     /* the knobs as last block left them, so a turn glides */
-    float space, size, glue, warm;
+    float size, glue, warm;
     int started;
     /* GLUE: a fast and a slow follower of the kit's level */
     float fast, slow;
@@ -31,6 +31,6 @@ typedef struct {
 
 /* g is the kit's knobs (STRUT_GLOBALS). Runs l and r, n samples, through
  * GLUE, WARM and the room, in place. Returns 1 while the room still rings. */
-int kit_run(kit_t *k, const float *g, float *l, float *r, int n);
+int kit_run(kit_t *k, const float *g, const float *send, float *l, float *r, int n);
 
 #endif

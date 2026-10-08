@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.8.2"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.9.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -54,7 +54,7 @@ const char *param_option(const param_def_t *d, int i);
  * (DESIGN.md, Pads and focus). Grouped by page, in cell order. */
 typedef enum {
     /* Pad */
-    P_SOUND, P_TUNE, P_DECAY, P_COLOR, P_SKIN, P_WAVE, P_NOISE, P_LEVEL,
+    P_SOUND, P_TUNE, P_DECAY, P_COLOR, P_SKIN, P_WAVE, P_NOISE, P_SPACE,
     /* Skin, sound view, then mod view */
     P_S_PITCH, P_S_RING, P_S_HIT, P_S_SNAP, P_S_METAL, P_S_TONE, P_S_MODE,
     P_S_KIND, P_S_RATE, P_S_CURVE, P_S_AIM1, P_S_DEPTH1, P_S_AIM2, P_S_DEPTH2,
@@ -65,7 +65,9 @@ typedef enum {
     P_N_PITCH, P_N_MODE, P_N_DECAY, P_N_TABLE, P_N_COLOR, P_N_START, P_N_LOOP,
     P_N_KIND, P_N_RATE, P_N_CURVE, P_N_AIM1, P_N_DEPTH1, P_N_AIM2, P_N_DEPTH2,
     /* Finish */
-    P_PAN, P_CHOKE, P_FLAM, P_DRIVE, P_CRUSH, P_LOW, P_HIGH, P_DICE,
+    P_LEVEL, P_PAN, P_FLAM, P_DRIVE, P_CRUSH, P_LOW, P_HIGH, P_DICE,
+    /* on the Kit page, through Kit > CHOKE (G_CHOKE) for the focused pad */
+    P_CHOKE,
     P_COUNT
 } pad_param_t;
 
@@ -73,7 +75,7 @@ typedef enum {
  * state: one per engine page, shared by every pad, never saved. */
 typedef enum {
     G_SKIN_VIEW, G_WAVE_VIEW, G_NOISE_VIEW,
-    G_SPACE, G_SIZE, G_GLUE, G_WARM, G_VOL, G_DICE,
+    G_SIZE, G_GLUE, G_WARM, G_VOL, G_CHOKE, G_DICE,
     G_COUNT
 } global_param_t;
 
@@ -117,6 +119,7 @@ typedef struct {
     int flams;                  /* FLAM's hits still to come */
     int flam_in;                /* samples to the next */
     float flam_amp;             /* the hit's strength, as played */
+    float space_g;              /* SPACE as the last block left it, so a turn glides; -1 none yet */
     dice_hist_t dice;           /* Finish > DICE's rolls of this pad */
     float rolls[DICE_SLOTS][P_COUNT];
 } pad_t;
@@ -135,6 +138,7 @@ typedef struct {
     float shape[2][STRUT_SHAPE];  /* each channel's last rounding errors */
     float bpm;                  /* the host's tempo, for RATE's synced half */
     int sounding;               /* voices that rendered this block, and the room */
+    float send[STRUT_MAX_BLOCK];  /* the pads' sends to the room, by each one's SPACE */
     unsigned healed;            /* pads (bit 16 the room) dropped for going to inf or NaN, not yet logged */
     kit_t kit;
     smp_lib_t lib;              /* the samples the pads name, loaded off the audio thread */

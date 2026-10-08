@@ -1031,12 +1031,17 @@ static double rms_of(const float *x, int from, int n) {
     return sqrt(a / n);
 }
 
+/* Every pad's SPACE, its send to the room. */
+static void space_all(strut_t *s, float v) {
+    for (int i = 0; i < STRUT_PADS; i++) s->pad[i].p[P_SPACE] = v;
+}
+
 /* The Kit page (DESIGN.md, How the Kit page works). */
 static void kit(void) {
     const int n2 = 2 * STRUT_SR;
     /* dry: every kit knob at zero leaves the pads exactly as they were */
     strut_t *s = fresh();
-    s->g[G_SPACE] = 0;
+    space_all(s, 0);
     beat(s, 2, 3);
     static float dl[3 * STRUT_SR];
     memcpy(dl, L, sizeof(dl));
@@ -1055,17 +1060,19 @@ static void kit(void) {
 
     /* every kit knob at its ends and middle: finite, under the limiter's
      * knee by a margin, and silent in the end */
-    const int knobs[] = { G_SPACE, G_SIZE, G_GLUE, G_WARM };
+    const int knobs[] = { -1, G_SIZE, G_GLUE, G_WARM };   /* -1: every pad's SPACE */
     int ok = 1;
     for (int k = 0; k < 4; k++)
         for (int i = 0; i < 3; i++) {
             s = fresh();
-            s->g[G_SPACE] = 0.5f, s->g[knobs[k]] = (float)i / 2;
+            space_all(s, k ? 0.5f : (float)i / 2);
+            if (k) s->g[knobs[k]] = (float)i / 2;
             beat(s, 1, 1);
             int rings = 1;
             for (int b = 0; b < 4000 && rings; b++) {
                 float l[128] = { 0 }, r[128] = { 0 };
                 s->sounding = 0;
+                memset(s->send, 0, sizeof(s->send));
                 strut_kit(s, l, r, 128);
                 rings = s->sounding > 0;
             }
@@ -1073,7 +1080,7 @@ static void kit(void) {
             for (int j = 0; j < STRUT_SR; j++) finite &= isfinite(L[j]) && isfinite(R[j]);
             const double pk = fmax(peak_of(L, 0, STRUT_SR), peak_of(R, 0, STRUT_SR));
             if (!finite || pk > 1.0 || rings) {
-                printf("  %s %.1f: finite %d peak %.2f rings %d\n", STRUT_GLOBALS[knobs[k]].key, i / 2.0, finite, pk, rings);
+                printf("  %s %.1f: finite %d peak %.2f rings %d\n", k ? STRUT_GLOBALS[knobs[k]].key : "space", i / 2.0, finite, pk, rings);
                 ok = 0;
             }
             free(s);
@@ -1088,7 +1095,7 @@ static void kit(void) {
     const double dtail = rms_of(dl, last + STRUT_SR / 2, STRUT_SR / 4);
     for (int i = 1; i <= 4; i++) {
         s = fresh();
-        s->g[G_SPACE] = (float)i / 4;
+        space_all(s, (float)i / 4);
         beat(s, 2, 3);
         double d = 0;
         for (int j = 0; j < n2; j++) d += (double)(L[j] - dl[j]) * (L[j] - dl[j]);
@@ -1112,15 +1119,16 @@ static void kit(void) {
      * 50 ms on */
     kit_t *k = calloc(1, sizeof(*k));
     float g[G_COUNT] = { 0 };
-    static float x[4 * STRUT_SR], y[4 * STRUT_SR];
+    static float x[4 * STRUT_SR], y[4 * STRUT_SR], sx[4 * STRUT_SR];
     double t30[3];
     for (int i = 0; i < 3; i++) {
         memset(k, 0, sizeof(*k));
         memset(x, 0, sizeof(x)), memset(y, 0, sizeof(y));
-        g[G_SPACE] = 1, g[G_SIZE] = (float)i / 2;
-        x[0] = y[0] = 0.5f;
+        memset(sx, 0, sizeof(sx));
+        g[G_SIZE] = (float)i / 2;
+        x[0] = y[0] = sx[0] = 0.5f;   /* SPACE full up */
         const int len = 4 * STRUT_SR, w = STRUT_SR / 50;
-        for (int j = 0; j < len; j += 128) kit_run(k, g, x + j, y + j, len - j < 128 ? len - j : 128);
+        for (int j = 0; j < len; j += 128) kit_run(k, g, sx + j, x + j, y + j, len - j < 128 ? len - j : 128);
         const double ref = rms_of(x, STRUT_SR / 20, w);
         int at = STRUT_SR / 20;
         while (at < len - w && rms_of(x, at, w) > ref * 0.0316) at += w / 2;
@@ -1133,7 +1141,7 @@ static void kit(void) {
     /* GLUE: the soft hits come nearer the loud ones, while the beat's
      * loudness and peaks stay about where they were */
     s = fresh();
-    s->g[G_SPACE] = 0, s->g[G_GLUE] = 1;
+    s->g[G_GLUE] = 1;
     beat(s, 2, 2);
     const double grms = rms_of(L, 0, n2), gpk = peak_of(L, 0, n2);
     double gap[2] = { 0 }, body[2] = { 0 };
@@ -1157,12 +1165,13 @@ static void kit(void) {
 
     /* WARM: on a 110 Hz sine at a typical level, even and odd harmonics
      * appear, the level holds, and nothing drifts off centre */
-    g[G_SPACE] = 0, g[G_SIZE] = 0;
+    memset(sx, 0, sizeof(sx));
+    g[G_SIZE] = 0;
     for (int w = 0; w <= 1; w++) {
         memset(k, 0, sizeof(*k));
         g[G_WARM] = (float)w;
         for (int j = 0; j < STRUT_SR; j++) x[j] = y[j] = 0.3f * sinf(2 * 3.14159265f * 110 * j / STRUT_SR);
-        for (int j = 0; j < STRUT_SR; j += 128) kit_run(k, g, x + j, y + j, STRUT_SR - j < 128 ? STRUT_SR - j : 128);
+        for (int j = 0; j < STRUT_SR; j += 128) kit_run(k, g, sx + j, x + j, y + j, STRUT_SR - j < 128 ? STRUT_SR - j : 128);
         double h[4] = { 0 }, mean = 0;
         const int from = STRUT_SR / 2, len = STRUT_SR / 2;
         for (int m = 1; m <= 3; m++) {
@@ -1773,7 +1782,7 @@ static void heal(void) {
     static int16_t out[2 * 128];
     void *p = A->create_instance(".", "");
     strut_t *s = p;
-    A->set_param(p, "space", "0.5");
+    A->set_param(p, "p01_space", "0.5");
     for (int bad = 0; bad < 2; bad++) {
         uint8_t on[3] = { 0x90, STRUT_NOTE0, 100 };
         A->on_midi(p, on, 3, 0);

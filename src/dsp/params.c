@@ -59,7 +59,7 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_SKIN] = UNI("skin", "Skin", "Skin Level", 0.8f),
     [P_WAVE] = UNI("wave", "Wave", "Wave Level", 0.0f),
     [P_NOISE] = UNI("noise", "Noise", "Noise Level", 0.0f),
-    [P_LEVEL] = UNI("level", "Level", "Level", 0.8f),
+    [P_SPACE] = UNI("space", "Space", "Room Send", 0.0f),
 
     [P_S_PITCH] = SEMI("s_pitch", "Pitch", "Skin Pitch", -12, 60),
     [P_S_RING] = UNI("s_ring", "Ring", "Skin Ring", 0.5f),
@@ -107,14 +107,15 @@ const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
     [P_N_AIM2] = ENUM("n_aim2", "Aim", "Noise Mod Aim 2", NOISE_AIMS),
     [P_N_DEPTH2] = BI("n_depth2", "Depth", "Noise Mod Depth 2"),
 
+    [P_LEVEL] = UNI("level", "Level", "Level", 0.8f),
     [P_PAN] = BI("pan", "Pan", "Pan"),
-    [P_CHOKE] = ENUM("choke", "Choke", "Choke Group", CHOKES),
     [P_FLAM] = UNI("flam", "Flam", "Flam", 0.0f),
     [P_DRIVE] = UNI("drive", "Drive", "Drive", 0.0f),
     [P_CRUSH] = UNI("crush", "Crush", "Crush", 0.0f),
     [P_LOW] = { "low", "Low", "Low Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0, 0 },
     [P_HIGH] = { "high", "High", "High Shelf", PK_FLOAT, -18.0f, 18.0f, 0.0f, "dB", NULL, 0, 0 },
     /* a turn right rolls, left steps back (dice.h); never saved */
+    [P_CHOKE] = ENUM("choke", "Choke", "Choke Group", CHOKES),
     [P_DICE] = { "dice", "Dice", "Dice", PK_ENUM, 0, 1, 1, NULL, STRUT_DICE_OPTIONS, 2, 0 },
 };
 
@@ -122,11 +123,11 @@ const param_def_t STRUT_GLOBALS[G_COUNT] = {
     [G_SKIN_VIEW] = ENUM("skin_view", "Mod", "Skin Page", STRUT_VIEW_OPTIONS),
     [G_WAVE_VIEW] = ENUM("wave_view", "Mod", "Wave Page", STRUT_VIEW_OPTIONS),
     [G_NOISE_VIEW] = ENUM("noise_view", "Mod", "Noise Page", STRUT_VIEW_OPTIONS),
-    [G_SPACE] = UNI("space", "Space", "Room Send", 0.0f),
     [G_SIZE] = UNI("size", "Size", "Room Size", 0.4f),
     [G_GLUE] = UNI("glue", "Glue", "Glue", 0.0f),
     [G_WARM] = UNI("warm", "Warm", "Warmth", 0.0f),
     [G_VOL] = { "vol", "Vol", "Kit Volume", PK_FLOAT, -60.0f, 6.0f, 0.0f, "dB", NULL, 0, 0 },
+    [G_CHOKE] = ENUM("kit_choke", "Choke", "Choke Group", CHOKES),
     [G_DICE] = { "kit_dice", "Dice", "Kit Dice", PK_ENUM, 0, 1, 1, NULL, STRUT_DICE_OPTIONS, 2, 0 },
 };
 
@@ -135,6 +136,6 @@ const page_def_t STRUT_PAGES[STRUT_NPAGES] = {
     { "skin", "Skin", 1, G_SKIN_VIEW, P_S_PITCH, 14 },
     { "wave", "Wave", 1, G_WAVE_VIEW, P_W_PITCH, 14 },
     { "noise", "Noise", 1, G_NOISE_VIEW, P_N_PITCH, 14 },
-    { "finish", "Finish", 1, -1, P_PAN, 8 },
-    { "kit", "Kit", 0, -1, G_SPACE, 6 },
+    { "finish", "Finish", 1, -1, P_LEVEL, 8 },
+    { "kit", "Kit", 0, -1, G_SIZE, 6 },
 };

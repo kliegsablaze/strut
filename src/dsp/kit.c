@@ -131,12 +131,12 @@ static float pre_of(float s) { return (0.002f + 0.030f * s) * STRUT_SR; }
  * all-pass, a delay, damping and another all-pass and delay; the two sides
  * tapped at seven points each. SPACE is the send of the whole kit to it,
  * after a high-pass at 150 Hz so the kicks do not boom in it. */
-static int room(kit_t *k, float s0, float s1, float z0, float z1, float *l, float *r, int n) {
+/* send: the pads' sends, each by its SPACE (strut.c, pad_render) */
+static int room(kit_t *k, const float *send, float z0, float z1, float *l, float *r, int n) {
     /* a resting tank with nothing coming in is skipped */
     if (k->fb[0] == 0.0f && k->fb[1] == 0.0f && k->fed <= 0) {
         int any = 0;
-        if (s0 >= 1e-4f || s1 >= 1e-4f)
-            for (int i = 0; i < n && !any; i++) any = l[i] != 0.0f || r[i] != 0.0f;
+        for (int i = 0; i < n && !any; i++) any = send[i] != 0.0f;
         if (!any) return 0;
     }
     const float dec0 = decay_of(z0), dec1 = decay_of(z1), kp0 = damp_of(z0), kp1 = damp_of(z1);
@@ -152,9 +152,10 @@ static int room(kit_t *k, float s0, float s1, float z0, float z1, float *l, floa
     for (int i = 0; i < n; i++) {
         const int w = k->w++;
         const float t = (float)(i + 1) / (float)n;
-        const float send = s0 + (s1 - s0) * t, decay = dec0 + (dec1 - dec0) * t, keep = kp0 + (kp1 - kp0) * t;
+        const float decay = dec0 + (dec1 - dec0) * t, keep = kp0 + (kp1 - kp0) * t;
         /* the send, high-passed */
-        const float x0 = 0.5f * (l[i] + r[i]) * send;
+        /* SPACE full up leaves the room about 6 dB under a beat's dry sound */
+        const float x0 = 1.75f * send[i];
         const float v = (x0 - k->send_hp) * hg, lo = v + k->send_hp;
         k->send_hp = lo + v;
         k->pre[w & (KIT_PRE - 1)] = x0 - lo;
@@ -208,9 +209,9 @@ static int room(kit_t *k, float s0, float s1, float z0, float z1, float *l, floa
     return 1;
 }
 
-int kit_run(kit_t *k, const float *g, float *l, float *r, int n) {
+int kit_run(kit_t *k, const float *g, const float *send, float *l, float *r, int n) {
     if (!k->started) {
-        k->space = g[G_SPACE], k->size = g[G_SIZE], k->glue = g[G_GLUE], k->warm = g[G_WARM];
+        k->size = g[G_SIZE], k->glue = g[G_GLUE], k->warm = g[G_WARM];
         k->started = 1;
     }
     if (k->glue > 0.0f || g[G_GLUE] > 0.0f) glue(k, k->glue, g[G_GLUE], l, r, n);
@@ -218,8 +219,7 @@ int kit_run(kit_t *k, const float *g, float *l, float *r, int n) {
     if (k->warm > 0.0f || g[G_WARM] > 0.0f) warm(k, k->warm, g[G_WARM], l, r, n);
     else
         for (int ch = 0; ch < 2; ch++) k->wu[ch] = k->wF[ch] = k->wlp[ch] = k->wdc[ch] = k->wdx[ch] = 0.0f;
-    /* SPACE full up leaves the room about 6 dB under a beat's dry sound */
-    const int rings = room(k, 1.75f * k->space, 1.75f * g[G_SPACE], k->size, g[G_SIZE], l, r, n);
-    k->space = g[G_SPACE], k->size = g[G_SIZE], k->glue = g[G_GLUE], k->warm = g[G_WARM];
+    const int rings = room(k, send, k->size, g[G_SIZE], l, r, n);
+    k->size = g[G_SIZE], k->glue = g[G_GLUE], k->warm = g[G_WARM];
     return rings;
 }

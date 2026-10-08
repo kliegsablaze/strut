@@ -37,7 +37,7 @@ const char *dice_role_name(dice_role_t r);
 
 /* A new sound for pad `pad` in p (its STRUT_PAD_PARAMS), by its role.
  * `kit` is set when the whole kit rolls: the pad's place in the mix (LEVEL,
- * PAN, CHOKE) is rolled too; a pad's own roll keeps it. */
+ * PAN, CHOKE, SPACE) is rolled too; a pad's own roll keeps it. */
 void dice_roll(float *p, int pad, int kit, uint32_t *rng);
 
 #endif

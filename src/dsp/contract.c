@@ -136,7 +136,9 @@ int strut_contract_params(char *buf, int len) {
     sb_t b = { buf, len, 0 };
     sb_printf(&b, "[{\"key\":\"pad\",\"name\":\"Selected Pad\",\"short_name\":\"Pad\",\"type\":\"int\",\"min\":1,\"max\":%d}",
               STRUT_PADS);
-    for (int k = 0; k < P_COUNT; k++) param_json(&b, &STRUT_PAD_PARAMS[k]);
+    /* a pad's CHOKE is reached through Kit > CHOKE, so it is on no page */
+    for (int k = 0; k < P_COUNT; k++)
+        if (k != P_CHOKE) param_json(&b, &STRUT_PAD_PARAMS[k]);
     for (int k = 0; k < G_COUNT; k++) param_json(&b, &STRUT_GLOBALS[k]);
     sb_printf(&b, "]");
     return done(&b);

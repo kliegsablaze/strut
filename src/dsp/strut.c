@@ -23,7 +23,7 @@ void strut_init(strut_t *s) {
     s->dither = 0x9E3779B9u;
     s->bpm = 120.0f;
     s->vol_g = -1.0f;
-    for (int i = 0; i < STRUT_PADS; i++) s->lib.want[i] = s->lib.seen[i] = -1;
+    for (int i = 0; i < STRUT_PADS; i++) s->lib.want[i] = s->lib.seen[i] = -1, s->pad[i].space_g = -1.0f;
 }
 
 static void focus(strut_t *s, int pad) {
@@ -311,7 +311,7 @@ static int voice_render(voice_t *restrict v, const float *restrict p, float leve
 }
 
 /* One pad's block, or part of one, through its finish into l and r. */
-static void pad_render(strut_t *s, pad_t *p, float *l, float *r, int frames) {
+static void pad_render(strut_t *s, pad_t *p, float *l, float *r, float *send, int frames) {
     voice_t *v = &p->voice;
     if (!v->active) return;
     float x[STRUT_MAX_BLOCK] = { 0 };
@@ -336,13 +336,22 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, int frames) {
     }
     finish_block_t fb;
     finish_block(p->p, &fb);
-    finish_run(&v->fx, &fb, x, l, r, frames);
+    float pl[STRUT_MAX_BLOCK] = { 0 }, pr[STRUT_MAX_BLOCK] = { 0 };
+    finish_run(&v->fx, &fb, x, pl, pr, frames);
+    /* the pad, and its share of the room by its SPACE, gliding */
+    const float s1 = p->p[P_SPACE], s0 = p->space_g < 0.0f ? s1 : p->space_g;
+    p->space_g = s1;
+    for (int n = 0; n < frames; n++) {
+        l[n] += pl[n], r[n] += pr[n];
+        send[n] += 0.5f * (pl[n] + pr[n]) * (s0 + (s1 - s0) * (float)(n + 1) / (float)frames);
+    }
     s->sounding++;
 }
 
 void strut_render(strut_t *s, float *l, float *r, int frames) {
     memset(l, 0, sizeof(float) * frames);
     memset(r, 0, sizeof(float) * frames);
+    memset(s->send, 0, sizeof(float) * frames);
     s->sounding = 0;
     /* tell the loader the samples the pads name */
     for (int i = 0; i < STRUT_PADS; i++) {
@@ -356,14 +365,14 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
         /* FLAM's hits still to come, each at its sample */
         int done = 0;
         while (p->flams > 0 && p->flam_in < frames - done) {
-            pad_render(s, p, l + done, r + done, p->flam_in);
+            pad_render(s, p, l + done, r + done, s->send + done, p->flam_in);
             done += p->flam_in;
             p->flams--;
             strike(s, i, p->flam_amp * flam_amp(p->flams));
             p->flam_in = flam_gap(p->p);
         }
         if (p->flams > 0) p->flam_in -= frames - done;
-        pad_render(s, p, l + done, r + done, frames - done);
+        pad_render(s, p, l + done, r + done, s->send + done, frames - done);
         /* and the sample each voice plays, so it is not freed under it */
         const smp_t *u = p->voice.active ? p->voice.noise.smp : NULL;
         if (u != s->lib.used[i]) __atomic_store_n(&s->lib.used[i], u, __ATOMIC_RELEASE);
@@ -373,7 +382,7 @@ void strut_render(strut_t *s, float *l, float *r, int frames) {
 }
 
 void strut_kit(strut_t *s, float *l, float *r, int frames) {
-    if (kit_run(&s->kit, s->g, l, r, frames)) s->sounding++;
+    if (kit_run(&s->kit, s->g, s->send, l, r, frames)) s->sounding++;
 }
 
 /* ---- the output (Quilt's, src/dsp/quilt.c) ---- */
@@ -490,17 +499,18 @@ static int read_value(const param_def_t *d, float v, char *buf, int len) {
  * (on its loader thread, before any note). It is one flat JSON object of the
  * same keys set_param takes, holding only what differs from the defaults:
  *
- *   {"v":1,"p01_s_pitch":"0.3125","p03_n_table":"Kick 003","space":"0.2000"}
+ *   {"v":1,"p01_s_pitch":"0.3125","p03_n_table":"Kick 003","size":"0.2000"}
  *
  * Values are written as get_param serves them, so an enum is its option
  * name and a sample comes back by name even if the user's folder changes.
- * DICE is a turn, not a value, and the MOD switches only choose a view, so
- * neither is kept: loading a kit never rolls. Reading starts from the
+ * DICE is a turn, not a value, the MOD switches only choose a view, and Kit >
+ * CHOKE is the focused pad's own, so none is kept: loading a kit never
+ * rolls. Reading starts from the
  * defaults and ignores keys it does not know, so older and newer saves load. */
 
 static int saved(int pad, int k) {
     if (pad >= 0) return k != P_DICE;
-    return k != G_DICE && k != G_SKIN_VIEW && k != G_WAVE_VIEW && k != G_NOISE_VIEW;
+    return k != G_DICE && k != G_CHOKE && k != G_SKIN_VIEW && k != G_WAVE_VIEW && k != G_NOISE_VIEW;
 }
 
 static int put_value(char *buf, int len, int at, const char *key, const char *val) {
@@ -631,7 +641,7 @@ static void set_param(void *instance, const char *key, const char *val) {
         write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
         if (k == P_DICE) strut_dice(s, pad, (int)s->pad[pad].p[k]);
     } else if ((k = global_key(key)) >= 0) {
-        write_value(&STRUT_GLOBALS[k], &s->g[k], val);
+        write_value(&STRUT_GLOBALS[k], k == G_CHOKE ? &s->pad[s->focus].p[P_CHOKE] : &s->g[k], val);
         if (k == G_DICE) strut_dice(s, -1, (int)s->g[k]);
     }
 }
@@ -651,7 +661,8 @@ static int get_param(void *instance, const char *key, char *buf, int buf_len) {
     if (!strcmp(key, "pad")) return snprintf(buf, buf_len, "%d", s->focus + 1);
     if (!strcmp(key, "state")) return write_state(s, buf, buf_len);
     if ((k = pad_key(key, &pad)) >= 0) return read_value(&STRUT_PAD_PARAMS[k], s->pad[pad].p[k], buf, buf_len);
-    if ((k = global_key(key)) >= 0) return read_value(&STRUT_GLOBALS[k], s->g[k], buf, buf_len);
+    if ((k = global_key(key)) >= 0)
+        return read_value(&STRUT_GLOBALS[k], k == G_CHOKE ? s->pad[s->focus].p[P_CHOKE] : s->g[k], buf, buf_len);
     return -1;
 }
 

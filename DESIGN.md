@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -848,6 +848,15 @@ skipped while its knob is at zero, and the room once its tail has died, so
 with all three at zero the kit is exactly the pads (the tests check it).
 Every knob glides across a block.
 
+- **Layout from 0.9.0** (the user's ask, 2026-10-07; the tables in this
+  file still show the older layout until the next pass):
+  - Pad: SOUND TUNE DECAY COLOR SKIN WAVE NOISE SPACE. SPACE is now this
+    pad's own send to the room, taken after its Finish, so a dry kick can sit
+    beside a roomy snare. The room no longer hears GLUE and WARM.
+  - Finish: LEVEL PAN FLAM DRIVE CRUSH LOW HIGH DICE (LEVEL before PAN).
+  - Kit: SIZE GLUE WARM VOL CHOKE DICE PAD. Kit > CHOKE sets the focused
+    pad's choke group (`kit_choke`, served from that pad); Finish was full.
+    Rejected: DICE off Finish to make room (the user chose to move CHOKE).
 - **SPACE** sends the whole kit, high-passed at 150 Hz so the kicks do not
   boom in it, to the room; full up, the room is about 6 dB under a beat's
   dry sound. The default is 0, a dry kit (the user's choice, 2026-10-07; it was 0.15, a touch of air about 22 dB under).
