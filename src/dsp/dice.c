@@ -121,7 +121,7 @@ float levels_measure(int t, float *l, float *r, float *pk) {
     smp_service(&s.lib, 0);
     strut_note_on(&s, STRUT_NOTE0, 100);
     const int n = 4 * STRUT_SR, w = STRUT_SR * 2 / 5;
-    for (int k = 0; k < n; k += 128) strut_render(&s, l + k, r + k, 128);
+    for (int k = 0; k < n; k += 128) strut_render(&s, l + k, r + k, n - k < 128 ? n - k : 128);  /* l and r hold n */
     double best = 0.0, top = 0.0;
     for (int k = 0; k < n; k++) {   /* not fmax: gcc 12 crashes on it (noise.c) */
         if (fabs(l[k]) > top) top = fabs(l[k]);
