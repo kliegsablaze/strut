@@ -253,7 +253,14 @@ static void snare(float *p, uint32_t *r) {
  * whole tail: they blurred into one hiss, mostly above 8 kHz.) */
 static void clap(float *p, uint32_t *r) {
     p[P_SKIN] = 0.0f;
-    if (chance(r, 0.3f) && noise_sample(p, r, "Clap", -31.0f)) return;
+    if (chance(r, 0.3f) && noise_sample(p, r, "Clap", -31.0f)) {
+        /* held whole for its slaps, then cut: the library's claps ring on
+         * airy for about 100 ms, and the user wanted them snappier
+         * (2026-10-09). A plain fade from the start dulled the slaps. */
+        p[P_N_CURVE] = CURVE_HOLD;
+        p[P_N_DECAY] = in(r, 0.35f, 0.39f);
+        return;
+    }
     static const int T[] = { NT_WHITE, NT_PINK, NT_HISS };
     noise_table(p, T[one_of(r, 3)], in(r, 0.12f, 0.35f), in(r, -0.4f, -0.25f), 0.95f);
     p[P_N_CURVE] = CURVE_CLAP;
@@ -322,6 +329,8 @@ static void rim(float *p, uint32_t *r) {
     p[P_S_MODE] = MODE_HIGH;
     noise_table(p, chance(r, 0.5f) ? NT_WHITE : NT_HISS, in(r, 0.015f, 0.025f), in(r, 0.6f, 0.75f), in(r, 0.8f, 0.9f));
     p[P_DRIVE] = in(r, 0.2f, 0.45f);
+    /* no thump under the crack: the user heard Rim 1 as bassy (2026-10-09) */
+    p[P_COLOR] = in(r, 0.56f, 0.62f);   /* a high-pass, 390 to 520 Hz */
 }
 
 /* Toms by place, low to high: the kit's 9th, 10th and 11th pads. */

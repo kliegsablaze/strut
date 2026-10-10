@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1084,6 +1084,11 @@ own engine, reach most of the same sounds.)
   4 kHz. Rejected: the clap as FLAM's three hits of full-band noise (mostly
   above 8 kHz, the hits blurred into one), and the rim as Skin alone rung
   40 to 100 ms (a pure tone at 440 to 600 Hz, a woodblock).
+  Then (0.12.2), after the user's listen: a recorded clap is held whole
+  for its slaps and cut at 55 to 70 ms by Noise > CURVE on Hold (they
+  rang airy for about 100 ms; a plain fade from the start dulled the
+  slaps), and a rim is high-passed by Pad > COLOR at 390 to 520 Hz (Rim 1
+  was bassy).
 - **Kicks by style (0.12.0).** Kick 1 to 7 are designed, not rolled:
   Soft (a felt beater on a deep Skin), Round (a played kick drum, beater,
   shell and a breath of Pink), Dance (a bent sine under a click, pushed),
