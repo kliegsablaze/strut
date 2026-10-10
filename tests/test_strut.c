@@ -812,6 +812,18 @@ static void modulation(void) {
               e[CURVE_PING][2] / e[CURVE_NATURAL][2]);
     }
 
+    /* Noise's Clap: three slaps with quiet between, then a tail as loud */
+    {
+        strut_t *s = fresh();
+        float *p = s->pad[0].p;
+        p[P_SKIN] = 0.0f, p[P_NOISE] = 0.8f, p[P_N_DECAY] = 0.45f, p[P_N_CURVE] = CURVE_CLAP;
+        hit(s, 1.0f);
+        const double slap = window_rms(0, 132), gap = window_rms(330, 88), tail = window_rms(1400, 132);
+        CHECK(20 * log10(gap / slap) < -15, "Clap: quiet between slaps (%+.1f dB)", 20 * log10(gap / slap));
+        CHECK(fabs(20 * log10(tail / slap)) < 6, "Clap: the tail starts as loud as a slap (%+.1f dB)", 20 * log10(tail / slap));
+        free(s);
+    }
+
     /* Skin's Hold: the ring is kept from falling, then let go */
     {
         double r[2];

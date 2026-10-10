@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -373,7 +373,7 @@ nothing.
 | 1 | MOD | | MOD | |
 | 2 | PITCH | | KIND | |
 | 3 | BEND | pitch envelope depth, bi | RATE | |
-| 4 | DECAY | | CURVE | Natural, Ping, Soft, Hold, Swell (inverted) |
+| 4 | DECAY | | CURVE | Natural, Ping, Soft, Hold, Swell (inverted), Clap |
 | 5 | TABLE | Analog, then the spectral tables | AIM | |
 | 6 | WAVE | position in the table; at the end of Analog, pulse width | DEPTH | |
 | 7 | FM | Skin into Wave's frequency | AIM | |
@@ -952,6 +952,12 @@ Rejected for the Kit page:
   - **Swell** (Wave and Noise): rises from 60 dB down to full over it, then
     stops in 10 ms, a sound played backwards. Not on Skin: a resonance swells
     only by being struck again.
+  - **Clap** (Wave and Noise, 0.11.1): three slaps 10.5 and 9 ms apart,
+    each falling away in a few milliseconds (2.5 ms to a third), its own
+    fall paused; at 31 ms the fourth starts the tail, the fall as it is.
+    The hand clap's own envelope, so a clap is one hit and FLAM stays free.
+    Rejected: claps made by FLAM, each of its three hits carrying the whole
+    tail; heard on the device (2026-10-09), they blurred into one hiss.
 - **A pad that moves nothing runs as before**, a whole block at once; only
   one with a depth or a CURVE other than Natural runs in stretches of 64
   samples (1.45 ms).
@@ -1054,6 +1060,16 @@ own engine, reach most of the same sounds.)
   engines are done (the user's call, 2026-10-09): **30 kits**, that sound
   great and range across genres, from acoustic to electronic to
   experimental, each designed by hand, not rolled.
+- **Claps and rims rebuilt (0.11.1),** after the user heard neither as its
+  name on the device (2026-10-09). A clap is White, Pink or Hiss noise
+  low-passed by Noise > COLOR to about 2.5 to 4 kHz (it makes up the level
+  it takes) and high-passed by Pad > COLOR at about 600 Hz to 1.1 kHz, with
+  Noise > CURVE on Clap. A rim is Skin at 370 to 520 Hz, RING near its
+  shortest, METAL 0.6 to 1, MODE High, with 15 to 25 ms of bright noise
+  and a little DRIVE: under 15 ms to fall 40 dB, energy from 200 Hz to
+  4 kHz. Rejected: the clap as FLAM's three hits of full-band noise (mostly
+  above 8 kHz, the hits blurred into one), and the rim as Skin alone rung
+  40 to 100 ms (a pure tone at 440 to 600 Hz, a woodblock).
 - **Rejected: a seventh page for the kits** (the host's preset browser, a
   `list_param` level). The user wants as few pages as Quilt has
   (2026-10-09): six is already a lot, and the Kit page had a knob free.

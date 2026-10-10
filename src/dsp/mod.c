@@ -80,7 +80,9 @@ static void move(float *q, float *level, int aim, float d, float v) {
  * over a tenth of it (2 to 80 ms). Hold stays full for half of it, its own
  * fall paused, then lets go over a tenth (at least 5 ms). Swell rises from
  * 60 dB down to full over it, its own fall paused, then lets go in 10 ms:
- * a sound played backwards. */
+ * a sound played backwards. Clap is three quick slaps, each falling away in
+ * a few milliseconds, its own fall paused; the fourth is the tail, its own
+ * fall. The gaps are a little uneven, as hands are. */
 static float curve(int c, float t, float T, int *hold, int *over) {
     *hold = *over = 0;
     switch (c) {
@@ -102,6 +104,13 @@ static float curve(int c, float t, float T, int *hold, int *over) {
         const float g = expf(-6.9078f * (t - T) / 0.01f);
         *over = g < 1e-5f;
         return g;
+    }
+    case CURVE_CLAP: {
+        static const float AT[] = { 0.0f, 0.0105f, 0.0195f, 0.031f };
+        if (t >= AT[3]) return 1.0f;
+        *hold = 1;
+        const float u = t - (t >= AT[2] ? AT[2] : t >= AT[1] ? AT[1] : AT[0]);
+        return expf(-u / 0.0025f);
     }
     default: return 1.0f;
     }

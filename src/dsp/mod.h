@@ -5,7 +5,7 @@
  * shows what was set.
  *
  * Each engine's CURVE, the shape of its own fall, lives here too: it is a
- * gain over time, and for Hold and Swell a pause in the engine's own fall.
+ * gain over time, and for Hold, Swell and Clap a pause in the engine's own fall.
  */
 #ifndef STRUT_MOD_H
 #define STRUT_MOD_H
@@ -14,7 +14,7 @@
 
 enum { ENG_SKIN, ENG_WAVE, ENG_NOISE, ENG_COUNT };
 enum { KIND_ENVELOPE, KIND_LFO, KIND_RANDOM, KIND_VELOCITY };
-enum { CURVE_NATURAL, CURVE_PING, CURVE_SOFT, CURVE_HOLD, CURVE_SWELL };
+enum { CURVE_NATURAL, CURVE_PING, CURVE_SOFT, CURVE_HOLD, CURVE_SWELL, CURVE_CLAP };
 
 #define MOD_SUB 64          /* samples between updates while anything moves: 1.45 ms */
 

@@ -153,7 +153,7 @@ const LISTS = {
     s_hit: ["Click", "Soft", "Burst", "Wave", "Noise"], s_mode: ["Low", "Band", "High"],
     n_mode: ["Sample", "Resynth", "Noise"],
     kind: ["Envelope", "LFO", "Random", "Velocity"],
-    curve: ["Natural", "Ping", "Soft", "Hold", "Swell"], s_curve: ["Natural", "Ping", "Soft", "Hold"],
+    curve: ["Natural", "Ping", "Soft", "Hold", "Swell", "Clap"], s_curve: ["Natural", "Ping", "Soft", "Hold"],
     s_aim: ["Pitch", "Ring", "Snap", "Metal", "Tone", "Level"],
     w_aim: ["Pitch", "Wave", "FM", "Ring", "Level"],
     n_aim: ["Pitch", "Color", "Start", "Loop", "Level"],
@@ -449,6 +449,10 @@ D.curve = (c, v, s) => {                         /* the shape of the engine's ow
     else if (k === "Soft") { c.line(4, 10, 8, 1, 1); curve(c, 8, 28, (x) => 10 - 9 * Math.exp(-(x - 8) / 5)); }
     else if (k === "Hold") { vline(c, 4, 1, 10); hline(c, 4, 15, 1); curve(c, 15, 28, (x) => 10 - 9 * Math.exp(-(x - 15) / 1.5)); }
     else if (k === "Swell") { curve(c, 4, 25, (x) => 10 - 9 * Math.exp(-(25 - x) / 5)); vline(c, 25, 1, 10); }
+    else if (k === "Clap") {                     /* three slaps, then the tail */
+        for (const a of [4, 8, 12]) { vline(c, a, 1, 10); curve(c, a, a + 4, (x) => 10 - 9 * Math.exp(-(x - a) / 0.8)); }
+        vline(c, 16, 1, 10); curve(c, 16, 28, (x) => 10 - 9 * Math.exp(-(x - 16) / 4));
+    }
     else { vline(c, 4, 1, 10); curve(c, 4, 28, (x) => 10 - 9 * Math.exp(-(x - 4) / 5)); }
 };
 /* AIM: an arrow into a small picture of the knob it moves. */

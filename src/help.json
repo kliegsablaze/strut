@@ -163,6 +163,8 @@
         "",
         "CURVE: the engine's",
         "envelope shape.",
+        "Clap (Wave, Noise):",
+        "three slaps, a tail.",
         "",
         "Each AIM sends it to",
         "a knob of that",

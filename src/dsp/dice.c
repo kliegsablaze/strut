@@ -185,15 +185,17 @@ static void snare(float *p, uint32_t *r) {
     noise_table(p, T[one_of(r, 4)], in(r, 0.15f, 0.35f), in(r, -0.1f, 0.5f), in(r, 0.85f, 0.92f));
 }
 
+/* A clap is noise in the hands' band, 800 Hz to 3.5 kHz or so (Noise's
+ * low-pass, which makes up the level it takes, and the pad's high-pass),
+ * slapped three times by CURVE's Clap, then its tail. (Rejected: FLAM's three hits of plain noise, each with the
+ * whole tail: they blurred into one hiss, mostly above 8 kHz.) */
 static void clap(float *p, uint32_t *r) {
     p[P_SKIN] = 0.0f;
-    p[P_FLAM] = in(r, 0.3f, 0.55f);
-    if (chance(r, 0.3f) && noise_sample(p, r, "Clap", -31.0f)) {
-        p[P_FLAM] = chance(r, 0.5f) ? 0.0f : p[P_FLAM];
-        return;
-    }
+    if (chance(r, 0.3f) && noise_sample(p, r, "Clap", -31.0f)) return;
     static const int T[] = { NT_WHITE, NT_PINK, NT_HISS };
-    noise_table(p, T[one_of(r, 3)], in(r, 0.12f, 0.3f), in(r, 0.1f, 0.45f), 0.82f);
+    noise_table(p, T[one_of(r, 3)], in(r, 0.12f, 0.35f), in(r, -0.4f, -0.25f), 0.95f);
+    p[P_N_CURVE] = CURVE_CLAP;
+    p[P_COLOR] = in(r, 0.62f, 0.75f);
     if (chance(r, 0.4f)) {      /* a little body */
         p[P_SKIN] = in(r, 0.45f, 0.6f);
         p[P_S_PITCH] = roundf(in(r, 28.0f, 38.0f));
@@ -240,19 +242,24 @@ static void cymbal(float *p, uint32_t *r) {
     }
 }
 
+/* A rim is a crack: Skin as short as it goes, high-passed, its METAL
+ * partials up, and a few milliseconds of bright noise on top. (Rejected:
+ * Skin alone, rung for 40 to 100 ms; it was a tone, a woodblock.) */
 static void rim(float *p, uint32_t *r) {
-    if (chance(r, 0.3f) && noise_sample(p, r, "Rim", -28.0f)) {
+    if (chance(r, 0.3f) && noise_sample(p, r, "Rim", -30.0f)) {
         p[P_SKIN] = 0.0f;
         return;
     }
-    p[P_SKIN] = 1.0f;
-    p[P_S_PITCH] = roundf(in(r, 34.0f, 46.0f));
-    p[P_S_RING] = secs(in(r, 0.04f, 0.1f));
+    p[P_SKIN] = in(r, 0.95f, 1.0f);
+    p[P_S_PITCH] = roundf(in(r, 33.0f, 39.0f));
+    p[P_S_RING] = in(r, 0.0f, 0.08f);
     p[P_S_HIT] = HIT_CLICK;
-    p[P_S_SNAP] = snap(in(r, 0.2f, 1.0f));
-    p[P_S_METAL] = in(r, 0.2f, 0.7f);
-    p[P_S_TONE] = in(r, 0.6f, 0.95f);
-    p[P_S_MODE] = chance(r, 0.5f) ? MODE_BAND : MODE_HIGH;
+    p[P_S_SNAP] = snap(in(r, 0.2f, 0.4f));
+    p[P_S_METAL] = in(r, 0.6f, 1.0f);
+    p[P_S_TONE] = in(r, 0.85f, 1.0f);
+    p[P_S_MODE] = MODE_HIGH;
+    noise_table(p, chance(r, 0.5f) ? NT_WHITE : NT_HISS, in(r, 0.015f, 0.025f), in(r, 0.6f, 0.75f), in(r, 0.8f, 0.9f));
+    p[P_DRIVE] = in(r, 0.2f, 0.45f);
 }
 
 /* Toms by place, low to high: the kit's 9th, 10th and 11th pads. */
@@ -477,7 +484,7 @@ static const struct {
     { 0.15f, 0.25f, 0.0f,  1.0f,  0.50f, 0.55f, 0.30f },   /* Club */
     { 0.30f, 0.0f,  0.0f,  -8.0f, 0.50f, 0.10f, 0.30f },   /* Soft */
     { 0.45f, 0.10f, 0.0f,  -5.0f, 1.0f,  0.20f, 0.20f },   /* Cave */
-    { 0.10f, 0.60f, 0.35f, 0.0f,  0.30f, 0.50f, 0.40f },   /* Grit */
+    { 0.10f, 0.50f, 0.35f, 0.0f,  0.30f, 0.50f, 0.40f },   /* Grit */
     { 0.40f, 0.0f,  0.0f,  4.0f,  0.65f, 0.15f, 0.0f },    /* Glass */
 };
 
