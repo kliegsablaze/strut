@@ -232,19 +232,24 @@ static void kick(float *p, uint32_t *r) {
     kick_style(p, r, one_of(r, KICKS));
 }
 
+/* The body leads and the wires sit under it, driven: to 0.12.2 the noise
+ * matched the body, METAL reached 0.3 and a third of the bodies were
+ * band-passed, and the user heard them thin, hollow and noisy
+ * (2026-10-10). */
 static void snare(float *p, uint32_t *r) {
-    p[P_SKIN] = in(r, 0.8f, 0.9f);
-    p[P_S_PITCH] = roundf(in(r, 16.0f, 26.0f));
-    p[P_S_RING] = secs(in(r, 0.12f, 0.3f));
+    p[P_SKIN] = in(r, 0.9f, 0.95f);
+    p[P_S_PITCH] = roundf(in(r, 16.0f, 22.0f));
+    p[P_S_RING] = secs(in(r, 0.15f, 0.3f));
     p[P_S_HIT] = chance(r, 0.5f) ? HIT_BURST : HIT_CLICK;
     p[P_S_SNAP] = snap(in(r, 1.0f, 6.0f));
-    p[P_S_METAL] = in(r, 0.0f, 0.3f);
+    p[P_S_METAL] = in(r, 0.0f, 0.12f);
     p[P_S_TONE] = in(r, 0.5f, 0.85f);
-    p[P_S_MODE] = chance(r, 0.7f) ? MODE_LOW : MODE_BAND;
+    p[P_S_MODE] = MODE_LOW;
     if (chance(r, 0.4f)) pitch_drop(p, P_S_KIND, in(r, 0.2f, 0.4f), in(r, 0.02f, 0.06f));
     if (chance(r, 0.25f) && noise_sample(p, r, "Snare", -26.0f)) return;
     static const int T[] = { NT_WIRES, NT_WHITE, NT_HISS, NT_PINK };
-    noise_table(p, T[one_of(r, 4)], in(r, 0.15f, 0.35f), in(r, -0.1f, 0.5f), in(r, 0.85f, 0.92f));
+    noise_table(p, T[one_of(r, 4)], in(r, 0.15f, 0.35f), in(r, -0.1f, 0.5f), in(r, 0.74f, 0.8f));
+    p[P_DRIVE] = in(r, 0.3f, 0.4f);
 }
 
 /* A clap is noise in the hands' band, 800 Hz to 3.5 kHz or so (Noise's

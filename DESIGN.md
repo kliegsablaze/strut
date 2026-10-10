@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1089,6 +1089,13 @@ own engine, reach most of the same sounds.)
   rang airy for about 100 ms; a plain fade from the start dulled the
   slaps), and a rim is high-passed by Pad > COLOR at 390 to 520 Hz (Rim 1
   was bassy).
+- **Snares fuller (0.12.3).** The user heard Snares 1 to 3 as thin,
+  hollow and too noisy. The body now leads: Pad > SKIN 0.9 to 0.95 over
+  NOISE 0.74 to 0.8 (they were level), Skin always on MODE Low (a third
+  were band-passed, the hollow ring), METAL at most 0.12 (was 0.3), the
+  body at 145 to 200 Hz, and Finish > DRIVE 0.3 to 0.4 built in. Their
+  50 ms loudness rose from about -11 dB to -6 to -9, beside the recorded
+  snare's -7.
 - **Kicks by style (0.12.0).** Kick 1 to 7 are designed, not rolled:
   Soft (a felt beater on a deep Skin), Round (a played kick drum, beater,
   shell and a breath of Pink), Dance (a bent sine under a click, pushed),
