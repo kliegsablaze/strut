@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -14,8 +14,9 @@ Finish page (*How Finish works*), every engine its modulator and CURVE
 works*). Noise plays the library's 208 samples, or your own, as recorded,
 resynthesised or as their colour alone (*The sample library*, *How
 Resynth and Noise work*). DICE rolls a pad, or the whole kit, by each
-pad's place in it, with eight steps back (*How DICE works*, 0.8.0); SOUND
-is still the plan, its knob kept but doing nothing yet. On the Move, every pad at its dearest, with
+pad's place in it, with eight steps back (*How DICE works*, 0.8.0);
+SOUND and KIT pick fixed sounds and kits, each undone by DICE Back
+(*SOUND and KIT*, 0.10.0). On the Move, every pad at its dearest, with
 every effect and modulator and the Kit page: about 22 % of the CPU (0.6.0);
 with Resynth on every pad, 20.5 %, its runs reaching 22.3 % (0.7.0).
 
@@ -281,14 +282,14 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 
 | Knob | Key | Label | Behaviour |
 |---|---|---|---|
-| 1 | `pNN_sound` | SOUND | Picks a starting sound for this pad from the library (Kick, Snare, Hat…), replacing its engines. |
+| 1 | `pNN_sound` | SOUND | Own (the pad as it is), then 40 starting sounds (Kick 1, Snare 2, Hat 3…), each replacing the pad's engines and keeping its place in the mix. |
 | 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. |
 | 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
 | 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass), the whole pad (see *How Finish works*). |
-| 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and LEVEL. |
+| 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and Finish > LEVEL. |
 | 6 | `pNN_wave` | WAVE | Wave's level. |
 | 7 | `pNN_noise` | NOISE | Noise's level. |
-| 8 | `pNN_level` | LEVEL | The pad's level. |
+| 8 | `pNN_space` | SPACE | This pad's send to the room, after its Finish. 0 by default: dry. |
 
 ### Skin (the resonator)
 
@@ -757,8 +758,8 @@ Rejected for Resynth:
 
 | Knob | Label | Behaviour |
 |---|---|---|
-| 1 | PAN | Bi. |
-| 2 | CHOKE | Off, or group A to D: a hit stops the others in its group (open/closed hats). |
+| 1 | LEVEL | The pad's level, a fader like SKIN. |
+| 2 | PAN | Bi. |
 | 3 | FLAM | One hit becomes three; how far apart (claps). |
 | 4 | DRIVE | Saturation. |
 | 5 | CRUSH | Fewer bits and a lower rate. |
@@ -827,13 +828,14 @@ a swelling noise is a reverse cymbal.
 
 | Knob | Label | Behaviour |
 |---|---|---|
-| 1 | SPACE | How much of the kit goes to the room: none, to about 6 dB under the dry kit. Per-pad sends are a later choice. |
-| 2 | SIZE | The room's size: rings under a second to about four, darker and later as it grows. |
-| 3 | GLUE | Kit compression, one knob: soft hits nearer loud ones, attacks kept. |
-| 4 | WARM | Saturation of the whole kit: thicker, rounder, a softer top. |
-| 5 | VOL | Kit volume, in dB. |
-| 6 | DICE | Turn right to roll a new kit, every pad by its place; turn left to step back through the last eight (header: Kit Dice). |
-| 7 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
+| 1 | SIZE | The room's size: rings under a second to about four, darker and later as it grows. How much each pad sends is its own Pad > SPACE. |
+| 2 | GLUE | Kit compression, one knob: soft hits nearer loud ones, attacks kept. |
+| 3 | WARM | Saturation of the whole kit: thicker, rounder, a softer top. |
+| 4 | VOL | Kit volume, in dB. |
+| 5 | CHOKE | The focused pad's choke group: Off, or A to D; a hit stops the others in its group (open/closed hats). |
+| 6 | KIT | Own (the kit as it is), then the factory kits. The list follows the knob; the kit loads where it stops (header: Factory Kit). |
+| 7 | DICE | Turn right to roll a new kit, every pad by its place; turn left to step back through the last eight (header: Kit Dice). |
+| 8 | PAD | The pad the other pages edit, 1 to 16 (header: Selected Pad). Tapping a pad picks it too. |
 
 (Rejected: SWING. Move's own sequencer swings.)
 
@@ -848,17 +850,18 @@ skipped while its knob is at zero, and the room once its tail has died, so
 with all three at zero the kit is exactly the pads (the tests check it).
 Every knob glides across a block.
 
-- **Layout from 0.9.0** (the user's ask, 2026-10-07; the tables in this
-  file still show the older layout until the next pass):
+- **Layout from 0.9.0** (the user's ask, 2026-10-07; the tables above
+  show it, with KIT from 0.10.0):
   - Pad: SOUND TUNE DECAY COLOR SKIN WAVE NOISE SPACE. SPACE is now this
     pad's own send to the room, taken after its Finish, so a dry kick can sit
     beside a roomy snare. The room no longer hears GLUE and WARM.
   - Finish: LEVEL PAN FLAM DRIVE CRUSH LOW HIGH DICE (LEVEL before PAN).
-  - Kit: SIZE GLUE WARM VOL CHOKE DICE PAD. Kit > CHOKE sets the focused
+  - Kit: SIZE GLUE WARM VOL CHOKE KIT DICE PAD (KIT from 0.10.0). Kit > CHOKE sets the focused
     pad's choke group (`kit_choke`, served from that pad); Finish was full.
     Rejected: DICE off Finish to make room (the user chose to move CHOKE).
-- **SPACE** sends the whole kit, high-passed at 150 Hz so the kicks do not
-  boom in it, to the room; full up, the room is about 6 dB under a beat's
+- **SPACE** (Pad > SPACE, each pad's own, from 0.9.0) sends that pad,
+  after its Finish, to the room, high-passed at 150 Hz so a kick does not
+  boom in it; full up on every pad, the room is about 6 dB under a beat's
   dry sound. The default is 0, a dry kit (the user's choice, 2026-10-07; it was 0.15, a touch of air about 22 dB under).
 - **The room** is Dattorro's plate (JAES 1997), Quilt's: four diffusing
   all-passes into two cross-fed loops, each a slowly wandering all-pass, a
@@ -1025,6 +1028,36 @@ own engine, reach most of the same sounds.)
   The int gesture above was the plan; reading the host's knob code for
   1.7.3 changed it (below). Kit > DICE is knob 6, not 7, so PAD stays last.
 
+### SOUND and KIT (built, 0.10.0)
+
+- **Pad > SOUND** is Own, then 40 sounds: Kick 1 to 7, Snare 1 to 4, Clap
+  1 to 3, Rim 1 and 2, Hat 1 to 4, Open 1 and 2, Cymbal 1 and 2, Tom 1 to
+  4, Perc 1 to 4, Bell 1 to 3, Bass 1 and 2, FX 1 to 3. Each is one roll of
+  its role from a seed of its own (`dice_sound`), so it is the same sound
+  every time, level-matched as DICE's rolls are; it keeps the pad's LEVEL,
+  PAN, CHOKE and SPACE. The names say the role, not a promise of the
+  timbre. Any edit or roll after a pick is the pad's Own sound again.
+- **Kit > KIT** is Own, then the factory kits: a kit roll from the kit's
+  seed, dressed with sends, DRIVE, CRUSH, HIGH and the Kit page
+  (`dice_kit`). It writes only when the knob is let go
+  (`"commit":"release"`), so a turn past ten kits loads one.
+- **Both are one step for DICE Back.** A pick saves what was there into
+  the DICE history (Finish > DICE for SOUND, Kit > DICE for KIT), and picks
+  in a row, one knob turning, share the step: a long turn of SOUND costs
+  one step back, not eight. Kit > DICE Back brings back the pads, not the
+  Kit page's knobs.
+- **Neither loads on a `state` load.** The saved value is only a name: the
+  pads come back as saved, edits and all.
+- **The factory kits are placeholders.** Twelve (Strut, Dry, Hall, Dust,
+  Hard, Tape, Tin, Club, Soft, Cave, Grit, Glass), within 3 dB of each other
+  through the Kit page (tests, `picks()`). The real set waits until the
+  engines are done (the user's call, 2026-10-09): **30 kits**, that sound
+  great and range across genres, from acoustic to electronic to
+  experimental, each designed by hand, not rolled.
+- **Rejected: a seventh page for the kits** (the host's preset browser, a
+  `list_param` level). The user wants as few pages as Quilt has
+  (2026-10-09): six is already a lot, and the Kit page had a knob free.
+
 ### How DICE works (built, 0.8.0)
 
 - **The knob is a two-word switch, Back and Roll.** Turn it right and let
@@ -1093,6 +1126,13 @@ Rejected for DICE:
 ---
 
 ## Implementation notes
+
+- **`pad_press` and the host's slow-param warning.** The Move logs
+  `param-slow: set ... synth:pad_press took 2 ms` (0.9.1, 2026-10-09).
+  Strut's own part is a time stamp and one comparison (`strut_press`); the
+  rest is the host's handling of the key around the call (it looks the key
+  up and makes a smoother for it, as "1" reads as a number). Nothing to fix
+  in Strut, and no request to the host (the user's rule).
 
 - **CPU.** Sixteen pads × three engines, at most two voices a pad, so a fast
   roll's tail can overlap the next hit. Target: under a quarter of the Move's
@@ -1315,8 +1355,10 @@ Rejected for DICE:
     - ~~`state`, so a kit saves and loads whole, without DICE~~ (0.8.1;
       a module that does not answer `state` makes the host retry every
       few seconds on the channel the knobs read through);
-    - the SOUND library and factory kits;
-    - `help.json` and the README.
+    - ~~the SOUND library, and KIT with placeholder kits~~ (0.10.0);
+    - the 30 factory kits, after more engine work (the user's call,
+      2026-10-09);
+    - ~~`help.json` and the README~~ (0.10.0).
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
 

@@ -29,6 +29,11 @@ else
   rc=1
 fi
 
+# Module Help draws 20 characters a line.
+if command -v node >/dev/null 2>&1; then
+  node -e 'const h=require("./src/help.json");const bad=h.children.flatMap(c=>c.lines.filter(l=>l.length>20));if(bad.length){console.log("FAIL: help.json lines over 20:",bad);process.exit(1)}' || rc=1
+fi
+
 # A synth slot always dlopens <module>/dsp.so, whatever module.json says.
 if ! grep -q '"dsp": "dsp.so"' src/module.json; then
   echo "FAIL: module.json dsp must be dsp.so (the chain host loads that name)"; rc=1

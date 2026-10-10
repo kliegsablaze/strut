@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 #include "strut.h"
+#include "dice.h"
 #include "noise.h"
 #include "samples.h"
 #include "tables.h"
@@ -16,15 +17,6 @@
 #define BI(key, cell, name) { key, cell, name, PK_FLOAT, -1.0f, 1.0f, 0.0f, NULL, NULL, 0, 0 }
 #define SEMI(key, cell, name, lo, hi) { key, cell, name, PK_INT, lo, hi, 0, "st", NULL, 0, 0 }
 
-/* The SOUND library is build step 10. Until then, forty stand-in names, so
- * the contract carries a list the size of the real one. */
-static const char *const SOUNDS[] = {
-    "Kick 1", "Kick 2", "Kick 3", "Kick 4", "Kick 5", "Kick 6", "Kick 7", "Kick 8",
-    "Snare 1", "Snare 2", "Snare 3", "Snare 4", "Clap 1", "Clap 2", "Clap 3", "Clap 4",
-    "Hat 1", "Hat 2", "Hat 3", "Hat 4", "Open 1", "Open 2", "Ride", "Crash",
-    "Tom 1", "Tom 2", "Tom 3", "Tom 4", "Rim", "Bell", "Block", "Shaker",
-    "Zap 1", "Zap 2", "Blip", "Drop", "Laser", "Thud", "Chord", "Noise",
-};
 static const char *const HITS[] = { "Click", "Soft", "Burst", "Wave", "Noise" };
 static const char *const MODES[] = { "Low", "Band", "High" };
 static const char *const KINDS[] = { "Envelope", "LFO", "Random", "Velocity" };
@@ -52,7 +44,7 @@ const char *param_option(const param_def_t *d, int i) {
 }
 
 const param_def_t STRUT_PAD_PARAMS[P_COUNT] = {
-    [P_SOUND] = ENUM("sound", "Sound", "Sound", SOUNDS),
+    [P_SOUND] = ENUM("sound", "Sound", "Sound", DICE_SOUND_NAMES),
     [P_TUNE] = SEMI("tune", "Tune", "Tune", -24, 24),
     [P_DECAY] = BI("decay", "Decay", "Decay"),
     [P_COLOR] = BI("color", "Color", "Color"),
@@ -128,6 +120,7 @@ const param_def_t STRUT_GLOBALS[G_COUNT] = {
     [G_WARM] = UNI("warm", "Warm", "Warmth", 0.0f),
     [G_VOL] = { "vol", "Vol", "Kit Volume", PK_FLOAT, -60.0f, 6.0f, 0.0f, "dB", NULL, 0, 0 },
     [G_CHOKE] = ENUM("kit_choke", "Choke", "Choke Group", CHOKES),
+    [G_KIT] = ENUM("kit", "Kit", "Factory Kit", DICE_KIT_NAMES),
     [G_DICE] = { "kit_dice", "Dice", "Kit Dice", PK_ENUM, 0, 1, 1, NULL, STRUT_DICE_OPTIONS, 2, 0 },
 };
 
@@ -137,5 +130,5 @@ const page_def_t STRUT_PAGES[STRUT_NPAGES] = {
     { "wave", "Wave", 1, G_WAVE_VIEW, P_W_PITCH, 14 },
     { "noise", "Noise", 1, G_NOISE_VIEW, P_N_PITCH, 14 },
     { "finish", "Finish", 1, -1, P_LEVEL, 8 },
-    { "kit", "Kit", 0, -1, G_SIZE, 6 },
+    { "kit", "Kit", 0, -1, G_SIZE, 7 },
 };

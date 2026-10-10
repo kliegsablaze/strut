@@ -1741,6 +1741,121 @@ static void dice(void) {
     }
 }
 
+/* A pass through the kit as it stands: each pad once, 0.2 s apart, through
+ * the Kit page, its samples loaded first. The loudness over all of it in
+ * dB; *peak its peak. */
+static double kit_pass(strut_t *s, double *peak) {
+    strut_render(s, L, R, 128);
+    for (int k = 0; k < 4; k++) smp_service(&s->lib, 0);
+    const int n = STRUT_SR * 4, gap = STRUT_SR / 5;
+    double pk = 0;
+    for (int at = 0, h = 0; at < n; at += 128) {
+        if (h < STRUT_PADS && at >= h * gap) strut_note_on(s, STRUT_NOTE0 + h, 100), h++;
+        const int m = n - at < 128 ? n - at : 128;
+        strut_render(s, L + at, R + at, m);
+        strut_kit(s, L + at, R + at, m);
+    }
+    for (int k = 0; k < n; k++) pk = fmax(pk, fmax(fabs(L[k]), fabs(R[k])));
+    *peak = pk;
+    return 20 * log10(fmax(rms_of(L, 0, n), 1e-9));
+}
+
+/* Pad > SOUND and Kit > KIT: fixed sounds and kits, each one step back for
+ * DICE however far the knob turned, and never loaded by a saved kit. */
+static void picks(void) {
+    void *p = A->create_instance(".", "");
+    strut_t *s = p;
+    float s0[P_COUNT], s1[P_COUNT];
+    CHECK(!strcmp(get(p, "p02_sound"), "Own"), "SOUND starts on Own, the pad's own sound");
+    A->set_param(p, "p02_level", "0.5");
+    memcpy(s0, s->pad[1].p, sizeof(s0));
+    A->set_param(p, "p02_sound", "Kick 1");
+    A->set_param(p, "pad_press", "1");
+    A->set_param(p, "p02_sound", "Kick 2");
+    A->set_param(p, "p02_sound", "Kick 3");
+    memcpy(s1, s->pad[1].p, sizeof(s1));
+    CHECK(!same(s0, s1, P_DICE) && !strcmp(get(p, "p02_sound"), "Kick 3") && s1[P_LEVEL] == 0.5f,
+          "SOUND puts a sound on the pad, names it, and keeps its LEVEL");
+    A->set_param(p, "p05_sound", "Kick 3");
+    CHECK(same(s->pad[4].p + 1, s1 + 1, P_LEVEL - 1), "a SOUND is the same sound on any pad");
+    A->set_param(p, "p02_dice", "Back");
+    CHECK(same(s->pad[1].p, s0, P_DICE), "one Finish > DICE Back undoes a whole turn of SOUND");
+    A->set_param(p, "p02_dice", "Roll");
+    CHECK(same(s->pad[1].p, s1, P_DICE), "and Roll brings the pick back");
+    A->set_param(p, "p02_dice", "Roll");
+    CHECK(!strcmp(get(p, "p02_sound"), "Own"), "a roll is the pad's own sound again");
+
+    float before[STRUT_PADS][P_COUNT], after[STRUT_PADS][P_COUNT];
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(before[i], s->pad[i].p, sizeof(before[i]));
+    A->set_param(p, "kit", "Dust");
+    A->set_param(p, "kit", "Hall");
+    int changed = 0;
+    for (int i = 0; i < STRUT_PADS; i++) changed += !same(before[i], s->pad[i].p, P_DICE);
+    CHECK(changed == STRUT_PADS && !strcmp(get(p, "kit"), "Hall") && s->g[G_SIZE] > 0.8f,
+          "KIT loads all sixteen pads and the Kit page (%d)", changed);
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(after[i], s->pad[i].p, sizeof(after[i]));
+    A->set_param(p, "kit_dice", "Back");
+    int back = 0;
+    for (int i = 0; i < STRUT_PADS; i++) back += same(before[i], s->pad[i].p, P_DICE);
+    CHECK(back == STRUT_PADS, "one Kit > DICE Back brings the kit before (%d)", back);
+    A->set_param(p, "kit", "Hall");
+    A->set_param(p, "p03_tune", "3");
+    static char buf[131072];
+    A->get_param(p, "state", buf, sizeof(buf));
+    void *q = A->create_instance(".", "");
+    A->set_param(q, "state", buf);
+    CHECK(!strcmp(get(q, "kit"), "Hall") && ((strut_t *)q)->pad[2].p[P_TUNE] == 3.0f,
+          "a saved kit names its KIT and loads as saved, not as the factory kit");
+    A->destroy_instance(q);
+    A->destroy_instance(p);
+
+    /* every SOUND plays, finite and under 0.95 */
+    int bad = 0, quiet = 0;
+    double lo = 99, hi = -99;
+    for (int n = 1; n < DICE_SOUNDS; n++) {
+        strut_t *t = fresh();
+        dice_sound(t->pad[0].p, n);
+        const int m = hit_pad(t, 0, 4.0f);
+        double pk = 0;
+        int finite = 1;
+        for (int k = 0; k < m; k++) {
+            finite &= isfinite(L[k]) && isfinite(R[k]);
+            pk = fmax(pk, fmax(fabs(L[k]), fabs(R[k])));
+        }
+        for (int k = 0; k < m; k++) L[k] = 0.5f * (L[k] + R[k]);
+        const double db = 20 * log10(fmax(loudest(m), 1e-9));
+        if (!finite || pk >= 0.95) bad++, printf("  %s: peak %.2f\n", DICE_SOUND_NAMES[n], pk);
+        if (pk < 0.05) quiet++, printf("  %s: quiet, peak %.3f\n", DICE_SOUND_NAMES[n], pk);
+        lo = fmin(lo, db), hi = fmax(hi, db);
+        printf("%s %s %.1f", n == 1 ? "picks: SOUNDs" : ",", DICE_SOUND_NAMES[n], db);
+        smp_stop(&t->lib);
+        free(t);
+    }
+    CHECK(!bad && !quiet, "every SOUND plays, finite, under 0.95 (%d bad, %d quiet)", bad, quiet);
+    printf("\npicks: SOUNDs loudness %.1f .. %.1f dB\n", lo, hi);
+
+    /* every factory kit plays, finite, under full scale, near the others */
+    double db[DICE_KITS];
+    lo = 99, hi = -99, bad = 0;
+    printf("picks: kits");
+    for (int k = 1; k < DICE_KITS; k++) {
+        strut_t *t = fresh();
+        float kit[STRUT_PADS][P_COUNT];
+        for (int i = 0; i < STRUT_PADS; i++) memcpy(kit[i], t->pad[i].p, sizeof(kit[i]));
+        dice_kit(k, &kit[0][0], t->g);
+        for (int i = 0; i < STRUT_PADS; i++) memcpy(t->pad[i].p, kit[i], sizeof(kit[i]));
+        double pk;
+        db[k] = kit_pass(t, &pk);
+        bad += !isfinite(db[k]) || pk >= 1.0;
+        lo = fmin(lo, db[k]), hi = fmax(hi, db[k]);
+        printf(" %s %.1f (peak %.2f)", DICE_KIT_NAMES[k], db[k], pk);
+        smp_stop(&t->lib);
+        free(t);
+    }
+    printf("\n");
+    CHECK(!bad && hi - lo <= 4.0, "every kit plays, under full scale, within 4 dB of the others (%.1f)", hi - lo);
+}
+
 /* `state` saves the kit and loads it back exactly, keeps no DICE turn, and
  * answers even for an untouched kit (the host retries a slot that does not). */
 static void state(void) {
@@ -1829,6 +1944,7 @@ int main(int argc, char **argv) {
     focus();
     sample_levels();
     dice();
+    picks();
     state();
     heal();
     printf("%s: %d checks, %d failed\n", fails ? "FAIL" : "ok", checks, fails);

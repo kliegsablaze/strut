@@ -50,6 +50,8 @@ static void param_json(sb_t *b, const param_def_t *d) {
          * only when the knob is let go, so one turn is one roll */
         if (d->options == STRUT_DICE_OPTIONS)
             sb_printf(b, ",\"peek\":false,\"turn\":\"absolute\",\"commit\":\"release\"");
+        /* KIT: the list follows the knob, and the kit loads where it stops */
+        if (d->options == DICE_KIT_NAMES) sb_printf(b, ",\"commit\":\"release\"");
     } else if (d->kind == PK_INT) {
         sb_printf(b, "\"type\":\"int\",\"min\":%d,\"max\":%d,\"default\":%d", (int)d->min, (int)d->max, (int)d->def);
         if (d->unit) sb_printf(b, ",\"unit\":\"%s\"", d->unit);

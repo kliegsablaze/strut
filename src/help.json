@@ -1,14 +1,265 @@
 {
+  "title": "Strut",
   "children": [
     {
-      "title": "Strut",
+      "title": "Overview",
       "lines": [
-        "A drum instrument.",
-        "Sixteen pads, each",
-        "its own sound.",
+        "A drum instrument:",
+        "sixteen pads, each",
+        "its own drum.",
         "",
-        "Hit a pad to edit",
-        "it."
+        "Each drum is built",
+        "from three engines:",
+        "Skin, a resonating",
+        "body; Wave, an",
+        "oscillator; and",
+        "Noise, noise or a",
+        "sample.",
+        "",
+        "Six pages, the same",
+        "for every pad."
+      ]
+    },
+    {
+      "title": "Getting started",
+      "lines": [
+        "Put Strut in a synth",
+        "slot and hit a pad.",
+        "The pages now edit",
+        "that pad.",
+        "",
+        "Turn Pad > SOUND for",
+        "a starting sound, or",
+        "Finish > DICE right",
+        "for a new one.",
+        "",
+        "Kit > KIT picks a",
+        "whole kit; Kit >",
+        "DICE rolls one."
+      ]
+    },
+    {
+      "title": "Pages",
+      "lines": [
+        "Pad: the mix of the",
+        "three engines, and",
+        "the moves for all of",
+        "them.",
+        "",
+        "Skin, Wave, Noise:",
+        "one engine each,",
+        "with a MOD switch",
+        "for its modulator.",
+        "",
+        "Finish: the pad's",
+        "level, pan and",
+        "effects.",
+        "",
+        "Kit: the room and",
+        "the whole kit."
+      ]
+    },
+    {
+      "title": "Pad",
+      "lines": [
+        "SOUND: a starting",
+        "sound. Own is the",
+        "pad as it is.",
+        "",
+        "TUNE, DECAY: all",
+        "three engines' pitch",
+        "and length together.",
+        "",
+        "COLOR: darker left,",
+        "thinner right.",
+        "",
+        "SKIN, WAVE, NOISE:",
+        "each engine's level.",
+        "",
+        "SPACE: this pad's",
+        "send to the room."
+      ]
+    },
+    {
+      "title": "Skin",
+      "lines": [
+        "A body that rings,",
+        "like a drum head or",
+        "a bar.",
+        "",
+        "PITCH and RING: its",
+        "note and how long it",
+        "rings.",
+        "",
+        "HIT: what strikes",
+        "it. Click, Soft,",
+        "Burst, or the Wave",
+        "or Noise engine.",
+        "",
+        "SNAP: how long the",
+        "strike lasts.",
+        "",
+        "METAL: harder,",
+        "clangy overtones.",
+        "TONE: brightness.",
+        "MODE: Low, Band or",
+        "High."
+      ]
+    },
+    {
+      "title": "Wave",
+      "lines": [
+        "An oscillator.",
+        "PITCH, and BEND: a",
+        "drop or rise at the",
+        "start of each hit.",
+        "",
+        "DECAY: how long it",
+        "sounds.",
+        "",
+        "TABLE and WAVE: its",
+        "shape. FM: Skin",
+        "bends its pitch.",
+        "RING: ring",
+        "modulation."
+      ]
+    },
+    {
+      "title": "Noise",
+      "lines": [
+        "Noise, or a sample.",
+        "TABLE lists the",
+        "noises, then the",
+        "sample library, then",
+        "your own samples.",
+        "",
+        "COLOR: darker left,",
+        "thinner right.",
+        "DECAY: how long it",
+        "falls.",
+        "",
+        "With a sample, MODE",
+        "plays it straight",
+        "(Sample), rebuilt",
+        "(Resynth) or as its",
+        "colour alone",
+        "(Noise). START and",
+        "LOOP set where it",
+        "plays."
+      ]
+    },
+    {
+      "title": "Mod",
+      "lines": [
+        "Turn MOD on an",
+        "engine page to Mod",
+        "for its modulator,",
+        "and back to Sound.",
+        "",
+        "KIND: Envelope, LFO,",
+        "Random or Velocity.",
+        "RATE: free left,",
+        "synced right.",
+        "",
+        "CURVE: the engine's",
+        "envelope shape.",
+        "",
+        "Each AIM sends it to",
+        "a knob of that",
+        "engine, or Level, by",
+        "its DEPTH.",
+        "",
+        "Knobs show what you",
+        "set, not the",
+        "movement."
+      ]
+    },
+    {
+      "title": "Finish",
+      "lines": [
+        "LEVEL and PAN.",
+        "",
+        "FLAM: one hit",
+        "becomes three,",
+        "further apart as it",
+        "turns. For claps.",
+        "",
+        "DRIVE: saturation.",
+        "CRUSH: fewer bits",
+        "and a lower rate.",
+        "",
+        "LOW and HIGH:",
+        "shelves, cut or",
+        "boost.",
+        "",
+        "DICE: a new sound",
+        "for this pad."
+      ]
+    },
+    {
+      "title": "Kit",
+      "lines": [
+        "SIZE: the room, from",
+        "small to about four",
+        "seconds. Each pad",
+        "sends to it with Pad",
+        "> SPACE.",
+        "",
+        "GLUE: compresses the",
+        "kit. WARM: saturates",
+        "it. VOL: its volume.",
+        "",
+        "CHOKE: this pad's",
+        "group. Pads in a",
+        "group cut each other",
+        "off, like open and",
+        "closed hats.",
+        "",
+        "KIT: a factory kit,",
+        "loaded when you let",
+        "go. Own is the kit",
+        "as it is.",
+        "",
+        "PAD: the pad the",
+        "pages edit."
+      ]
+    },
+    {
+      "title": "Dice",
+      "lines": [
+        "Turn DICE right for",
+        "a new sound, left to",
+        "go back. Eight steps",
+        "back.",
+        "",
+        "Finish > DICE rolls",
+        "this pad; Kit > DICE",
+        "rolls all sixteen,",
+        "each by its place:",
+        "kicks on 1 and 5,",
+        "snare 2, hats 3 and",
+        "4, and so on.",
+        "",
+        "Rolls are level-",
+        "matched and never",
+        "silent.",
+        "",
+        "A SOUND or KIT pick",
+        "is one step: DICE",
+        "left undoes it."
+      ]
+    },
+    {
+      "title": "Saving",
+      "lines": [
+        "Your kit is saved",
+        "with the set, and",
+        "with My Presets on",
+        "the slot.",
+        "",
+        "Loading brings back",
+        "the pads as you left",
+        "them."
       ]
     }
   ]

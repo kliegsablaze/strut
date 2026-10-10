@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.9.1"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.10.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -75,7 +75,7 @@ typedef enum {
  * state: one per engine page, shared by every pad, never saved. */
 typedef enum {
     G_SKIN_VIEW, G_WAVE_VIEW, G_NOISE_VIEW,
-    G_SIZE, G_GLUE, G_WARM, G_VOL, G_CHOKE, G_DICE,
+    G_SIZE, G_GLUE, G_WARM, G_VOL, G_CHOKE, G_KIT, G_DICE,
     G_COUNT
 } global_param_t;
 
@@ -145,6 +145,7 @@ typedef struct {
     dice_hist_t dice;           /* Kit > DICE's rolls of every pad */
     float rolls[DICE_SLOTS][STRUT_PADS][P_COUNT];
     uint32_t dice_rng;
+    int picking;                /* what the last write picked: 1 + pad for SOUND, -1 a kit, 0 neither */
 } strut_t;
 
 void strut_init(strut_t *s);
@@ -158,6 +159,10 @@ void strut_press(strut_t *s);   /* the host's "a finger did that" */
 /* A turn of Finish > DICE on pad (0..15), or of Kit > DICE with pad -1:
  * DICE_ROLL or DICE_BACK (dice.h). */
 void strut_dice(strut_t *s, int pad, int way);
+/* Pad > SOUND, and Kit > KIT (k 0 "Own", then the factory kits): one step for DICE Back however far they
+ * turn (`again` while the same knob is still turning). */
+void strut_sound(strut_t *s, int pad, int n, int again);
+void strut_load_kit(strut_t *s, int k, int again);
 
 int strut_contract_hierarchy(char *buf, int len);
 int strut_contract_params(char *buf, int len);

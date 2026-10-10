@@ -378,12 +378,13 @@ static void fx(float *p, uint32_t *r) {
 
 /* ---- a roll ---- */
 
-void dice_roll(float *p, int pad, int kit, uint32_t *rng) {
-    const float level = p[P_LEVEL], pan = p[P_PAN], choke = p[P_CHOKE], space = p[P_SPACE];
+/* Every knob back to its default (DICE's own turn aside), then a sound of
+ * `role`; `pad` places a tom's pitch. */
+static void roll(float *p, dice_role_t role, int pad, uint32_t *rng) {
     for (int k = 0; k < P_COUNT; k++)
         if (k != P_DICE) p[k] = STRUT_PAD_PARAMS[k].def;
     p[P_SKIN] = 0.0f;
-    switch (dice_role(pad)) {
+    switch (role) {
     case ROLE_KICK: kick(p, rng); break;
     case ROLE_SNARE: snare(p, rng); break;
     case ROLE_CLAP: clap(p, rng); break;
@@ -397,14 +398,102 @@ void dice_roll(float *p, int pad, int kit, uint32_t *rng) {
     case ROLE_BASS: bass(p, rng); break;
     default: fx(p, rng); break;
     }
-    if (!kit) {
-        p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke, p[P_SPACE] = space;
-        return;
-    }
-    /* the kit's mix: hats choke each other, toms spread low to high, the
-     * percussion either side */
+}
+
+/* The kit's mix: hats choke each other, toms spread low to high, the
+ * percussion either side. */
+static void mix(float *p, int pad) {
     const dice_role_t role = dice_role(pad);
     p[P_CHOKE] = role == ROLE_HAT || role == ROLE_OPEN ? 1.0f : 0.0f;   /* group A */
     p[P_PAN] = role == ROLE_TOM ? 0.3f * (float)(pad - 9)
              : role == ROLE_PERC ? (pad == 11 ? -0.25f : 0.25f) : 0.0f;
+}
+
+void dice_roll(float *p, int pad, int kit, uint32_t *rng) {
+    const float level = p[P_LEVEL], pan = p[P_PAN], choke = p[P_CHOKE], space = p[P_SPACE];
+    roll(p, dice_role(pad), pad, rng);
+    if (kit) mix(p, pad);
+    else p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke, p[P_SPACE] = space;
+}
+
+/* ---- the SOUND library ---- */
+
+/* Each SOUND is one roll of its role, from a seed of its own, so it is the
+ * same sound every time (as long as the rolls and the sample library stay
+ * as they are). The names say the role, not a promise of the timbre. */
+const char *const DICE_SOUND_NAMES[DICE_SOUNDS] = {
+    "Own",
+    "Kick 1", "Kick 2", "Kick 3", "Kick 4", "Kick 5", "Kick 6", "Kick 7",
+    "Snare 1", "Snare 2", "Snare 3", "Snare 4", "Clap 1", "Clap 2", "Clap 3", "Rim 1", "Rim 2",
+    "Hat 1", "Hat 2", "Hat 3", "Hat 4", "Open 1", "Open 2", "Cymbal 1", "Cymbal 2",
+    "Tom 1", "Tom 2", "Tom 3", "Tom 4", "Perc 1", "Perc 2", "Perc 3", "Perc 4",
+    "Bell 1", "Bell 2", "Bell 3", "Bass 1", "Bass 2", "FX 1", "FX 2", "FX 3",
+};
+
+static const struct { dice_role_t role; int count; } SOUND_ROLES[] = {
+    { ROLE_KICK, 7 }, { ROLE_SNARE, 4 }, { ROLE_CLAP, 3 }, { ROLE_RIM, 2 }, { ROLE_HAT, 4 },
+    { ROLE_OPEN, 2 }, { ROLE_CYMBAL, 2 }, { ROLE_TOM, 4 }, { ROLE_PERC, 4 }, { ROLE_BELL, 3 },
+    { ROLE_BASS, 2 }, { ROLE_FX, 3 },
+};
+
+static uint32_t seed(uint32_t n) {
+    uint32_t r = 0x9E3779B9u * (n + 1u) ^ 0x5BD1E995u;
+    return r ? r : 1u;
+}
+
+void dice_sound(float *p, int n) {
+    if (n <= 0 || n >= DICE_SOUNDS) return;
+    const float level = p[P_LEVEL], pan = p[P_PAN], choke = p[P_CHOKE], space = p[P_SPACE];
+    int i = n - 1, r = 0;
+    while (i >= SOUND_ROLES[r].count) i -= SOUND_ROLES[r++].count;
+    uint32_t rng = seed((uint32_t)n);
+    /* a tom's number is its place low to high, as on pads 9 to 11 */
+    roll(p, SOUND_ROLES[r].role, 8 + (i < 2 ? i : 2), &rng);
+    p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke, p[P_SPACE] = space;
+    p[P_SOUND] = (float)n;
+}
+
+/* ---- the factory kits ---- */
+
+/* Each kit is a kit roll from its own seed, then dressed: how much goes to
+ * the room (all but the kicks, the bass and the closed hat), DRIVE on the
+ * kicks, snares, claps and bass, CRUSH and HIGH on every pad, and the Kit
+ * page. Provisional until the voicing pass. */
+const char *const DICE_KIT_NAMES[DICE_KITS] = {
+    "Own", "Strut", "Dry", "Hall", "Dust", "Hard", "Tape", "Tin", "Club", "Soft", "Cave", "Grit", "Glass",
+};
+
+static const struct {
+    float space, drive, crush, high, size, glue, warm;
+} KITS[DICE_KITS] = {
+    { 0 },
+    { 0.25f, 0.0f,  0.0f,  0.0f,  0.40f, 0.30f, 0.20f },   /* Strut */
+    { 0.0f,  0.0f,  0.0f,  0.0f,  0.40f, 0.20f, 0.0f },    /* Dry */
+    { 0.55f, 0.0f,  0.0f,  -2.0f, 0.85f, 0.20f, 0.10f },   /* Hall */
+    { 0.20f, 0.0f,  0.25f, -6.0f, 0.35f, 0.30f, 0.50f },   /* Dust */
+    { 0.10f, 0.45f, 0.0f,  2.0f,  0.30f, 0.60f, 0.20f },   /* Hard */
+    { 0.20f, 0.15f, 0.0f,  -4.0f, 0.45f, 0.40f, 0.70f },   /* Tape */
+    { 0.15f, 0.0f,  0.55f, 0.0f,  0.25f, 0.20f, 0.0f },    /* Tin */
+    { 0.15f, 0.25f, 0.0f,  1.0f,  0.50f, 0.55f, 0.30f },   /* Club */
+    { 0.30f, 0.0f,  0.0f,  -8.0f, 0.50f, 0.10f, 0.30f },   /* Soft */
+    { 0.45f, 0.10f, 0.0f,  -5.0f, 1.0f,  0.20f, 0.20f },   /* Cave */
+    { 0.10f, 0.60f, 0.35f, 0.0f,  0.30f, 0.50f, 0.40f },   /* Grit */
+    { 0.40f, 0.0f,  0.0f,  4.0f,  0.65f, 0.15f, 0.0f },    /* Glass */
+};
+
+void dice_kit(int k, float *pads, float *g) {
+    if (k <= 0 || k >= DICE_KITS) return;
+    uint32_t rng = seed(1000u + (uint32_t)k);
+    for (int i = 0; i < STRUT_PADS; i++) {
+        float *p = pads + (size_t)i * P_COUNT;
+        roll(p, dice_role(i), i, &rng);
+        mix(p, i);
+        const dice_role_t role = dice_role(i);
+        if (role != ROLE_KICK && role != ROLE_BASS && role != ROLE_HAT) p[P_SPACE] = KITS[k].space;
+        if (role == ROLE_KICK || role == ROLE_SNARE || role == ROLE_CLAP || role == ROLE_BASS)
+            p[P_DRIVE] = p[P_DRIVE] > KITS[k].drive ? p[P_DRIVE] : KITS[k].drive;
+        p[P_CRUSH] = p[P_CRUSH] > KITS[k].crush ? p[P_CRUSH] : KITS[k].crush;
+        p[P_HIGH] += KITS[k].high;
+    }
+    g[G_SIZE] = KITS[k].size, g[G_GLUE] = KITS[k].glue, g[G_WARM] = KITS[k].warm;
 }

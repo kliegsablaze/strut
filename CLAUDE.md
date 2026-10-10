@@ -182,24 +182,26 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-07, 0.8.1)
+## Where things stand (2026-10-09, 0.10.0)
 
-- **New since 0.7.0:**
-  - DICE (0.8.0): Finish > DICE rolls the focused pad, Kit > DICE the whole
-    kit, by the role layout in DESIGN.md, eight steps back, level-matched
-    by a measured table (`src/dsp/levels.c`, made by `tools/levels.c`);
-  - `state` (0.8.1): kits save and load with the set, DICE never rolls on
-    load;
-  - `scripts/build.sh` works with the local gcc 12 image again (no fmax
-    reductions in loops: gcc 12 crashes vectorising them).
-  - 0.8.1 is installed on the user's Move; nothing heard yet.
-- **Before release** (the user asked to release soon, 2026-10-07): hear
-  DICE, Finish, the modulators, the Kit page, samples and Resynth; the
-  knob-minimum and voicing checks; then ask for the go-ahead.
-- **Next:** the SOUND library and factory kits, help.json (cover DICE),
-  the README.
-- **Open questions for the user:** the kit layout DICE rolls by; Skin with
-  HIT Soft, MODE High and high PITCH peaks near 1.5 (DICE avoids it); a
-  held step while turning DICE locks a roll to the step.
-- **Earlier** (0.7.0 and before): see git history for the fuller notes;
-  CPU worst case near 22 % of the 25 % allowed.
+- **Released:** 0.9.1 is public (GitHub release, tarball), and the catalog
+  PR to Schwung is open. 0.10.0 is pushed, not released.
+- **New since 0.8.1:**
+  - SPACE starts dry; a pad or the room gone to NaN is dropped and logged,
+    not left to silence Strut (0.8.2);
+  - layout (0.9.0): Pad ends in SPACE (each pad's send to the room), Finish
+    starts with LEVEL, CHOKE moved to the Kit page for the focused pad;
+  - Pad > SOUND picks 40 fixed sounds, and Kit > KIT holds the factory kits,
+    each undone by one DICE Back (0.10.0, DESIGN.md *SOUND and KIT*);
+  - help.json and the README cover all of it.
+- **The user's rule on pages (2026-10-09):** keep it to six, as few as
+  Quilt; put new things on a free knob, never a new page.
+- **Next:** more engine work (the user wants it before the kits). Then the
+  **30 factory kits**: designed by hand, sounding great, across genres,
+  from acoustic to electronic to experimental. The 12 kits there now are
+  placeholders.
+- **Not heard on the device yet:** DICE, SOUND, KIT, the modulators,
+  samples and Resynth, per-pad SPACE. The silence after turning Pad > DECAY
+  down (2026-10-07) has no root cause yet; the log now names the pad.
+- **Host noise, not ours:** `param-slow ... synth:pad_press took 2 ms` is the
+  host's handling of the key (DESIGN.md, *Implementation notes*).

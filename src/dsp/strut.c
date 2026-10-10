@@ -89,6 +89,34 @@ void strut_dice(strut_t *s, int pad, int way) {
     s->g[G_DICE] = (float)way;
 }
 
+/* A pick (SOUND, a factory kit) is a new step in a DICE's history: what was
+ * there is kept, so DICE Back brings it back. Picks in a row, one knob
+ * turning, share the step, so a long turn costs one step, not eight. */
+static void dice_push(dice_hist_t *h, float *slots, const float *cur, size_t n) {
+    memcpy(slots + (size_t)(h->at % DICE_SLOTS) * n, cur, n * sizeof(float));
+    h->at = h->newest = h->at + 1;
+}
+
+void strut_sound(strut_t *s, int pad, int n, int again) {
+    pad_t *p = &s->pad[pad];
+    if (n <= 0 || n >= DICE_SOUNDS) return;
+    if (!again) dice_push(&p->dice, &p->rolls[0][0], p->p, P_COUNT);
+    dice_sound(p->p, n);
+}
+
+void strut_load_kit(strut_t *s, int k, int again) {
+    if (k <= 0 || k >= DICE_KITS) return;
+    float kit[STRUT_PADS][P_COUNT];
+    for (int i = 0; i < STRUT_PADS; i++) memcpy(kit[i], s->pad[i].p, sizeof(kit[i]));
+    if (!again) dice_push(&s->dice, &s->rolls[0][0][0], &kit[0][0], STRUT_PADS * P_COUNT);
+    dice_kit(k, &kit[0][0], s->g);
+    for (int i = 0; i < STRUT_PADS; i++) {
+        memcpy(s->pad[i].p, kit[i], sizeof(kit[i]));
+        s->pad[i].dice = (dice_hist_t){ 0, 0 };
+    }
+    s->g[G_KIT] = (float)k;
+}
+
 /* FLAM's spacing: 2 to 50 ms, nothing at zero. */
 static int flam_gap(const float *p) {
     return (int)(0.002f * powf(25.0f, p[P_FLAM]) * STRUT_SR);
@@ -630,6 +658,9 @@ static void on_midi(void *instance, const uint8_t *msg, int len, int source) {
 static void set_param(void *instance, const char *key, const char *val) {
     strut_t *s = instance;
     int pad, k;
+    /* a pad press or focus move between two picks still counts as one turn */
+    const int was = s->picking;
+    if (strcmp(key, "pad") && strcmp(key, "pad_press")) s->picking = 0;
     if (!strcmp(key, "pad")) {
         const int n = atoi(val);
         if (n >= 1 && n <= STRUT_PADS) focus(s, n - 1);
@@ -637,12 +668,18 @@ static void set_param(void *instance, const char *key, const char *val) {
         strut_press(s);
     } else if (!strcmp(key, "state")) {
         read_state(s, val);
-    } else if ((k = pad_key(key, &pad)) >= 0) {
+    } else if ((k = pad_key(key, &pad)) >= 0 && k == P_SOUND) {
+        float n = 0;
+        write_value(&STRUT_PAD_PARAMS[k], &n, val);
+        strut_sound(s, pad, (int)n, was == pad + 1);
+        s->picking = pad + 1;
+    } else if (k >= 0) {
         write_value(&STRUT_PAD_PARAMS[k], &s->pad[pad].p[k], val);
         if (k == P_DICE) strut_dice(s, pad, (int)s->pad[pad].p[k]);
     } else if ((k = global_key(key)) >= 0) {
         write_value(&STRUT_GLOBALS[k], k == G_CHOKE ? &s->pad[s->focus].p[P_CHOKE] : &s->g[k], val);
         if (k == G_DICE) strut_dice(s, -1, (int)s->g[k]);
+        if (k == G_KIT) strut_load_kit(s, (int)s->g[k], was == -1), s->picking = -1;
     }
 }
 

@@ -40,4 +40,18 @@ const char *dice_role_name(dice_role_t r);
  * PAN, CHOKE, SPACE) is rolled too; a pad's own roll keeps it. */
 void dice_roll(float *p, int pad, int kit, uint32_t *rng);
 
+/* Pad > SOUND's options: "Own" (the pad's own sound, nothing picked), then
+ * the library, each a fixed roll of its role. dice_sound puts sound n on
+ * p, keeping its place in the mix; 0 does nothing. */
+#define DICE_SOUNDS 41
+extern const char *const DICE_SOUND_NAMES[DICE_SOUNDS];
+void dice_sound(float *p, int n);
+
+/* Kit > KIT's options: "Own" (the kit as it is), then the factory kits.
+ * dice_kit puts kit k (1 on) onto all sixteen pads (STRUT_PADS rows of
+ * P_COUNT) and the Kit page's knobs g. */
+#define DICE_KITS 13
+extern const char *const DICE_KIT_NAMES[DICE_KITS];
+void dice_kit(int k, float *pads, float *g);
+
 #endif
