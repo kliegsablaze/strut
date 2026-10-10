@@ -139,8 +139,88 @@ float levels_measure(int t, float *l, float *r, float *pk) {
 
 /* ---- the roles ---- */
 
+/* A setting a style keeps exactly for SOUND (r NULL), or rolled near it
+ * for DICE. */
+static float near(uint32_t *r, float lo, float hi) { return r ? in(r, lo, hi) : 0.5f * (lo + hi); }
+
+/* Skin as a kick's beater: a click high above, gone in 15 ms. */
+static void beater(float *p, uint32_t *r, float level, float pitch) {
+    p[P_SKIN] = level;
+    p[P_S_PITCH] = roundf(near(r, pitch - 2.0f, pitch + 2.0f));
+    p[P_S_RING] = 0.0f, p[P_S_HIT] = HIT_CLICK, p[P_S_SNAP] = 0.0f;
+    p[P_S_TONE] = 1.0f, p[P_S_MODE] = MODE_HIGH;
+}
+
+/* Wave as a kick's body: a sine bent down into place. */
+static void body(float *p, uint32_t *r, float pitch, float bend, float decay) {
+    p[P_WAVE] = 1.0f;
+    p[P_W_PITCH] = roundf(near(r, pitch - 1.0f, pitch + 1.0f));
+    p[P_W_TABLE] = WT_ANALOG, p[P_W_WAVE] = near(r, 0.0f, 0.06f);
+    p[P_W_BEND] = near(r, bend - 0.05f, bend + 0.05f);
+    p[P_W_DECAY] = near(r, decay - 0.04f, decay + 0.04f);
+}
+
+/* The kicks by style, each a SOUND (Kick 1 to 7) and a DICE roll. Each
+ * lands within about 2 dB of a recorded kick at the same faders (-11 dB
+ * over its loudest 400 ms, after the make-up), the hard one a little over.
+ * SOUND keeps the pad's LEVEL, so a style's loudness is in its engine
+ * faders and DRIVE (whose ceiling, once reached, is the level). (Rejected:
+ * rolls of one Skin recipe, 0.10.0: seven soft thumps 9 dB under a
+ * recorded kick, heard as too soft, 2026-10-09.) */
+enum { KICK_SOFT, KICK_ROUND, KICK_DANCE, KICK_BOOM, KICK_TIGHT, KICK_FM, KICK_HARD, KICKS };
+
+static void kick_style(float *p, uint32_t *r, int style) {
+    switch (style) {
+    case KICK_SOFT:             /* a felt beater on a deep drum */
+        p[P_SKIN] = 0.95f;
+        p[P_S_PITCH] = roundf(near(r, -4.0f, 0.0f));
+        p[P_S_RING] = near(r, 0.5f, 0.6f);
+        p[P_S_HIT] = HIT_SOFT, p[P_S_SNAP] = near(r, 0.5f, 0.6f);
+        p[P_S_TONE] = near(r, 0.3f, 0.4f), p[P_S_MODE] = MODE_LOW;
+        pitch_drop(p, P_S_KIND, near(r, 0.25f, 0.35f), 0.05f);
+        break;
+    case KICK_ROUND:            /* a played kick drum: beater, shell, a little air */
+        p[P_SKIN] = 0.95f;
+        p[P_S_PITCH] = roundf(near(r, -1.0f, 3.0f));
+        p[P_S_RING] = near(r, 0.45f, 0.55f);
+        p[P_S_HIT] = HIT_CLICK, p[P_S_SNAP] = near(r, 0.25f, 0.35f);
+        p[P_S_TONE] = near(r, 0.55f, 0.65f), p[P_S_METAL] = 0.1f, p[P_S_MODE] = MODE_LOW;
+        pitch_drop(p, P_S_KIND, near(r, 0.35f, 0.45f), 0.04f);
+        noise_table(p, NT_PINK, 0.03f, 0.3f, 0.55f);
+        p[P_DRIVE] = 0.45f;
+        break;
+    case KICK_DANCE:            /* four to the floor: a bent sine, a click, pushed */
+        beater(p, r, 0.6f, 48.0f);
+        body(p, r, -1.0f, 0.65f, 0.55f);
+        p[P_DRIVE] = near(r, 0.4f, 0.5f);
+        break;
+    case KICK_BOOM:             /* a long sine, the tuned boom under hip hop */
+        beater(p, r, 0.45f, 36.0f);
+        body(p, r, -5.0f, 0.45f, 0.74f);
+        p[P_WAVE] = 0.85f, p[P_DRIVE] = 0.15f;
+        break;
+    case KICK_TIGHT:            /* minimal: short, high, a tick and a blip */
+        beater(p, r, 0.55f, 52.0f);
+        body(p, r, 5.0f, 0.55f, 0.42f);
+        p[P_DRIVE] = 0.6f;
+        break;
+    case KICK_FM:               /* Skin's ring bends the sine: a growl that settles */
+        p[P_S_PITCH] = roundf(near(r, 17.0f, 21.0f));
+        p[P_S_RING] = near(r, 0.3f, 0.4f), p[P_S_MODE] = MODE_BAND;
+        body(p, r, 0.0f, 0.5f, 0.5f);
+        p[P_W_FM] = near(r, 0.45f, 0.65f);
+        p[P_DRIVE] = 0.5f;
+        break;
+    default:                    /* hard: a sine driven square, dived from high */
+        beater(p, r, 0.5f, 50.0f);
+        body(p, r, 2.0f, 0.75f, 0.38f);
+        p[P_DRIVE] = 1.0f;
+        break;
+    }
+}
+
 static void kick(float *p, uint32_t *r) {
-    if (chance(r, 0.2f) && noise_sample(p, r, "Kick", -23.0f)) {
+    if (chance(r, 0.2f) && noise_sample(p, r, "Kick", -17.0f)) {
         p[P_N_DECAY] = secs(in(r, 0.6f, 1.2f));     /* some of the files ring for seconds */
         p[P_SKIN] = chance(r, 0.5f) ? in(r, 0.5f, 0.65f) : 0.0f;   /* under it, a body */
         p[P_S_PITCH] = roundf(in(r, -5.0f, 2.0f));
@@ -149,25 +229,7 @@ static void kick(float *p, uint32_t *r) {
         p[P_S_MODE] = MODE_LOW;
         return;
     }
-    p[P_SKIN] = 0.8f;
-    p[P_S_PITCH] = roundf(in(r, -5.0f, 3.0f));
-    p[P_S_RING] = secs(in(r, 0.25f, 0.9f));
-    p[P_S_HIT] = chance(r, 0.6f) ? HIT_CLICK : HIT_SOFT;
-    p[P_S_SNAP] = snap(in(r, 0.5f, 5.0f));
-    p[P_S_METAL] = chance(r, 0.3f) ? in(r, 0.0f, 0.2f) : 0.0f;
-    p[P_S_TONE] = in(r, 0.3f, 0.7f);
-    p[P_S_MODE] = MODE_LOW;
-    pitch_drop(p, P_S_KIND, in(r, 0.45f, 0.8f), in(r, 0.03f, 0.15f));
-    if (chance(r, 0.3f)) {      /* a tone under it, bent down into place */
-        p[P_W_PITCH] = p[P_S_PITCH];
-        p[P_W_TABLE] = WT_ANALOG;
-        p[P_W_WAVE] = in(r, 0.0f, 0.3f);
-        p[P_W_BEND] = in(r, 0.2f, 0.5f);
-        p[P_W_DECAY] = secs(in(r, 0.2f, 0.6f));
-        p[P_WAVE] = in(r, 0.55f, 0.7f);
-    }
-    if (chance(r, 0.15f)) noise_table(p, chance(r, 0.5f) ? NT_WHITE : NT_HISS, in(r, 0.02f, 0.06f), in(r, 0.2f, 0.6f), in(r, 0.45f, 0.6f));
-    if (chance(r, 0.2f)) p[P_DRIVE] = in(r, 0.1f, 0.4f);
+    kick_style(p, r, one_of(r, KICKS));
 }
 
 static void snare(float *p, uint32_t *r) {
@@ -387,10 +449,14 @@ static void fx(float *p, uint32_t *r) {
 
 /* Every knob back to its default (DICE's own turn aside), then a sound of
  * `role`; `pad` places a tom's pitch. */
-static void roll(float *p, dice_role_t role, int pad, uint32_t *rng) {
+static void reset(float *p) {
     for (int k = 0; k < P_COUNT; k++)
         if (k != P_DICE) p[k] = STRUT_PAD_PARAMS[k].def;
     p[P_SKIN] = 0.0f;
+}
+
+static void roll(float *p, dice_role_t role, int pad, uint32_t *rng) {
+    reset(p);
     switch (role) {
     case ROLE_KICK: kick(p, rng); break;
     case ROLE_SNARE: snare(p, rng); break;
@@ -454,8 +520,13 @@ void dice_sound(float *p, int n) {
     int i = n - 1, r = 0;
     while (i >= SOUND_ROLES[r].count) i -= SOUND_ROLES[r++].count;
     uint32_t rng = seed((uint32_t)n);
-    /* a tom's number is its place low to high, as on pads 9 to 11 */
-    roll(p, SOUND_ROLES[r].role, 8 + (i < 2 ? i : 2), &rng);
+    if (SOUND_ROLES[r].role == ROLE_KICK) {     /* each kick is its style, exactly */
+        reset(p);
+        kick_style(p, NULL, i);
+    } else {
+        /* a tom's number is its place low to high, as on pads 9 to 11 */
+        roll(p, SOUND_ROLES[r].role, 8 + (i < 2 ? i : 2), &rng);
+    }
     p[P_LEVEL] = level, p[P_PAN] = pan, p[P_CHOKE] = choke, p[P_SPACE] = space;
     p[P_SOUND] = (float)n;
 }
@@ -477,15 +548,15 @@ static const struct {
     { 0.25f, 0.0f,  0.0f,  0.0f,  0.40f, 0.30f, 0.20f },   /* Strut */
     { 0.0f,  0.0f,  0.0f,  0.0f,  0.40f, 0.20f, 0.0f },    /* Dry */
     { 0.55f, 0.0f,  0.0f,  -2.0f, 0.85f, 0.20f, 0.10f },   /* Hall */
-    { 0.20f, 0.0f,  0.25f, -6.0f, 0.35f, 0.30f, 0.50f },   /* Dust */
+    { 0.20f, 0.0f,  0.25f, -4.0f, 0.35f, 0.30f, 0.50f },   /* Dust */
     { 0.10f, 0.45f, 0.0f,  2.0f,  0.30f, 0.60f, 0.20f },   /* Hard */
     { 0.20f, 0.15f, 0.0f,  -4.0f, 0.45f, 0.40f, 0.70f },   /* Tape */
     { 0.15f, 0.0f,  0.55f, 0.0f,  0.25f, 0.20f, 0.0f },    /* Tin */
     { 0.15f, 0.25f, 0.0f,  1.0f,  0.50f, 0.55f, 0.30f },   /* Club */
     { 0.30f, 0.0f,  0.0f,  -8.0f, 0.50f, 0.10f, 0.30f },   /* Soft */
-    { 0.45f, 0.10f, 0.0f,  -5.0f, 1.0f,  0.20f, 0.20f },   /* Cave */
+    { 0.35f, 0.10f, 0.0f,  -5.0f, 1.0f,  0.20f, 0.20f },   /* Cave */
     { 0.10f, 0.50f, 0.35f, 0.0f,  0.30f, 0.50f, 0.40f },   /* Grit */
-    { 0.40f, 0.0f,  0.0f,  4.0f,  0.65f, 0.15f, 0.0f },    /* Glass */
+    { 0.30f, 0.0f,  0.0f,  4.0f,  0.65f, 0.15f, 0.0f },    /* Glass */
 };
 
 void dice_kit(int k, float *pads, float *g) {

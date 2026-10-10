@@ -41,12 +41,18 @@ static float pole(float hz) {
 void finish_block(const float *p, finish_block_t *b) {
     b->color = color(p[P_COLOR], &b->cf);
 
-    /* DRIVE: pushed up to 30 dB into a soft curve, and brought back so a
-     * loud hit stays about as loud while its quiet parts come up */
+    /* DRIVE: pushed up to 40 dB into a soft curve, and brought back so a
+     * loud hit (0.3) stays about as loud at first; further round, its
+     * ceiling rises 2.5 dB, to about 2 dB under full scale after the
+     * make-up (strut.h), so a hard kick gets louder as well as squarer. A
+     * pad pushed to the ceiling ignores its engines' faders: only LEVEL,
+     * after the finish, turns it down. (Rejected: the level kept all the way with no
+     * make-up, as to 0.11.1: every driven pad was held under -10.7 dB, and
+     * the user heard the kicks as too soft, 2026-10-09.) */
     const float d = p[P_DRIVE];
     b->drive = d > 0.0f;
-    b->g = powf(10.0f, 1.5f * d);
-    b->out = 0.3f / curve(0.3f * b->g);
+    b->g = powf(10.0f, 2.0f * d);
+    b->out = 0.3f * powf(10.0f, 0.125f * d * d) / curve(0.3f * b->g);
 
     /* CRUSH: from 16 bits to 4, and from every sample held to every 16th */
     const float c = p[P_CRUSH];

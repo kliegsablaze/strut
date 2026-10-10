@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.11.1"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.12.0"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -32,6 +32,12 @@
 #define STRUT_CHOKE 220         /* samples a choked pad fades out over, 5 ms */
 #define STRUT_FLAMS 3           /* hits FLAM makes of one */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
+#define LEVEL_REF 0.50119f      /* strut_fader(0.8), LEVEL's default: the engines mix at it */
+/* 6 dB on the way out: to 0.11.1 a kick sat about 9 dB under one of the
+ * library's recorded kicks at full fader, and the user heard it as too
+ * quiet (2026-10-09). After the Kit page, so GLUE, WARM and the room hear
+ * what they always did. */
+#define STRUT_MAKEUP 1.99526f
 
 typedef enum { PK_FLOAT, PK_INT, PK_ENUM } param_kind_t;
 
@@ -120,6 +126,7 @@ typedef struct {
     int flam_in;                /* samples to the next */
     float flam_amp;             /* the hit's strength, as played */
     float space_g;              /* SPACE as the last block left it, so a turn glides; -1 none yet */
+    float level_g;              /* LEVEL's gain, likewise */
     dice_hist_t dice;           /* Finish > DICE's rolls of this pad */
     float rolls[DICE_SLOTS][P_COUNT];
 } pad_t;

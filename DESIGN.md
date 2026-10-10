@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -770,8 +770,11 @@ Rejected for Resynth:
 #### How Finish works (built, 0.3.0)
 
 Each pad's three engines are mixed, then go through Pad COLOR and the
-Finish page in this order: COLOR, DRIVE, CRUSH, LOW, HIGH, then PAN into
-stereo. Each is skipped when at rest, so a pad that uses none costs only
+Finish page in this order: COLOR, DRIVE, CRUSH, LOW, HIGH, then LEVEL and
+PAN into stereo. LEVEL comes last (0.12.0): the engines mix at its default,
+so a pad DRIVE has pushed to its ceiling still turns down. Rejected: LEVEL
+before the finish, as to 0.11.1; once DRIVE reached its ceiling, LEVEL
+hardly moved it. Each is skipped when at rest, so a pad that uses none costs only
 its PAN.
 
 - **Pad COLOR:** a two-pole filter on the whole pad. Low-pass from 20 kHz
@@ -789,9 +792,15 @@ its PAN.
   to the hit played: a grace note at 55 %, a second at 75 %, then the hit.
   Each is a real hit, on its own sample, so a roll builds on Skin as a
   played one does. Claps, flams, ruffs.
-- **DRIVE:** pushed up to 30 dB into a curve that rises straight through
+- **DRIVE:** pushed up to 40 dB into a curve that rises straight through
   zero and levels off smoothly, then brought back down so a loud hit stays
-  about as loud while its quiet parts come up. Its fold-back is smoothed by
+  about as loud while its quiet parts come up. Its ceiling rises 2.5 dB as
+  it turns (0.12.0), to about 2 dB under full scale after the output's
+  make-up: fully round, a kick is a loud square. Once a pad reaches the
+  ceiling, its engines' faders no longer change its level; LEVEL does.
+  Rejected: the level kept all the way with no make-up, as to 0.11.1; every
+  driven pad peaked under -10.7 dB, and the user heard the kicks as too
+  soft and not gnarly enough (2026-10-09). Its fold-back is smoothed by
   taking the curve's area between samples (Parker, Zavalishin and Le Bivic,
   2016), so a high whine is not folded down under a kick.
 - **CRUSH:** from 16 bits down to 4, and from every sample kept to every
@@ -1070,6 +1079,18 @@ own engine, reach most of the same sounds.)
   4 kHz. Rejected: the clap as FLAM's three hits of full-band noise (mostly
   above 8 kHz, the hits blurred into one), and the rim as Skin alone rung
   40 to 100 ms (a pure tone at 440 to 600 Hz, a woodblock).
+- **Kicks by style (0.12.0).** Kick 1 to 7 are designed, not rolled:
+  Soft (a felt beater on a deep Skin), Round (a played kick drum, beater,
+  shell and a breath of Pink), Dance (a bent sine under a click, pushed),
+  Boom (a long tuned sine), Tight (minimal: short and high, a tick and a
+  blip), FM (Skin's ring bending the sine, a growl that settles) and Hard
+  (a sine driven square, dived from four octaves up). A kick pad's DICE
+  rolls one of the seven, varied a little. Each lands within about 2 dB
+  of a recorded kick at the same faders, -11 dB over its loudest 400 ms;
+  Hard a little over. The output's 6 dB make-up came with them: to
+  0.11.1 Strut sat about 9 dB under a recorded drum at full fader.
+  Rejected: kicks as rolls of one Skin recipe, 0.10.0 (seven soft thumps
+  9 dB under a recorded kick).
 - **Rejected: a seventh page for the kits** (the host's preset browser, a
   `list_param` level). The user wants as few pages as Quilt has
   (2026-10-09): six is already a lot, and the Kit page had a knob free.
@@ -1327,8 +1348,9 @@ or turned.
     Move's, which this session cannot check, and noise would be silent for
     its first seconds.
 - **The output** is Quilt's, with one change. VOL (the Kit page's, wired
-  early) glides across the block; a soft limiter above half scale rounds off a
-  stack of pads instead of clipping; then 16 bits, rounded with one step of
+  early) glides across the block, with 6 dB of make-up (0.12.0); a soft
+  limiter above 0.7 of full scale rounds off a stack of pads instead of
+  clipping; then 16 bits, rounded with one step of
   triangular dither, and denormals flushed to zero on the Move.
   - **The dither stays at full depth while any voice sounds**, and fades out
     over a block once all have ended. The user heard quantization grit on the

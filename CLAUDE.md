@@ -182,10 +182,10 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-09, 0.11.0)
+## Where things stand (2026-10-09, 0.12.0)
 
 - **Released:** 0.9.1 is public (GitHub release, tarball), and the catalog
-  PR to Schwung is open. 0.10.0 and 0.11.0 are pushed, not released.
+  PR to Schwung is open. 0.10.0 to 0.12.0 are pushed, not released.
 - **New since 0.8.1:**
   - SPACE starts dry; a pad or the room gone to NaN is dropped and logged,
     not left to silence Strut (0.8.2);
@@ -195,7 +195,11 @@ When the user moves work back to their local machine:
     each undone by one DICE Back (0.10.0, DESIGN.md *SOUND and KIT*);
   - help.json and the README cover all of it;
   - every knob draws a picture in Quilt's style (`src/canvas.js`, 0.11.0,
-    DESIGN.md *Knob pictures*), not yet seen on the device.
+    DESIGN.md *Knob pictures*), seen on the device;
+  - the sound walkthrough with the user, page by page, one knob at a
+    time (started 2026-10-09, on Pad > SOUND): claps and rims rebuilt with
+    CURVE's Clap (0.11.1); then 6 dB of output make-up, a harder DRIVE,
+    LEVEL after the finish and seven kick styles (0.12.0).
 - **The user's rule on pages (2026-10-09):** keep it to six, as few as
   Quilt; put new things on a free knob, never a new page.
 - **Next:** more engine work (the user wants it before the kits). Then the

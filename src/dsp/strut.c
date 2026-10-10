@@ -23,7 +23,7 @@ void strut_init(strut_t *s) {
     s->dither = 0x9E3779B9u;
     s->bpm = 120.0f;
     s->vol_g = -1.0f;
-    for (int i = 0; i < STRUT_PADS; i++) s->lib.want[i] = s->lib.seen[i] = -1, s->pad[i].space_g = -1.0f;
+    for (int i = 0; i < STRUT_PADS; i++) s->lib.want[i] = s->lib.seen[i] = -1, s->pad[i].space_g = s->pad[i].level_g = -1.0f;
 }
 
 static void focus(strut_t *s, int pad) {
@@ -343,7 +343,9 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, float *send, in
     voice_t *v = &p->voice;
     if (!v->active) return;
     float x[STRUT_MAX_BLOCK] = { 0 };
-    v->active = voice_render(v, p->p, strut_fader(p->p[P_LEVEL]), s->bpm, x, frames);
+    /* the engines mix at LEVEL's default; LEVEL itself comes after the
+     * finish, so it turns down a pad DRIVE has pushed to its ceiling */
+    v->active = voice_render(v, p->p, LEVEL_REF, s->bpm, x, frames);
     /* choked: a straight fade to nothing, then the voice is done */
     if (v->choke_n) {
         for (int n = 0; n < frames; n++) {
@@ -366,12 +368,14 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, float *send, in
     finish_block(p->p, &fb);
     float pl[STRUT_MAX_BLOCK] = { 0 }, pr[STRUT_MAX_BLOCK] = { 0 };
     finish_run(&v->fx, &fb, x, pl, pr, frames);
-    /* the pad, and its share of the room by its SPACE, gliding */
+    /* the pad at its LEVEL, and its share of the room by its SPACE, gliding */
     const float s1 = p->p[P_SPACE], s0 = p->space_g < 0.0f ? s1 : p->space_g;
-    p->space_g = s1;
+    const float g1 = strut_fader(p->p[P_LEVEL]) / LEVEL_REF, g0 = p->level_g < 0.0f ? g1 : p->level_g;
+    p->space_g = s1, p->level_g = g1;
     for (int n = 0; n < frames; n++) {
-        l[n] += pl[n], r[n] += pr[n];
-        send[n] += 0.5f * (pl[n] + pr[n]) * (s0 + (s1 - s0) * (float)(n + 1) / (float)frames);
+        const float t = (float)(n + 1) / (float)frames, g = g0 + (g1 - g0) * t;
+        l[n] += g * pl[n], r[n] += g * pr[n];
+        send[n] += 0.5f * g * (pl[n] + pr[n]) * (s0 + (s1 - s0) * t);
     }
     s->sounding++;
 }
@@ -422,10 +426,12 @@ static inline float dither(uint32_t *d) {
     return (a + b) * (1.0f / 65536.0f) - 1.0f;
 }
 
-/* Soft above half scale, so a stack of pads rounds off rather than clips. */
+/* Soft above 0.7 of full scale, so a stack of pads rounds off rather than
+ * clips. (Rejected: soft above half scale, as to 0.11.1: with the make-up
+ * below, every kick's peak would have been squashed.) */
 static inline float limit(float x) {
     float a = fabsf(x);
-    if (a > 0.5f) a = 0.5f + 0.5f * tanhf((a - 0.5f) * 2.0f);
+    if (a > 0.7f) a = 0.7f + 0.3f * tanhf((a - 0.7f) * (1.0f / 0.3f));
     return copysignf(a, x);
 }
 
@@ -462,7 +468,7 @@ static inline int16_t to16(float x, float dg, uint32_t *d, float *e) {
  * across the block, as the pads' levels do. */
 void strut_output(strut_t *s, const float *l, const float *r, int16_t *out, int frames) {
     const float vol = s->g[G_VOL];
-    const float g1 = vol <= -59.9f ? 0.0f : powf(10.0f, vol / 20.0f);
+    const float g1 = vol <= -59.9f ? 0.0f : STRUT_MAKEUP * powf(10.0f, vol / 20.0f);
     const float g0 = s->vol_g < 0.0f ? g1 : s->vol_g;
     s->vol_g = g1;
     const float d0 = s->dither_g, d1 = s->sounding && g1 > 0.0f ? 1.0f : 0.0f;

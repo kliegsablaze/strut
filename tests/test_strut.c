@@ -659,21 +659,24 @@ static void finish(void) {
         free(s);
     }
 
-    /* DRIVE: a sine grows overtones, and a loud hit stays about as loud */
+    /* DRIVE: a sine grows overtones, a loud hit stays about as loud
+     * halfway round, and fully round it is louder, still under full scale */
     {
-        double third[2], peak[2];
-        for (int i = 0; i < 2; i++) {
+        double third[3], peak[3];
+        for (int i = 0; i < 3; i++) {
             strut_t *s = wave_pad();
             s->pad[0].p[P_W_DECAY] = 1.0f;
             s->pad[0].p[P_W_PITCH] = 24;
-            s->pad[0].p[P_DRIVE] = i ? 0.7f : 0.0f;
+            s->pad[0].p[P_DRIVE] = i == 2 ? 1.0f : i ? 0.5f : 0.0f;
             hit(s, 0.5f);
             third[i] = level_at(3 * wave_hz(s->pad[0].p), 4410, 8192) / level_at(wave_hz(s->pad[0].p), 4410, 8192);
             peak[i] = peak_of(L, 0, STRUT_SR / 2);
             free(s);
         }
         CHECK(third[1] > 30 * third[0] + 0.01, "DRIVE adds overtones (third harmonic %.4f, from %.4f)", third[1], third[0]);
-        CHECK(fabs(20 * log10(peak[1] / peak[0])) < 6, "DRIVE keeps a loud hit's level (%+.1f dB)", 20 * log10(peak[1] / peak[0]));
+        CHECK(fabs(20 * log10(peak[1] / peak[0])) < 6, "DRIVE halfway keeps a loud hit's level (%+.1f dB)", 20 * log10(peak[1] / peak[0]));
+        CHECK(20 * log10(peak[2] / peak[0]) > 5 && peak[2] < 1.0, "DRIVE fully round is louder, under full scale (%+.1f dB, peak %.2f)",
+              20 * log10(peak[2] / peak[0]), peak[2]);
     }
 
     /* CRUSH: fully on, a held sample on few levels */
@@ -993,11 +996,11 @@ static void tail(void) {
         strut_render(ref, l, r, 128);
         int all0 = 1;
         for (int i = 0; i < 128; i++) {
-            if (fabs(l[i]) * 32000 < 40 && (out[2 * i] || out[2 * i + 1])) {
-                const double e = out[2 * i] - l[i] * 32000;
+            if (fabs(l[i]) * STRUT_MAKEUP * 32000 < 40 && (out[2 * i] || out[2 * i + 1])) {
+                const double e = out[2 * i] - l[i] * STRUT_MAKEUP * 32000;
                 worst = fmax(worst, fabs(e));
                 rs ^= rs << 13, rs ^= rs >> 17, rs ^= rs << 5;
-                const double v = l[i] * 32000, tp = ((rs & 0xFFFF) + (rs >> 16)) / 65536.0 - 1;
+                const double v = l[i] * STRUT_MAKEUP * 32000, tp = ((rs & 0xFFFF) + (rs >> 16)) / 65536.0 - 1;
                 double x = e, y = rint(v + tp) - v;
                 for (int k = 0; k < 4; k++) {
                     x = lp[k] = a * lp[k] + (1 - a) * x;
