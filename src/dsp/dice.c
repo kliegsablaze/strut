@@ -485,6 +485,15 @@ static void closed_hat(float *p, uint32_t *r, int style) {
     p[P_DRIVE] = 0.5f;
 }
 
+/* Pad > SOUND's open hats, designed: rolled, both came out plain bright
+ * noise and the user heard them as the same (2026-10-10). Open 2 rattles
+ * on Wires, an octave darker and with some tone to it. */
+static void open_hat(float *p, int style) {
+    p[P_SKIN] = 0.0f;
+    if (style == 0) noise_table(p, NT_HISS, 0.77f, 0.61f, 0.9f);
+    else noise_table(p, NT_WIRES, 0.68f, 0.65f, 1.0f);
+}
+
 /* ---- a roll ---- */
 
 /* Every knob back to its default (DICE's own turn aside), then a sound of
@@ -566,6 +575,9 @@ void dice_sound(float *p, int n) {
     } else if (SOUND_ROLES[r].role == ROLE_HAT) {   /* each hat its own table (Hat 1 and 4 were both Wires) */
         reset(p);
         closed_hat(p, NULL, i);
+    } else if (SOUND_ROLES[r].role == ROLE_OPEN) {
+        reset(p);
+        open_hat(p, i);
     } else {
         /* a tom's number is its place low to high, as on pads 9 to 11 */
         roll(p, SOUND_ROLES[r].role, 8 + (i < 2 ? i : 2), &rng);
