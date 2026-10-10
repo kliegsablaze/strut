@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1115,6 +1115,19 @@ own engine, reach most of the same sounds.)
   5 kHz, its strongest peak 24 dB over the median against Open 1's 11),
   both about -11 dB over 50 ms. Rejected for Open 2: Metal (51 dB, a
   tone, not a hat) and a Wave ring under White (barely more tonal).
+- **Toms rebuilt (0.12.7).** The user heard Toms 1 to 4 as quiet, muted
+  sines without character (their pitches spread well, and stay). They
+  were Skin alone on MODE Low, a low-pass at twice the pitch, struck soft
+  over 1 to 8 ms: above 250 Hz 60 to 100 dB down. Now Skin is struck
+  sharp (SNAP 0.5 to 1 ms, Click) on MODE High with METAL 0.15 to 0.25
+  and TONE 0.75 to 0.85; Wave adds the membrane's next mode, 8 semitones
+  (1.59 times) up, on Fold for the shell's overtones, gone in about 0.2 s;
+  Noise a 50 ms White stick; DRIVE 0.45. Their mids (0.5 to 2 kHz) rose
+  by 40 dB or more, to within about 10 dB of the library's toms; about
+  -6 dB over 50 ms, a kick's level over 400 ms. A recorded tom gets the
+  same DRIVE, or it sits 10 dB under. Rejected: DRIVE and a brighter
+  TONE alone (the hit carried nothing up there to brighten), and Wave a
+  further octave up (thinner in 250 to 500 Hz).
 - **Kicks by style (0.12.0).** Kick 1 to 7 are designed, not rolled:
   Soft (a felt beater on a deep Skin), Round (a played kick drum, beater,
   shell and a breath of Pink), Dance (a bent sine under a click, pushed),

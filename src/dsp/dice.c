@@ -344,17 +344,33 @@ static void tom(float *p, uint32_t *r, int pad) {
     if (chance(r, 0.2f) && noise_sample(p, r, "Tom", -24.0f)) {
         p[P_SKIN] = 0.0f;
         p[P_N_PITCH] = (float)(4 * (pad - 9)) + roundf(in(r, -1.0f, 1.0f));
+        p[P_DRIVE] = 0.45f;     /* as the made toms, or it sits 10 dB under them */
         return;
     }
-    p[P_SKIN] = 0.8f;
+    /* Skin the head's fundamental, struck sharp and left open; Wave its
+     * next mode, a membrane's 1.59 times up (8 semitones), folded for the
+     * shell's overtones and gone sooner; Noise the stick; DRIVE the rest.
+     * To 0.12.6 a tom was Skin alone on MODE Low (a low-pass at twice its
+     * pitch) struck soft over 1 to 8 ms: above 250 Hz it was 60 to 100 dB
+     * down, a sine, and the user heard it as quiet, muted and characterless
+     * (2026-10-10). Now its mids sit within about 10 dB of the library's
+     * toms'. */
+    p[P_SKIN] = 0.65f;
     p[P_S_PITCH] = roundf(in(r, lo, lo + 5.0f));
     p[P_S_RING] = secs(in(r, 0.3f, 0.8f));
-    p[P_S_HIT] = chance(r, 0.5f) ? HIT_SOFT : HIT_CLICK;
-    p[P_S_SNAP] = snap(in(r, 1.0f, 8.0f));
-    p[P_S_METAL] = in(r, 0.0f, 0.2f);
-    p[P_S_TONE] = in(r, 0.4f, 0.8f);
-    p[P_S_MODE] = MODE_LOW;
+    p[P_S_HIT] = HIT_CLICK;
+    p[P_S_SNAP] = snap(in(r, 0.5f, 1.0f));
+    p[P_S_METAL] = in(r, 0.15f, 0.25f);
+    p[P_S_TONE] = in(r, 0.75f, 0.85f);
+    p[P_S_MODE] = MODE_HIGH;
     pitch_drop(p, P_S_KIND, in(r, 0.15f, 0.35f), in(r, 0.05f, 0.2f));
+    p[P_WAVE] = 0.75f;
+    p[P_W_PITCH] = p[P_S_PITCH] + 8.0f;
+    p[P_W_TABLE] = WT_FOLD, p[P_W_WAVE] = in(r, 0.6f, 0.8f);
+    p[P_W_BEND] = 0.55f;
+    p[P_W_DECAY] = secs(in(r, 0.15f, 0.22f));
+    noise_table(p, NT_WHITE, 0.05f, 0.1f, 0.85f);
+    p[P_DRIVE] = 0.45f;
 }
 
 static void perc(float *p, uint32_t *r) {
