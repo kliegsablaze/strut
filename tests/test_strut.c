@@ -679,6 +679,33 @@ static void finish(void) {
               20 * log10(peak[2] / peak[0]), peak[2]);
     }
 
+    /* DRIVE turned while a pad rings: no crackle. Each block's turn is a
+     * big one, in and out of the curve twice; no sample may jump further
+     * than DRIVE held fully round ever makes one jump. */
+    {
+        double jump[2];
+        for (int i = 0; i < 2; i++) {
+            strut_t *s = wave_pad();
+            s->pad[0].p[P_W_DECAY] = 1.0f;
+            s->pad[0].p[P_W_PITCH] = -12;
+            s->pad[0].p[P_DRIVE] = i ? 0.0f : 1.0f;
+            strut_note_on(s, STRUT_NOTE0, 100);
+            const int n = STRUT_SR / 2;
+            for (int k = 0; k < n; k += 128) {
+                if (i) {
+                    const int b = (k / 128) % 50;
+                    s->pad[0].p[P_DRIVE] = (b < 25 ? b : 50 - b) / 24.0f;
+                    if (s->pad[0].p[P_DRIVE] > 1) s->pad[0].p[P_DRIVE] = 1;
+                }
+                strut_render(s, L + k, R + k, 128);
+            }
+            jump[i] = 0;
+            for (int k = 2; k < n; k++) jump[i] = fmax(jump[i], fabs(L[k] - 2 * L[k - 1] + L[k - 2]));
+            free(s);
+        }
+        CHECK(jump[1] <= 1.2 * jump[0], "DRIVE turned while ringing does not crackle (bend %.4f, held round %.4f)", jump[1], jump[0]);
+    }
+
     /* CRUSH: fully on, a held sample on few levels */
     {
         strut_t *s = wave_pad();

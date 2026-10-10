@@ -48,6 +48,8 @@ DESIGN.md saying what actually runs versus what is planned.
   - a voicing pass with the user listening;
   - level-matched presets;
   - under a quarter of the Move's CPU at full load.
+- **Keep Strut to six pages**, as few as Quilt: a new thing goes on a free
+  knob or an option, never a new page (2026-10-09).
 - **Make no requests to Schwung**: no PRs, issues or proposals (the user
   declined one for the host's volume-stage rounding, 2026-10-07). Work within
   what the host already does.
@@ -168,46 +170,3 @@ listen for.
   Its plate reverb (`src/dsp/fx.c`) and modal resonators are ours and may be
   reused.
 - `kliegsablaze/ragtag`: loading WAVs off the audio thread.
-
-## Handing back
-
-When the user moves work back to their local machine:
-
-- Leave DESIGN.md's status line current.
-- Strike through finished Build order steps.
-- Push everything.
-- Leave a short **"Where things stand"** note at the bottom of this file:
-  - what works;
-  - what was tried on the device;
-  - what is next;
-  - open questions for the user.
-
-## Where things stand (2026-10-09, 0.12.0)
-
-- **Released:** 0.9.1 is public (GitHub release, tarball), and the catalog
-  PR to Schwung is open. 0.10.0 to 0.12.0 are pushed, not released.
-- **New since 0.8.1:**
-  - SPACE starts dry; a pad or the room gone to NaN is dropped and logged,
-    not left to silence Strut (0.8.2);
-  - layout (0.9.0): Pad ends in SPACE (each pad's send to the room), Finish
-    starts with LEVEL, CHOKE moved to the Kit page for the focused pad;
-  - Pad > SOUND picks 40 fixed sounds, and Kit > KIT holds the factory kits,
-    each undone by one DICE Back (0.10.0, DESIGN.md *SOUND and KIT*);
-  - help.json and the README cover all of it;
-  - every knob draws a picture in Quilt's style (`src/canvas.js`, 0.11.0,
-    DESIGN.md *Knob pictures*), seen on the device;
-  - the sound walkthrough with the user, page by page, one knob at a
-    time (started 2026-10-09, on Pad > SOUND): claps and rims rebuilt with
-    CURVE's Clap (0.11.1); then 6 dB of output make-up, a harder DRIVE,
-    LEVEL after the finish and seven kick styles (0.12.0).
-- **The user's rule on pages (2026-10-09):** keep it to six, as few as
-  Quilt; put new things on a free knob, never a new page.
-- **Next:** more engine work (the user wants it before the kits). Then the
-  **30 factory kits**: designed by hand, sounding great, across genres,
-  from acoustic to electronic to experimental. The 12 kits there now are
-  placeholders.
-- **Not heard on the device yet:** DICE, SOUND, KIT, the modulators,
-  samples and Resynth, per-pad SPACE. The silence after turning Pad > DECAY
-  down (2026-10-07) has no root cause yet; the log now names the pad.
-- **Host noise, not ours:** `param-slow ... synth:pad_press took 2 ms` is the
-  host's handling of the key (DESIGN.md, *Implementation notes*).

@@ -12,6 +12,8 @@
 typedef struct {
     float c1, c2;           /* COLOR's filter */
     float du, dF;           /* DRIVE: the last input, and its curve's area there */
+    float dy;               /* the last sample into DRIVE, run or not */
+    float dg, dout, dw;     /* DRIVE's push, level and share as the last block left them; dg 0 none yet */
     float held, ph;         /* CRUSH: the sample held, and how far to the next */
     float lo, hi;           /* LOW's and HIGH's one-pole filters */
 } finish_t;
@@ -22,6 +24,7 @@ typedef struct {
     svf_t cf;
     int drive;
     float g, out;           /* DRIVE's push in, and its level back out */
+    float w;                /* how much of the pad goes through DRIVE: it fades in over the knob's first 5% */
     int crush;
     float step, q;          /* CRUSH: samples held, a fraction each; levels a side */
     int shelf;              /* 1 LOW, 2 HIGH, each run only when moved */

@@ -53,6 +53,7 @@ void finish_block(const float *p, finish_block_t *b) {
     b->drive = d > 0.0f;
     b->g = powf(10.0f, 2.0f * d);
     b->out = 0.3f * powf(10.0f, 0.125f * d * d) / curve(0.3f * b->g);
+    b->w = fminf(1.0f, 20.0f * d);
 
     /* CRUSH: from 16 bits to 4, and from every sample held to every 16th */
     const float c = p[P_CRUSH];
@@ -83,7 +84,17 @@ void finish_block(const float *p, finish_block_t *b) {
 void finish_run(finish_t *f, const finish_block_t *b, float *x, float *l, float *r, int n) {
     finish_t s = *f;
     if (!b->color) s.c1 = s.c2 = 0.0f;
-    if (!b->drive) s.du = s.dF = 0.0f;
+    /* DRIVE glides from the last block's setting to this one's, a sample
+     * at a time, and keeps running until it has faded all the way out.
+     * Stepped once a block, a turn while a pad rang crackled (the user,
+     * 2026-10-09): the push spans 40 dB, so each step of the knob jumped a
+     * quiet tail by a fraction of a dB, and switching the curve in or out
+     * jumped by its bend and its half-sample delay. */
+    if (s.dg == 0.0f) s.dg = b->g, s.dout = b->out, s.dw = b->w;
+    const int drive = b->drive || s.dw > 0.0f;
+    if (drive && !(s.dw > 0.0f)) s.du = s.dg * s.dy, s.dF = area(s.du);
+    const float kn = n > 0 ? 1.0f / (float)n : 0.0f;
+    const float dg = (b->g - s.dg) * kn, dout = (b->out - s.dout) * kn, dw = (b->w - s.dw) * kn;
     if (!(b->shelf & 1)) s.lo = 0.0f;
     if (!(b->shelf & 2)) s.hi = 0.0f;
     for (int i = 0; i < n; i++) {
@@ -93,16 +104,17 @@ void finish_run(finish_t *f, const finish_block_t *b, float *x, float *l, float 
             svf_step(&b->cf, &s.c1, &s.c2, y, &lp, &bp, &hp);
             y = b->color == 1 ? lp : hp;
         }
-        if (b->drive) {
+        if (drive) {
             /* the curve, with its fold-back smoothed: its area between
              * this sample and the last, over the step (Parker, Zavalishin
              * and Le Bivic, DAFx 2016). A plain curve pushed 30 dB folds a
              * high whine down under a kick. */
-            const float u = b->g * y, F = area(u), du = u - s.du;
+            s.dg += dg, s.dout += dout, s.dw += dw;
+            const float u = s.dg * y, F = area(u), du = u - s.du;
             const float c = fabsf(du) > 1e-4f ? (F - s.dF) / du : curve(0.5f * (u + s.du));
-            s.du = u, s.dF = F;
-            y = c * b->out;
-        }
+            s.du = u, s.dF = F, s.dy = y;
+            y += s.dw * (c * s.dout - y);
+        } else s.dy = y;
         if (b->crush) {
             s.ph += b->step;
             if (s.ph >= 1.0f) s.ph -= 1.0f, s.held = y;
@@ -120,5 +132,7 @@ void finish_run(finish_t *f, const finish_block_t *b, float *x, float *l, float 
         }
         l[i] += b->pl * y, r[i] += b->pr * y;
     }
+    /* exactly where this block aimed, whatever the sums lost on the way */
+    s.dg = b->g, s.dout = b->out, s.dw = b->w;
     *f = s;
 }

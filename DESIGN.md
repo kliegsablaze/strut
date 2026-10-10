@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -802,7 +802,12 @@ its PAN.
   driven pad peaked under -10.7 dB, and the user heard the kicks as too
   soft and not gnarly enough (2026-10-09). Its fold-back is smoothed by
   taking the curve's area between samples (Parker, Zavalishin and Le Bivic,
-  2016), so a high whine is not folded down under a kick.
+  2016), so a high whine is not folded down under a kick. A turn glides
+  through each block a sample at a time, and the curve fades in over the
+  knob's first 5% (0.12.1). Rejected: stepping once a block, as to 0.12.0;
+  turned while a pad rang, it crackled (the user, 2026-10-09), since each
+  step jumped a quiet tail and switching the curve in or out jumped by its
+  bend and its half-sample delay.
 - **CRUSH:** from 16 bits down to 4, and from every sample kept to every
   16th held, together: grit, then ring, then a broken toy.
 - **LOW** and **HIGH:** gentle shelves, below about 200 Hz and above about
