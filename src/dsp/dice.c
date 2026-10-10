@@ -465,7 +465,7 @@ static void fx(float *p, uint32_t *r) {
  * table is measured to about -10 dB over 50 ms, as the library's hats. */
 static const struct { int table; float color, t; } HATS[4] = {
     { NT_WIRES, 0.45f, 0.095f },    /* rattly */
-    { NT_METAL, 0.45f, 0.10f },     /* clangy */
+    { NT_PINK,  0.70f, 0.10f },     /* soft and dark (Metal rang as a tone, 2026-10-10) */
     { NT_WHITE, 0.70f, 0.09f },     /* tight and bright */
     { NT_HISS,  0.60f, 0.105f },    /* airy */
 };
