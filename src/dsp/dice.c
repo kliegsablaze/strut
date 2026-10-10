@@ -344,33 +344,32 @@ static void tom(float *p, uint32_t *r, int pad) {
     if (chance(r, 0.2f) && noise_sample(p, r, "Tom", -24.0f)) {
         p[P_SKIN] = 0.0f;
         p[P_N_PITCH] = (float)(4 * (pad - 9)) + roundf(in(r, -1.0f, 1.0f));
-        p[P_DRIVE] = 0.45f;     /* as the made toms, or it sits 10 dB under them */
+        p[P_DRIVE] = 0.2f;      /* as the made toms */
         return;
     }
     /* Skin the head's fundamental, struck sharp and left open; Wave its
-     * next mode, a membrane's 1.59 times up (8 semitones), folded for the
-     * shell's overtones and gone sooner; Noise the stick; DRIVE the rest.
-     * To 0.12.6 a tom was Skin alone on MODE Low (a low-pass at twice its
-     * pitch) struck soft over 1 to 8 ms: above 250 Hz it was 60 to 100 dB
-     * down, a sine, and the user heard it as quiet, muted and characterless
-     * (2026-10-10). Now its mids sit within about 10 dB of the library's
-     * toms'. */
-    p[P_SKIN] = 0.65f;
+     * next mode, a membrane's 1.59 times up (8 semitones), a sine gone
+     * sooner; Noise the head's breath, Pink and dark, 150 ms. To 0.12.6 a
+     * tom was Skin alone on MODE Low (a low-pass at twice its pitch) struck
+     * soft: above 250 Hz 60 to 100 dB down, heard as quiet, muted sines
+     * (2026-10-10). Rejected, 0.12.7: Wave on Fold and DRIVE 0.45, which
+     * filled the mids but was heard as electronic and dirty. */
+    p[P_SKIN] = 0.9f;
     p[P_S_PITCH] = roundf(in(r, lo, lo + 5.0f));
     p[P_S_RING] = secs(in(r, 0.3f, 0.8f));
     p[P_S_HIT] = HIT_CLICK;
     p[P_S_SNAP] = snap(in(r, 0.5f, 1.0f));
-    p[P_S_METAL] = in(r, 0.15f, 0.25f);
+    p[P_S_METAL] = in(r, 0.25f, 0.35f);
     p[P_S_TONE] = in(r, 0.75f, 0.85f);
     p[P_S_MODE] = MODE_HIGH;
     pitch_drop(p, P_S_KIND, in(r, 0.15f, 0.35f), in(r, 0.05f, 0.2f));
-    p[P_WAVE] = 0.75f;
+    p[P_WAVE] = 0.8f;
     p[P_W_PITCH] = p[P_S_PITCH] + 8.0f;
-    p[P_W_TABLE] = WT_FOLD, p[P_W_WAVE] = in(r, 0.6f, 0.8f);
+    p[P_W_TABLE] = WT_ANALOG, p[P_W_WAVE] = 0.0f;
     p[P_W_BEND] = 0.55f;
     p[P_W_DECAY] = secs(in(r, 0.15f, 0.22f));
-    noise_table(p, NT_WHITE, 0.05f, 0.1f, 0.85f);
-    p[P_DRIVE] = 0.45f;
+    noise_table(p, NT_PINK, 0.15f, -0.35f, 0.9f);
+    p[P_DRIVE] = 0.2f;
 }
 
 static void perc(float *p, uint32_t *r) {
