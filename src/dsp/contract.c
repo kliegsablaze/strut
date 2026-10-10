@@ -38,6 +38,10 @@ static void sb_printf(sb_t *b, const char *fmt, ...) {
 
 static int done(sb_t *b) { return b->n < b->len ? b->n : -1; }
 
+/* Every control draws its own picture (src/canvas.js, DESIGN.md Knob
+ * pictures). */
+#define VIZ ",\"viz\":{\"kind\":\"custom:strut\"}"
+
 static void param_json(sb_t *b, const param_def_t *d) {
     sb_printf(b, ",{\"key\":\"%s\",\"name\":\"%s\",\"short_name\":\"%s\",", d->key, d->name, d->cell);
     if (d->kind == PK_ENUM) {
@@ -62,7 +66,7 @@ static void param_json(sb_t *b, const param_def_t *d) {
         sb_printf(b, "\"type\":\"float\",\"min\":%g,\"max\":1,\"step\":0.01,\"default\":%g,\"unit\":\"%%\"",
                   (double)d->min, (double)d->def);
     }
-    sb_printf(b, "}");
+    sb_printf(b, VIZ "}");
 }
 
 static const param_def_t *page_param(const page_def_t *pg, int i) {
@@ -136,7 +140,7 @@ int strut_contract_hierarchy(char *buf, int len) {
 
 int strut_contract_params(char *buf, int len) {
     sb_t b = { buf, len, 0 };
-    sb_printf(&b, "[{\"key\":\"pad\",\"name\":\"Selected Pad\",\"short_name\":\"Pad\",\"type\":\"int\",\"min\":1,\"max\":%d}",
+    sb_printf(&b, "[{\"key\":\"pad\",\"name\":\"Selected Pad\",\"short_name\":\"Pad\",\"type\":\"int\",\"min\":1,\"max\":%d" VIZ "}",
               STRUT_PADS);
     /* a pad's CHOKE is reached through Kit > CHOKE, so it is on no page */
     for (int k = 0; k < P_COUNT; k++)

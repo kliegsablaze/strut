@@ -24,6 +24,7 @@ done
 
 if command -v node >/dev/null 2>&1 && [ -d "$SCHWUNG/src/shared/param_pages" ]; then
   node tests/plan.test.mjs "$out" "$SCHWUNG" || rc=$?
+  node tests/widgets.test.mjs "$out" "$SCHWUNG" || rc=$?
 else
   echo "FAIL: needs node and a Schwung checkout (git clone https://github.com/charlesvestal/schwung .schwung)"
   rc=1

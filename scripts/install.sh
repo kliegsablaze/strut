@@ -41,10 +41,12 @@ ssh -o LogLevel=ERROR "$HOST" "mkdir -p '$REMOTE_DIR'"
 scp -q -o LogLevel=ERROR dist/strut/dsp.so "$HOST:$REMOTE_DIR/.dsp.so.incoming"
 scp -q -o LogLevel=ERROR dist/strut/module.json "$HOST:$REMOTE_DIR/.module.json.incoming"
 scp -q -o LogLevel=ERROR dist/strut/help.json "$HOST:$REMOTE_DIR/.help.json.incoming"
+scp -q -o LogLevel=ERROR dist/strut/canvas.js "$HOST:$REMOTE_DIR/.canvas.js.incoming"
 ssh -o LogLevel=ERROR "$HOST" "cd '$REMOTE_DIR' && chmod 755 .dsp.so.incoming && \
     mv -f .dsp.so.incoming dsp.so && \
     mv -f .module.json.incoming module.json && \
-    mv -f .help.json.incoming help.json && ls -l"
+    mv -f .help.json.incoming help.json && \
+    mv -f .canvas.js.incoming canvas.js && ls -l"
 version=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' dist/strut/module.json)
 echo "Installed Strut $version to $HOST:$REMOTE_DIR"
 

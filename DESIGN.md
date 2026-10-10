@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -22,7 +22,7 @@ with Resynth on every pad, 20.5 %, its runs reaching 22.3 % (0.7.0).
 
 - **Module ID:** `strut`
 - **Component type:** `sound_generator`, plugin API v2, pure C, no JavaScript UI
-  (knob pictures may follow Quilt's `canvas.js` later, see *Later*).
+  but the knob pictures (`src/canvas.js`, see *Knob pictures*).
 - **Host:** Schwung 1.7.3 (the Move runs 1.7.3; the scaffold uses nothing newer).
 
 ---
@@ -1125,6 +1125,79 @@ Rejected for DICE:
 
 ---
 
+## Knob pictures (built, 0.11.0)
+
+Every cell draws a picture of what its knob does in place of Schwung's dial,
+from `src/canvas.js`, in the same hand as Quilt's. Each param in
+`chain_params` names the one kind, `viz: {kind: "custom:strut"}`, and
+`module.json` declares `canvas_script`, so Schwung (1.7.3 and later) loads
+the file and hands each cell a 32×15 frame. An older host, or a picture that
+throws, draws the built-in dial instead. A pad page's keys reach the picture
+bare (`tune`, not `p05_tune`), so one picture serves all sixteen pads, and
+moving to another pad eases each picture to that pad's value.
+
+Quilt's three rules, unchanged:
+
+- **Small and centred.** Drawn in a 32×12 design space, scaled to 80 % about
+  the cell's centre, so lines stay one pixel.
+- **One pen.** One-pixel lines. What rings (a head, a wave) is a plain line,
+  what strikes it (stick, mallet, brush) an outline, and noise is dotted.
+  Solid fills are kept to the chosen pad on PAD and nothing else.
+- **Motion means time.** Only Pad > DECAY, Skin > RING, Wave > DECAY,
+  Noise > DECAY, each engine's RATE and Pad > SPACE move, while the knob is
+  touched or for 1.5 s after it turns. Every value eases in 140 ms.
+
+What they show, page by page:
+
+- **Pad.** SOUND the drum (kick, snare, hat, cymbal, cowbell, bolt for FX…)
+  and its number in its kind, sliding in the way you turned. TUNE more
+  cycles, higher. DECAY a strike and its tail. COLOR the filter's slope.
+  SKIN, WAVE and NOISE each engine's own sound (a ring, a saw, a cloud), as
+  big as its fader; a dotted line when off. SPACE echoes rolling out.
+- **Skin.** PITCH a drum, smaller as it rises. RING a ring dying away. HIT
+  what strikes the head: stick, mallet, brush, a wave, a cloud. SNAP the
+  strike, a spike widening to a thud. METAL the two partials climbing. TONE
+  the low-pass. MODE low, band or high-pass around the pitch.
+- **Wave.** PITCH cycles. BEND where the pitch starts and how it comes home.
+  TABLE each table's cycle, sliding; WAVE the cycle at that point of the
+  table Wave > TABLE picks (worked out from the same recipes as `tables.c`,
+  with spread phases). FM the cycles bunching, RING the beating.
+- **Noise.** PITCH the burst shorter as it speeds up. MODE a sample, its
+  partials, or its noise. TABLE each noise as a stretch of signal; a sample
+  as its own outline, the same for the same name. START and LOOP a sample
+  with the marker or the loop.
+- **Mod views.** MOD a ring (Sound) and a sine (Mod), the one on drawn and
+  the other dotted. KIND the modulator's shape. RATE that shape at its speed
+  with the time or note value in figures (`141MS`, `1/4T`, `4BAR`). CURVE the
+  fall's shape. AIM an arrow into a small picture of the knob it moves.
+  DEPTH how far and which way.
+- **Finish.** LEVEL a fader wedge. PAN a knob on a rail. FLAM three hits
+  drawing apart. DRIVE flattening shoulders. CRUSH a stepped sine. LOW and
+  HIGH the shelves. DICE a die and the way it turns.
+- **Kit.** SIZE the room in perspective. GLUE soft hits pulled up to loud
+  ones. WARM a rounder, thicker wave. VOL a wedge with 0 dB marked. CHOKE a
+  ring cut off, and the group's letter. KIT a kit from the front and its
+  number. DICE two dice. PAD the sixteen pads as the Move lays them out
+  (pad 1 bottom left), the chosen one solid, and its number. The grid is
+  drawn in the screen's own pixels: scaled, its rows ran together.
+
+Rejected: a kit drawn as three drums side by side. At this size three shapes
+in a row read as letters ("TOT", "ROT"); the kit is one cluster, toms on the
+kick.
+
+A still picture is drawn once into a bitmap and replayed as horizontal runs
+(64 host calls at most). Measured in Node with the JIT off, closer to the
+Move's QuickJS: a still page 0.03 ms; all eight cells moving at once under
+0.9 ms, with each Wave cycle worked out once and kept.
+
+`tests/widgets.test.mjs` loads the file the way the host does and draws
+every cell of every page, in both views, through the host's own frame and
+viz resolver. It checks that each draws inside its frame and near its
+middle, that every option and two settings of every knob look different,
+that its option lists match what Strut serves, that WAVE follows TABLE, that
+an unanswered value draws nothing, and that RATE holds still until touched
+or turned.
+
 ## Implementation notes
 
 - **`pad_press` and the host's slow-param warning.** The Move logs
@@ -1358,7 +1431,8 @@ Rejected for DICE:
     - ~~the SOUND library, and KIT with placeholder kits~~ (0.10.0);
     - the 30 factory kits, after more engine work (the user's call,
       2026-10-09);
-    - ~~`help.json` and the README~~ (0.10.0).
+    - ~~`help.json` and the README~~ (0.10.0);
+    - ~~knob pictures for every control, in Quilt's style~~ (0.11.0).
 11. Voicing pass with the user listening on the device.
 12. Release to the catalog (needs the user's go-ahead).
 
@@ -1453,7 +1527,5 @@ Rejected for DICE:
 
 ## Later
 
-- Knob pictures (Quilt's `canvas.js` approach).
-- Per-pad room sends.
 - Separate outputs.
 - MPE / pad pressure as a modulation kind.

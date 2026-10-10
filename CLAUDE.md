@@ -182,10 +182,10 @@ When the user moves work back to their local machine:
   - what is next;
   - open questions for the user.
 
-## Where things stand (2026-10-09, 0.10.0)
+## Where things stand (2026-10-09, 0.11.0)
 
 - **Released:** 0.9.1 is public (GitHub release, tarball), and the catalog
-  PR to Schwung is open. 0.10.0 is pushed, not released.
+  PR to Schwung is open. 0.10.0 and 0.11.0 are pushed, not released.
 - **New since 0.8.1:**
   - SPACE starts dry; a pad or the room gone to NaN is dropped and logged,
     not left to silence Strut (0.8.2);
@@ -193,7 +193,9 @@ When the user moves work back to their local machine:
     starts with LEVEL, CHOKE moved to the Kit page for the focused pad;
   - Pad > SOUND picks 40 fixed sounds, and Kit > KIT holds the factory kits,
     each undone by one DICE Back (0.10.0, DESIGN.md *SOUND and KIT*);
-  - help.json and the README cover all of it.
+  - help.json and the README cover all of it;
+  - every knob draws a picture in Quilt's style (`src/canvas.js`, 0.11.0,
+    DESIGN.md *Knob pictures*), not yet seen on the device.
 - **The user's rule on pages (2026-10-09):** keep it to six, as few as
   Quilt; put new things on a free knob, never a new page.
 - **Next:** more engine work (the user wants it before the kits). Then the

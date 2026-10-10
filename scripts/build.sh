@@ -18,8 +18,9 @@ else
     docker run --rm -v "$PWD:/build" -w /build "$IMAGE" sh -c "$CC_CMD"
 fi
 
-# help.json is what puts "Module Help" one jog from the controls.
-cp src/module.json src/help.json dist/strut/
+# help.json is what puts "Module Help" one jog from the controls, and
+# canvas.js draws the knob pictures.
+cp src/module.json src/help.json src/canvas.js dist/strut/
 cp LICENSE THIRD_PARTY_LICENSES.md dist/strut/
 # the sample library, with SOURCES.md, which travels with it
 cp -r src/samples dist/strut/
