@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1096,6 +1096,15 @@ own engine, reach most of the same sounds.)
   body at 145 to 200 Hz, and Finish > DRIVE 0.3 to 0.4 built in. Their
   50 ms loudness rose from about -11 dB to -6 to -9, beside the recorded
   snare's -7.
+- **Closed hats (0.12.4).** The user heard Hats 1 to 4 as quiet clicks,
+  and Hat 1 as nearly Hat 4 (both Wires). They were gone 30 dB down in 10
+  to 20 ms, about 10 dB under the library's hats. Now each is designed,
+  one per table: Wires (rattly), Metal (clangy), White (tight, Noise >
+  COLOR 0.7) and Hiss (airy), Noise > DECAY 0.09 to 0.105 s, Pad > NOISE
+  full and Finish > DRIVE 0.5: 30 dB down in 40 to 50 ms, about -10 dB
+  over 50 ms. A kit's closed hat is one of the four, or a recorded hat cut
+  as short, at full NOISE and the same DRIVE (its fader otherwise tops out
+  7 dB under).
 - **Kicks by style (0.12.0).** Kick 1 to 7 are designed, not rolled:
   Soft (a felt beater on a deep Skin), Round (a played kick drum, beater,
   shell and a breath of Pink), Dance (a bent sine under a click, pushed),

@@ -459,6 +459,32 @@ static void fx(float *p, uint32_t *r) {
     }
 }
 
+/* A closed hat, louder and a touch longer than a bare hat(): to 0.12.3
+ * they were gone in 10 to 20 ms, about 10 dB under a recorded hat, and the
+ * user heard them as quiet ticks (2026-10-10). DRIVE fills them out; each
+ * table is measured to about -10 dB over 50 ms, as the library's hats. */
+static const struct { int table; float color, t; } HATS[4] = {
+    { NT_WIRES, 0.45f, 0.095f },    /* rattly */
+    { NT_METAL, 0.45f, 0.10f },     /* clangy */
+    { NT_WHITE, 0.70f, 0.09f },     /* tight and bright */
+    { NT_HISS,  0.60f, 0.105f },    /* airy */
+};
+
+static void closed_hat(float *p, uint32_t *r, int style) {
+    if (style < 0) {
+        hat(p, r, 0.09f, 0.11f, -30.0f);
+        if (p[P_N_TABLE] < NT_TABLES) {
+            style = one_of(r, 4);
+            p[P_SKIN] = p[P_WAVE] = 0.0f;
+            noise_table(p, HATS[style].table, HATS[style].t, HATS[style].color, 1.0f);
+        } else p[P_NOISE] = 1.0f;      /* a recorded hat, cut as short: its fader tops out 7 dB under */
+    } else {
+        p[P_SKIN] = p[P_WAVE] = 0.0f;
+        noise_table(p, HATS[style].table, HATS[style].t, HATS[style].color, 1.0f);
+    }
+    p[P_DRIVE] = 0.5f;
+}
+
 /* ---- a roll ---- */
 
 /* Every knob back to its default (DICE's own turn aside), then a sound of
@@ -475,7 +501,7 @@ static void roll(float *p, dice_role_t role, int pad, uint32_t *rng) {
     case ROLE_KICK: kick(p, rng); break;
     case ROLE_SNARE: snare(p, rng); break;
     case ROLE_CLAP: clap(p, rng); break;
-    case ROLE_HAT: hat(p, rng, 0.04f, 0.1f, -30.0f); break;
+    case ROLE_HAT: closed_hat(p, rng, -1); break;
     case ROLE_OPEN: hat(p, rng, 0.35f, 0.8f, -28.0f); break;
     case ROLE_CYMBAL: cymbal(p, rng); break;
     case ROLE_RIM: rim(p, rng); break;
@@ -537,6 +563,9 @@ void dice_sound(float *p, int n) {
     if (SOUND_ROLES[r].role == ROLE_KICK) {     /* each kick is its style, exactly */
         reset(p);
         kick_style(p, NULL, i);
+    } else if (SOUND_ROLES[r].role == ROLE_HAT) {   /* each hat its own table (Hat 1 and 4 were both Wires) */
+        reset(p);
+        closed_hat(p, NULL, i);
     } else {
         /* a tom's number is its place low to high, as on pads 9 to 11 */
         roll(p, SOUND_ROLES[r].role, 8 + (i < 2 ? i : 2), &rng);
