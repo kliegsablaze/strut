@@ -283,7 +283,7 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 | Knob | Key | Label | Behaviour |
 |---|---|---|---|
 | 1 | `pNN_sound` | SOUND | Own (the pad as it is), then 40 starting sounds (Kick 1, Snare 2, Hat 3…), each replacing the pad's engines and keeping its place in the mix. |
-| 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. |
+| 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. A kick tuned below −12 sounds quieter though its level holds (its fundamental falls under 25 Hz, where ears and small speakers give little); rejected (2026-10-10): saturation added automatically below −12 to keep it heard. The user keeps TUNE plain; Finish > DRIVE does it by hand. |
 | 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
 | 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass), the whole pad (see *How Finish works*). |
 | 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and Finish > LEVEL. |
