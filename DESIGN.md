@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11; the output 10 dB quieter, 0.12.12; Pad COLOR's low-pass down to 40 Hz, 0.12.13 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11; the output 10 dB quieter, 0.12.12; Pad COLOR's low-pass down to 40 Hz, 0.12.13; every level knob one upright fader, 0.12.14 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1244,8 +1244,14 @@ What they show, page by page:
 - **Pad.** SOUND the drum (kick, snare, hat, cymbal, cowbell, bolt for FX…)
   and its number in its kind, sliding in the way you turned. TUNE more
   cycles, higher. DECAY a strike and its tail. COLOR the filter's slope.
-  SKIN, WAVE and NOISE each engine's own sound (a ring, a saw, a cloud), as
-  big as its fader; a dotted line when off. SPACE echoes rolling out.
+  SKIN, WAVE and NOISE a fader standing up: a cap on a dotted slot, lit
+  below it, the same as Finish > LEVEL and Kit > VOL, so every level knob
+  reads as a level (0.12.14, 2026-10-10). Rejected: each engine's own sound
+  (a ring, a saw, a cloud) as big as its level, to 0.12.13: three different
+  pictures did not say "level"; and, of five fader looks shown, bars, a
+  framed meter, a fader with a scale, the engine's sign with a wedge, and
+  the same fader lying down (the user chose it, standing up). SPACE echoes
+  rolling out.
 - **Skin.** PITCH a drum, smaller as it rises. RING a ring dying away. HIT
   what strikes the head: stick, mallet, brush, a wave, a cloud. SNAP the
   strike, a spike widening to a thud. METAL the two partials climbing. TONE
@@ -1263,11 +1269,11 @@ What they show, page by page:
   with the time or note value in figures (`141MS`, `1/4T`, `4BAR`). CURVE the
   fall's shape. AIM an arrow into a small picture of the knob it moves.
   DEPTH how far and which way.
-- **Finish.** LEVEL a fader wedge. PAN a knob on a rail. FLAM three hits
+- **Finish.** LEVEL the level fader. PAN a knob on a rail. FLAM three hits
   drawing apart. DRIVE flattening shoulders. CRUSH a stepped sine. LOW and
   HIGH the shelves. DICE a die and the way it turns.
 - **Kit.** SIZE the room in perspective. GLUE soft hits pulled up to loud
-  ones. WARM a rounder, thicker wave. VOL a wedge with 0 dB marked. CHOKE a
+  ones. WARM a rounder, thicker wave. VOL the level fader, 0 dB marked either side. CHOKE a
   ring cut off, and the group's letter. KIT a kit from the front and its
   number. DICE two dice. PAD the sixteen pads as the Move lays them out
   (pad 1 bottom left), the chosen one solid, and its number. The grid is

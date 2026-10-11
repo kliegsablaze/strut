@@ -217,15 +217,19 @@ const tilt = (c, v) => {                         /* darker left, thinner right, 
     response(c, b < 0 ? lowpass(28 + b * 22) : highpass(3 + b * 22));
 };
 D.color = tilt;
-/* The three engines' levels: each engine's own sound, as large as its fader. */
-D.skin = (c, v) => { const a = v * 5; if (a < 0.5) dotted(c, 3, 28, () => 6, 2); else { vline(c, 3, 6 - Math.round(a), 6); ring(c, 3, 28, 6, a, 9, 6); } };
-D.wave = (c, v) => { const a = v * 5; if (a < 0.5) dotted(c, 3, 28, () => 6, 2); else waveTone(c, 3, 28, 6, a, 3, (x, u) => 1 - 2 * (u % 1)); };
-D.noise = (c, v) => {
-    const a = Math.round(v * 5);
-    if (a < 1) { dotted(c, 3, 28, () => 6, 2); return; }
-    for (let x = 3; x <= 28; x++) for (let y = 6 - a; y <= 6 + a; y++) if (hash(x * 13 + y * 7) < 0.3) px(c, x, y);
-    px(c, 3, 6); px(c, 28, 6);
-};
+/* Every level knob is the same fader standing up, so it reads as a level:
+ * a cap on a dotted slot, the slot lit below it. In the screen's own
+ * pixels, so the slot's dots stay even. (Rejected: each engine's own sound
+ * drawn as large as its level, to 0.12.13: three different pictures did not
+ * say "level" (the user, 2026-10-10).) */
+function fader(c, v, mark) {
+    const y = Math.round(12 - clamp01(v) * 10);  /* the cap's middle row, 12 down to 2 */
+    for (let r = 1; r <= 13; r += 2) c.rawRect(15, r, 2, 1);
+    if (y + 2 <= 13) c.rawRect(15, y + 2, 2, 12 - y);
+    if (mark !== undefined) { const m = Math.round(12 - mark * 10); c.rawRect(7, m, 3, 1); c.rawRect(22, m, 3, 1); }
+    c.rawRect(11, y - 1, 10, 3);
+}
+D.skin = D.wave = D.noise = (c, v) => fader(c, v);
 D.space = (c, v, s) => {                         /* a sound in a room: the more space, the more echoes roll outward */
     vline(c, 3, 5, 7); for (let y = 0; y <= 11; y += 3) px(c, 28, y);
     const n = Math.ceil(v * 6 - 0.05), ph = phase(s.key, 0.6, s.now), o = offset(c, 0);
@@ -484,11 +488,7 @@ D.depth = (c, v) => {                            /* how far, and which way, from
 };
 
 /* FINISH ---------------------------------------------------------------- */
-function wedge(c, n) {                           /* a fader: a wedge filled to the level */
-    for (let x = 3; x <= 28; x++) { const h = Math.round(1 + (x - 3) * 0.4); const y0 = 11 - h;
-        if ((x - 3) / 25 <= n && n > 0.01) { px(c, x, y0); px(c, x, 11); if (x % 3 === 0) vline(c, x, y0, 11); } else if (x % 2 === 0) px(c, x, y0); }
-}
-D.level = (c, v) => wedge(c, v);
+D.level = (c, v) => fader(c, v);
 D.pan = (c, v) => {                              /* where the pad sits, left to right */
     const x = 16 + Math.round((v * 2 - 1) * 11);
     hline(c, 4, 28, 10); vline(c, 4, 8, 11); vline(c, 28, 8, 11); px(c, 16, 11);
@@ -543,10 +543,7 @@ D.warm = (c, v) => {                             /* thicker and rounder, the top
     curve(c, 3, 28, f);
     if (v > 0.25) curve(c, 3, 28, (x) => f(x) + 1);
 };
-D.vol = (c, v) => {                              /* a wedge, filled to the level, with a mark at 0 dB */
-    wedge(c, v);
-    const z = 3 + Math.round(25 * 60 / 66); vline(c, z, 0, 1);
-};
+D.vol = (c, v) => fader(c, v, 60 / 66);       /* marked at 0 dB */
 D.choke = (c, v, s) => {                         /* a hit in the group stops the one still ringing */
     if (s.opt === "Off" || !s.opt) { vline(c, 4, 2, 6); ring(c, 4, 28, 6, 4, 12, 4); vline(c, 16, 2, 6); return; }
     vline(c, 4, 2, 6); ring(c, 4, 13, 6, 4, 12, 4); vline(c, 14, 1, 11);
