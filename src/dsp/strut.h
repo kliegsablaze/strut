@@ -22,11 +22,15 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.12.8"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.12.9"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
 #define STRUT_MAX_BLOCK 256
+/* Pad DECAY: every fall an eighth as long fully left, eight times fully
+ * right. To 0.12.8 a quarter to four times: a hat could not be cut to a
+ * tick, nor a snare rung out (the user, 2026-10-10). */
+#define STRUT_DECAY_RANGE 8.0f
 #define STRUT_DECLICK 256       /* samples a restarted Wave note fades out over */
 #define STRUT_SHAPE 8           /* the noise shaper's memory (strut.c) */
 #define STRUT_CHOKE 220         /* samples a choked pad fades out over, 5 ms */

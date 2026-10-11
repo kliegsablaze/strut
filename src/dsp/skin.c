@@ -37,7 +37,7 @@ float skin_hz(const float *p) {
  * four. Never under two and a half cycles: a low drum rung shorter than its
  * own period is a click with no pitch, not a short drum. */
 float skin_t60(const float *p) {
-    const float t = 0.015f * powf(4.0f / 0.015f, p[P_S_RING]) * powf(4.0f, p[P_DECAY]);
+    const float t = 0.015f * powf(4.0f / 0.015f, p[P_S_RING]) * powf(STRUT_DECAY_RANGE, p[P_DECAY]);
     return fminf(fmaxf(t, 2.5f / skin_hz(p)), 12.0f);
 }
 

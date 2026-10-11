@@ -306,7 +306,7 @@ static int level_of(float rate) {
 
 /* DECAY from 15 ms to 4 s, as Wave's, and the Pad page's DECAY scales it. */
 float noise_t60(const float *p) {
-    return fminf(0.015f * powf(4.0f / 0.015f, p[P_N_DECAY]) * powf(4.0f, p[P_DECAY]), 12.0f);
+    return fminf(0.015f * powf(4.0f / 0.015f, p[P_N_DECAY]) * powf(STRUT_DECAY_RANGE, p[P_DECAY]), 12.0f);
 }
 
 /* COLOR: a low-pass sweeping down to 100 Hz to the left, a high-pass up to
@@ -367,7 +367,7 @@ static uint32_t start_of(const smp_t *sm, const float *p) {
 /* Resynth's length: DECAY's centre the sample's own, a quarter to four
  * times it, and Pad DECAY scales it as it does every fall. */
 static float stretch_of(const float *p) {
-    return fminf(fmaxf(powf(4.0f, 2.0f * p[P_N_DECAY] - 1.0f) * powf(4.0f, p[P_DECAY]), 1.0f / 16), 16.0f);
+    return fminf(fmaxf(powf(4.0f, 2.0f * p[P_N_DECAY] - 1.0f) * powf(STRUT_DECAY_RANGE, p[P_DECAY]), 1.0f / 16), 16.0f);
 }
 
 /* LOOP's slice: from START, 2 ms long to all that is left, in level-0
@@ -632,9 +632,15 @@ int noise_block(noise_voice_t *v, const float *p, int frames, int hold, noise_bl
     if (b->filt) b->f = svf(fc, COLOR_K);
     else v->s1 = v->s2 = 0.0f;      /* so turning COLOR off the centre starts clean */
     b->g = m * (1.0f / 32767.0f) * (sm && !sm->cycle ? SM_GAIN : 1.0f);
-    /* a one-shot with DECAY fully right plays to its end, unfaded */
-    const int whole = (b->shot && p[P_N_DECAY] >= 0.999f) || b->rs;     /* Resynth: DECAY is its length */
-    v->decay = hold || whole ? 1.0f : expf(-6.9078f / (noise_t60(p) * STRUT_SR));
+    /* a one-shot with DECAY fully right plays to its end, unfaded; Pad
+     * DECAY left of centre fades it over its own length, four times it at
+     * the centre to an eighth fully left (to 0.12.8 it could not shorten
+     * one: every SOUND plays its recording whole) */
+    const int to_end = b->shot && p[P_N_DECAY] >= 0.999f;
+    const int whole = (to_end && p[P_DECAY] >= 0.0f) || b->rs;     /* Resynth: DECAY is its length */
+    const float t60 = to_end ? 4.0f * (float)sm->len / ((float)NT_SR * rate) * powf(32.0f, p[P_DECAY])
+                             : noise_t60(p);
+    v->decay = hold || whole ? 1.0f : expf(-6.9078f / (fmaxf(t60, 0.005f) * STRUT_SR));
     (void)key;
     return v->env > 1e-5f;          /* 100 dB under a full hit */
 }

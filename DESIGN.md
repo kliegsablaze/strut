@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -284,7 +284,7 @@ share a word: `s_` Skin, `w_` Wave, `n_` Noise (`s_pitch`, `w_decay`).
 |---|---|---|---|
 | 1 | `pNN_sound` | SOUND | Own (the pad as it is), then 40 starting sounds (Kick 1, Snare 2, Hat 3…), each replacing the pad's engines and keeping its place in the mix. |
 | 2 | `pNN_tune` | TUNE | Bi. Moves all three engines' pitch together, ±24 semitones. A kick tuned below −12 sounds quieter though its level holds (its fundamental falls under 25 Hz, where ears and small speakers give little); rejected (2026-10-10): saturation added automatically below −12 to keep it heard. The user keeps TUNE plain; Finish > DRIVE does it by hand. |
-| 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together. |
+| 3 | `pNN_decay` | DECAY | Bi. Lengthens or shortens all three envelopes together, an eighth as long fully left to eight times fully right. Widened from a quarter to four (0.12.9): the user could not cut a hat to a tick nor ring a snare out (2026-10-10). |
 | 4 | `pNN_color` | COLOR | Bi. Darker to the left (low-pass), thinner to the right (high-pass), the whole pad (see *How Finish works*). |
 | 5 | `pNN_skin` | SKIN | Skin's level. A fader: off fully left, then 30 dB of travel; 0.8 is −6 dB. So are WAVE, NOISE and Finish > LEVEL. |
 | 6 | `pNN_wave` | WAVE | Wave's level. |
@@ -325,7 +325,7 @@ Skin's destinations: Pitch, Ring, Snap, Metal, Tone, Level.
   weaker. A burst rings at its expected level, so each hit is a little
   different, as on a real drum.
 - **RING** is the time to fall 60 dB, 15 ms to 4 s, and Pad DECAY scales it by
-  a quarter to four. It is never shorter than two and a half cycles of the
+  an eighth to eight (0.12.9; a quarter to four before). It is never shorter than two and a half cycles of the
   pitch: a 55 Hz drum rung for 15 ms is a click with no pitch.
 - **METAL** adds two partials above the body. At zero they sit at a
   drumhead's ratios over its fundamental (1.59 and 2.14, Rossing); turning it
@@ -489,7 +489,10 @@ four pads, tune them apart and play them as a riff. With a sample chosen:
 - **PITCH** is in semitones from the pitch it was recorded at (0 = as
   recorded). Pad TUNE moves it too, so a pad can be tuned to a note.
 - **DECAY** fades the sample out; turned fully right it plays to its end
-  at its own length. In Resynth it sets the length instead: the sample's
+  at its own length, unless Pad DECAY is left of centre: then it fades
+  over four times the sample's length at the centre to an eighth of it
+  fully left (0.12.9; before, Pad DECAY could not shorten a recording
+  played whole, as every SOUND plays one). In Resynth it sets the length instead: the sample's
   own at the centre, a quarter of it fully left, four times fully right.
 - **START** picks where in the sample to begin, so one long sample can feed
   several pads, each from its own slice.

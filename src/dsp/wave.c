@@ -33,7 +33,7 @@ float wave_hz(const float *p) {
 /* DECAY from 15 ms to 4 s, as Skin's RING; the Pad page's DECAY scales it.
  * Never under two and a half cycles, as Skin: less is a tick, not a note. */
 float wave_t60(const float *p) {
-    const float t = 0.015f * powf(4.0f / 0.015f, p[P_W_DECAY]) * powf(4.0f, p[P_DECAY]);
+    const float t = 0.015f * powf(4.0f / 0.015f, p[P_W_DECAY]) * powf(STRUT_DECAY_RANGE, p[P_DECAY]);
     return fminf(fmaxf(t, 2.5f / wave_hz(p)), 12.0f);
 }
 
