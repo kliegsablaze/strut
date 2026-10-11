@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.12.9"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.12.10"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -121,6 +121,7 @@ typedef struct {
     finish_t fx;
     mod_t mod;
     int choke_n;                /* choked: samples of its fade left; 0 not choked */
+    float cut;                  /* Pad DECAY left of centre: the whole pad's fade, 1 at a hit */
 } voice_t;
 
 typedef struct {

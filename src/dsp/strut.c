@@ -147,6 +147,9 @@ static void strike(strut_t *s, int i, float amp) {
         v->old_n = STRUT_DECLICK;
     }
     v->active = 1;
+    /* the last 15 % of DECAY's travel left takes the hit itself down to
+     * nothing, or a noise pad still clicks at full height (below) */
+    v->cut = fminf(1.0f, (1.0f + p->p[P_DECAY]) / 0.15f);
     s->seed = s->seed * 1664525u + 1013904223u;
     /* the hit's knobs as the modulators move them at its first instant,
      * so velocity on SNAP, say, shapes the strike itself */
@@ -368,6 +371,19 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, float *send, in
     finish_block(p->p, &fb);
     float pl[STRUT_MAX_BLOCK] = { 0 }, pr[STRUT_MAX_BLOCK] = { 0 };
     finish_run(&v->fx, &fb, x, pl, pr, frames);
+    /* Pad DECAY left of centre also fades the whole pad, from 4 s near the
+     * centre to 2 ms fully left: every fall shortens with it, but a drum
+     * keeps its strike, two and a half cycles of its pitch, and DRIVE's
+     * lift of its tail, and the user wants a pad turned fully down to be
+     * gone (2026-10-10). After the finish, so DRIVE cannot lift it back. */
+    if (p->p[P_DECAY] < 0.0f) {
+        const float t60 = 0.002f * powf(2000.0f, 1.0f + p->p[P_DECAY]);
+        const float k = expf(-6.9078f / (t60 * STRUT_SR));
+        float c = v->cut;
+        for (int n = 0; n < frames; n++) pl[n] *= c, pr[n] *= c, c *= k;
+        v->cut = c;
+        if (c < 1e-5f) v->active = 0;
+    }
     /* the pad at its LEVEL, and its share of the room by its SPACE, gliding */
     const float s1 = p->p[P_SPACE], s0 = p->space_g < 0.0f ? s1 : p->space_g;
     const float g1 = strut_fader(p->p[P_LEVEL]) / LEVEL_REF, g0 = p->level_g < 0.0f ? g1 : p->level_g;

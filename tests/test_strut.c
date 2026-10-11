@@ -210,7 +210,11 @@ static void skin(void) {
             (void)rms;
             CHECK(finite, "%s %g: finite", d->key, v);
             CHECK(peak < 0.9, "%s %g: does not clip (peak %.2f)", d->key, v, peak);
-            CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", d->key, v, peak);
+            /* DECAY fully left is gone, by the user's wish (2026-10-10) */
+            if (knobs[k] == P_DECAY && i == 0)
+                CHECK(peak < 0.05 && !s->pad[0].voice.active, "decay -1: gone (peak %.3f)", peak);
+            else
+                CHECK(peak > 0.05, "%s %g: sounds (peak %.3f)", d->key, v, peak);
             /* the longest ring, 12 s, may still be going after two */
             if (!(knobs[k] == P_S_RING && i == 2) && !(knobs[k] == P_DECAY && i == 2))
                 CHECK(!s->pad[0].voice.active, "%s %g: dies away", d->key, v);
