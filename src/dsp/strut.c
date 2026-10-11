@@ -371,13 +371,14 @@ static void pad_render(strut_t *s, pad_t *p, float *l, float *r, float *send, in
     finish_block(p->p, &fb);
     float pl[STRUT_MAX_BLOCK] = { 0 }, pr[STRUT_MAX_BLOCK] = { 0 };
     finish_run(&v->fx, &fb, x, pl, pr, frames);
-    /* Pad DECAY left of centre also fades the whole pad, from 4 s near the
-     * centre to 2 ms fully left: every fall shortens with it, but a drum
-     * keeps its strike, two and a half cycles of its pitch, and DRIVE's
-     * lift of its tail, and the user wants a pad turned fully down to be
-     * gone (2026-10-10). After the finish, so DRIVE cannot lift it back. */
-    if (p->p[P_DECAY] < 0.0f) {
-        const float t60 = 0.002f * powf(2000.0f, 1.0f + p->p[P_DECAY]);
+    /* Pad DECAY's left half also fades the whole pad, from 2 s halfway to
+     * 2 ms fully left: every fall shortens with it, but a drum keeps its
+     * strike, two and a half cycles of its pitch, and DRIVE's lift of its
+     * tail, and the user wants a pad turned fully down to be gone
+     * (2026-10-10). After the finish, so DRIVE cannot lift it back. Over
+     * the whole left side (0.12.10) it cut a snare short too early. */
+    if (p->p[P_DECAY] < -0.5f) {
+        const float t60 = 0.002f * powf(1000.0f, 2.0f * (1.0f + p->p[P_DECAY]));
         const float k = expf(-6.9078f / (t60 * STRUT_SR));
         float c = v->cut;
         for (int n = 0; n < frames; n++) pl[n] *= c, pr[n] *= c, c *= k;
