@@ -22,7 +22,7 @@
 #include "skin.h"
 #include "wave.h"
 
-#define STRUT_VERSION "0.12.11"  /* module.json's; logged on load (tests/run.sh) */
+#define STRUT_VERSION "0.12.12"  /* module.json's; logged on load (tests/run.sh) */
 #define STRUT_SR 44100
 #define STRUT_PADS 16
 #define STRUT_NOTE0 36          /* pad 1 plays C1, as a Move drum track sends */
@@ -37,11 +37,14 @@
 #define STRUT_FLAMS 3           /* hits FLAM makes of one */
 #define STRUT_PRESS_WINDOW 0.05f   /* a pad press and its note pair within 50 ms */
 #define LEVEL_REF 0.50119f      /* strut_fader(0.8), LEVEL's default: the engines mix at it */
-/* 6 dB on the way out: to 0.11.1 a kick sat about 9 dB under one of the
- * library's recorded kicks at full fader, and the user heard it as too
- * quiet (2026-10-09). After the Kit page, so GLUE, WARM and the room hear
- * what they always did. */
-#define STRUT_MAKEUP 1.99526f
+/* The output's gain, after the Kit page, so GLUE, WARM and the room hear
+ * what they always did. 0.12.0 raised it 6 dB (a kick sat 9 dB under a
+ * recorded one at full fader, heard as too quiet, 2026-10-09); by 0.12.11
+ * the drums had grown louder still, a plain beat peaked into the limiter
+ * at -12 dB RMS, and the user had to keep the Move turned down
+ * (2026-10-10). Now 4 dB under unity: a kick, snare and hat beat peaks
+ * at -4 to -8 dBFS, about -22 dB RMS, every sound's balance as it was. */
+#define STRUT_MAKEUP 0.63096f
 
 typedef enum { PK_FLOAT, PK_INT, PK_ENUM } param_kind_t;
 

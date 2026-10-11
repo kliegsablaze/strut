@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11; the output 10 dB quieter, 0.12.12 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -1141,7 +1141,8 @@ own engine, reach most of the same sounds.)
   rolls one of the seven, varied a little. Each lands within about 2 dB
   of a recorded kick at the same faders, -11 dB over its loudest 400 ms;
   Hard a little over. The output's 6 dB make-up came with them: to
-  0.11.1 Strut sat about 9 dB under a recorded drum at full fader.
+  0.11.1 Strut sat about 9 dB under a recorded drum at full fader. (It
+  is 4 dB under unity since 0.12.12; see *The output*.)
   Rejected: kicks as rolls of one Skin recipe, 0.10.0 (seven soft thumps
   9 dB under a recorded kick).
 - **Rejected: a seventh page for the kits** (the host's preset browser, a
@@ -1401,10 +1402,15 @@ or turned.
     Move's, which this session cannot check, and noise would be silent for
     its first seconds.
 - **The output** is Quilt's, with one change. VOL (the Kit page's, wired
-  early) glides across the block, with 6 dB of make-up (0.12.0); a soft
+  early) glides across the block, 4 dB under unity (0.12.12); a soft
   limiter above 0.7 of full scale rounds off a stack of pads instead of
   clipping; then 16 bits, rounded with one step of
-  triangular dither, and denormals flushed to zero on the Move.
+  triangular dither, and denormals flushed to zero on the Move. The gain
+  was 6 dB of make-up from 0.12.0; by 0.12.11 the drums had grown louder
+  still, a plain kick, snare and hat beat peaked into the limiter at
+  -12 dB RMS, and the user had to keep the Move turned down (2026-10-10).
+  10 dB less puts that beat at -4 to -8 dBFS peak, about -22 dB RMS,
+  every sound's balance unchanged.
   - **The dither stays at full depth while any voice sounds**, and fades out
     over a block once all have ended. The user heard quantization grit on the
     first Skin build (2026-10-07), which had no dither. Quilt's dither fades
