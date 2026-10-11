@@ -9,12 +9,12 @@
 
 #define PI 3.14159265f
 
-/* COLOR, for the whole pad: a low-pass from 20 kHz down to 200 Hz to the
+/* COLOR, for the whole pad: a low-pass from 20 kHz down to 40 Hz to the
  * left, a high-pass from 20 Hz up to 4 kHz to the right, nothing at the
- * centre. Narrower than Noise's COLOR: at its ends a pad is dark or thin,
- * not gone. */
+ * centre. The low-pass stopped at 200 Hz to 0.12.12; the user wanted it
+ * to go lower (2026-10-10). */
 static int color(float c, svf_t *f) {
-    if (c < 0.0f) { *f = svf(20000.0f * exp2f(6.64f * c), 1.2f); return 1; }
+    if (c < 0.0f) { *f = svf(20000.0f * exp2f(8.97f * c), 1.2f); return 1; }
     if (c > 0.0f) { *f = svf(20.0f * exp2f(7.64f * c), 1.2f); return 2; }
     return 0;
 }

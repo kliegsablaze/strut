@@ -2,7 +2,7 @@
 
 *Sixteen drums, each one built from three engines and played from eight knobs.*
 
-**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11; the output 10 dB quieter, 0.12.12 (2026-10-10). Every proposed knob,
+**Status:** all three engines sound, with each pad's finish, each engine's modulator, the Kit page, the sample library in all three of Noise's modes, and DICE, 0.8.0; kits save and load through `state`, 0.8.1; LEVEL on Finish, SPACE per pad, CHOKE on the Kit page, 0.9.0 (2026-10-07); Pad > SOUND picks from 40 fixed sounds and Kit > KIT holds the factory kits (placeholders until the engines are done), 0.10.0 (2026-10-09); every knob draws a picture of what it does, 0.11.0 (2026-10-09); claps and rims rebuilt, CURVE's Clap, 0.11.1 (2026-10-09); 6 dB louder, harder DRIVE, LEVEL after the finish, seven kick styles, 0.12.0 (2026-10-09); DRIVE turns without crackle, 0.12.1 (2026-10-09); recorded claps snappier, rims without the thump, 0.12.2 (2026-10-10); snares fuller and driven, 0.12.3 (2026-10-10); closed hats louder, a touch longer, four distinct, 0.12.4; Hat 2 Pink, not Metal, 0.12.5; open hats distinct, 0.12.6; toms with a stick, overtones and drive, 0.12.7; toms cleaner, 0.12.8; Pad DECAY wider and shortens recordings, 0.12.9; fully left is silence, 0.12.10; its fade held to the left half, 0.12.11; the output 10 dB quieter, 0.12.12; Pad COLOR's low-pass down to 40 Hz, 0.12.13 (2026-10-10). Every proposed knob,
 on every page and both views of each engine page, is declared, kept per pad
 and planned by the host's own planner in the tests. **Skin**, the resonator,
 **Wave**, the oscillator, and **Noise**, the noise source, are built and play
@@ -781,9 +781,10 @@ hardly moved it. Each is skipped when at rest, so a pad that uses none costs onl
 its PAN.
 
 - **Pad COLOR:** a two-pole filter on the whole pad. Low-pass from 20 kHz
-  down to 200 Hz to the left, high-pass from 20 Hz up to 4 kHz to the
-  right, nothing at the centre. Narrower than Noise's COLOR, so at its ends
-  a pad is dark or thin, not gone; and it does not make up the level it
+  down to 40 Hz to the left (200 Hz to 0.12.12; the user wanted it lower,
+  2026-10-10), high-pass from 20 Hz up to 4 kHz to the right, nothing at
+  the centre. Narrower than Noise's COLOR at the top, so a pad turned
+  right is thin, not gone; and it does not make up the level it
   takes, as Noise's does, because darker and quieter belong together on a
   whole drum.
 - **PAN:** as loud anywhere in power, and exactly as before at the centre.
